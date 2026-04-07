@@ -23,36 +23,31 @@ function PublicLandingPage({ onOpenLoginModal }) {
     <div className="landing-page">
       <section className="landing-hero" id="home">
         <div className="landing-hero-copy">
-          <span className="auth-hero-kicker">Smart Campus Operations Hub</span>
-          <h1 className="landing-title">One platform for campus services, bookings, and support.</h1>
-          <p className="landing-description">
-            Manage facilities, asset reservations, maintenance tickets, and operational
-            notifications from one streamlined system built for students and staff.
+          <span className="landing-kicker">Smart Campus Operations Hub</span>
+          <h1 className="landing-title">
+            <span className="landing-title-line landing-title-line-primary">
+              One Platform to Manage
+            </span>
+            <span className="landing-title-line landing-title-line-primary">
+              Campus Services
+            </span>
+            <span className="landing-title-line landing-title-line-secondary">
+              Bookings and Support.
+            </span>
+          </h1>
+          <p className="landing-support-copy">
+            Smart Campus Operations Hub centralizes campus services so users can manage
+            requests, bookings, and support tasks from one secure place.
           </p>
 
           <div className="landing-actions">
             <Button className="landing-cta-button" onClick={onOpenLoginModal} variant="primary">
               Login
             </Button>
-            <Link className="landing-secondary-link" to="/signup">
+            <Link className="landing-secondary-button" to="/signup">
               Sign Up
             </Link>
           </div>
-        </div>
-
-        <div className="landing-highlight-grid">
-          <article className="landing-highlight-card">
-            <strong>Facilities & Assets</strong>
-            <p>Browse campus resources, check availability, and manage asset visibility.</p>
-          </article>
-          <article className="landing-highlight-card">
-            <strong>Bookings & Approvals</strong>
-            <p>Submit booking requests, track approval status, and manage schedules.</p>
-          </article>
-          <article className="landing-highlight-card">
-            <strong>Incident Support</strong>
-            <p>Raise maintenance tickets quickly and follow operational updates in real time.</p>
-          </article>
         </div>
       </section>
 
