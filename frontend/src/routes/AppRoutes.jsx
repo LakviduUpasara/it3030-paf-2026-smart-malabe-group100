@@ -12,26 +12,27 @@ import MyBookingsPage from "../pages/MyBookingsPage";
 import MyTicketsPage from "../pages/MyTicketsPage";
 import NotificationsPage from "../pages/NotificationsPage";
 import NotFoundPage from "../pages/NotFoundPage";
+import PublicLandingPage from "../pages/PublicLandingPage";
 import SignupPage from "../pages/SignupPage";
 import TechnicianDashboardPage from "../pages/TechnicianDashboardPage";
 import AdminRoute from "./AdminRoute";
 import ProtectedRoute from "./ProtectedRoute";
 import { getDefaultRouteForRole, ROLES } from "../utils/roleUtils";
 
-function RootRedirect() {
+function PublicHomeRoute({ onOpenLoginModal }) {
   const { isAuthenticated, user } = useAuth();
 
-  if (!isAuthenticated) {
-    return <Navigate replace to="/login" />;
+  if (isAuthenticated) {
+    return <Navigate replace to={getDefaultRouteForRole(user?.role)} />;
   }
 
-  return <Navigate replace to={getDefaultRouteForRole(user?.role)} />;
+  return <PublicLandingPage onOpenLoginModal={onOpenLoginModal} />;
 }
 
-function AppRoutes() {
+function AppRoutes({ onOpenLoginModal }) {
   return (
     <Routes>
-      <Route index element={<RootRedirect />} />
+      <Route index element={<PublicHomeRoute onOpenLoginModal={onOpenLoginModal} />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
       <Route path="/access-denied" element={<AccessDeniedPage />} />

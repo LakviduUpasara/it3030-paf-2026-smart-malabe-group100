@@ -4,49 +4,83 @@ import { getDefaultRouteForRole, getNavigationItems } from "../utils/roleUtils";
 import Button from "./Button";
 import NotificationDropdown from "./NotificationDropdown";
 
-function Navbar() {
+const publicNavigationItems = [
+  { label: "Home", sectionId: "home" },
+  { label: "About Us", sectionId: "about" },
+  { label: "Contact Us", sectionId: "contact" },
+];
+
+function Navbar({ onOpenLoginModal }) {
   const { isAuthenticated, user, logout, isLoading } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const isLoginPage = location.pathname === "/login";
   const isSignupPage = location.pathname === "/signup";
+  const isPublicPage = !isAuthenticated && (location.pathname === "/" || isSignupPage);
 
   const handleLogout = async () => {
     await logout();
     navigate("/login");
   };
 
+  const handlePublicNavigation = (sectionId) => {
+    if (location.pathname !== "/") {
+      navigate("/", { state: { scrollToSection: sectionId } });
+      return;
+    }
+
+    const section = document.getElementById(sectionId);
+
+    if (section) {
+      section.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
   const navigationItems = isAuthenticated ? getNavigationItems(user?.role) : [];
 
   return (
-    <header className="navbar">
+    <header className={`navbar ${isPublicPage ? "navbar-auth-shell" : ""}`.trim()}>
       <div className="navbar-brand">
         <button
           className="brand-button"
           onClick={() =>
-            navigate(isAuthenticated ? getDefaultRouteForRole(user?.role) : "/login")
+            navigate(isAuthenticated ? getDefaultRouteForRole(user?.role) : "/")
           }
           type="button"
         >
           <span className="brand-mark">SC</span>
-          <span>
+          <span className="brand-copy">
             <strong>Smart Campus</strong>
             <small>Operations Hub</small>
           </span>
         </button>
       </div>
 
-      <nav className="navbar-links">
-        {navigationItems.map((item) => (
-          <NavLink
-            key={item.path}
-            className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}
-            to={item.path}
-          >
-            {item.label}
-          </NavLink>
-        ))}
-      </nav>
+      {isAuthenticated ? (
+        <nav className="navbar-links">
+          {navigationItems.map((item) => (
+            <NavLink
+              key={item.path}
+              className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}
+              to={item.path}
+            >
+              {item.label}
+            </NavLink>
+          ))}
+        </nav>
+      ) : (
+        <nav className="navbar-links navbar-links-public">
+          {publicNavigationItems.map((item) => (
+            <button
+              key={item.sectionId}
+              className="nav-link nav-link-button"
+              onClick={() => handlePublicNavigation(item.sectionId)}
+              type="button"
+            >
+              {item.label}
+            </button>
+          ))}
+        </nav>
+      )}
 
       <div className="navbar-actions">
         {isAuthenticated ? (
@@ -65,16 +99,15 @@ function Navbar() {
           </>
         ) : (
           <div className="navbar-auth-actions">
-            <span className="navbar-auth-copy">
-              {isSignupPage ? "Already have an account?" : "Don't have an account?"}
-            </span>
             <Button
-              onClick={() => navigate("/login")}
-              variant={isLoginPage ? "secondary" : "ghost"}
+              className="auth-nav-button"
+              onClick={() => onOpenLoginModal?.()}
+              variant="secondary"
             >
               Login
             </Button>
             <Button
+              className="auth-nav-button"
               onClick={() => navigate("/signup")}
               variant={isSignupPage ? "secondary" : "primary"}
             >
