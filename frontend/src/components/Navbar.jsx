@@ -1,13 +1,19 @@
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import {
+  HiOutlineHome,
+  HiOutlineInformationCircle,
+  HiOutlinePhone,
+} from "react-icons/hi2";
+import brandLogo from "../assets/smart-campus-logo.svg";
 import { useAuth } from "../hooks/useAuth";
 import { getDefaultRouteForRole, getNavigationItems } from "../utils/roleUtils";
 import Button from "./Button";
 import NotificationDropdown from "./NotificationDropdown";
 
 const publicNavigationItems = [
-  { label: "Home", sectionId: "home" },
-  { label: "About Us", sectionId: "about" },
-  { label: "Contact Us", sectionId: "contact" },
+  { label: "Home", sectionId: "home", icon: HiOutlineHome },
+  { label: "About Us", sectionId: "about", icon: HiOutlineInformationCircle },
+  { label: "Contact Us", sectionId: "contact", icon: HiOutlinePhone },
 ];
 
 function Navbar({ onOpenLoginModal }) {
@@ -47,7 +53,9 @@ function Navbar({ onOpenLoginModal }) {
           }
           type="button"
         >
-          <span className="brand-mark">SC</span>
+          <span className="brand-logo-shell" aria-hidden="true">
+            <img className="brand-logo" src={brandLogo} alt="" />
+          </span>
           <span className="brand-copy">
             <strong>Smart Campus</strong>
             <small>Operations Hub</small>
@@ -72,11 +80,12 @@ function Navbar({ onOpenLoginModal }) {
           {publicNavigationItems.map((item) => (
             <button
               key={item.sectionId}
-              className="nav-link nav-link-button"
+              className="nav-link nav-link-button nav-link-button-public"
               onClick={() => handlePublicNavigation(item.sectionId)}
               type="button"
             >
-              {item.label}
+              <item.icon className="nav-link-icon" aria-hidden="true" />
+              <span>{item.label}</span>
             </button>
           ))}
         </nav>
@@ -102,12 +111,12 @@ function Navbar({ onOpenLoginModal }) {
             <Button
               className="auth-nav-button"
               onClick={() => onOpenLoginModal?.()}
-              variant="secondary"
+              variant="primary"
             >
               Login
             </Button>
             <Button
-              className="auth-nav-button"
+              className="auth-nav-button auth-nav-button-transparent"
               onClick={() => navigate("/signup")}
               variant={isSignupPage ? "secondary" : "primary"}
             >
