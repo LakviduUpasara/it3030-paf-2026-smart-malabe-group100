@@ -1,8 +1,39 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
+
+const heroSlides = [
+  {
+    headingLines: ["One Platform to Manage", "Campus Services", "Bookings and Support."],
+    description:
+      "Manage campus services, reservations, and support requests through one secure and streamlined platform.",
+  },
+  {
+    headingLines: ["Simplify Campus", "Services, Bookings", "and Requests."],
+    description:
+      "Coordinate reservations, service access, and request workflows through one connected campus experience.",
+  },
+  {
+    headingLines: ["Smart Campus", "Operations in", "One Place."],
+    description:
+      "Keep bookings, maintenance updates, and campus support operations organized inside a single platform.",
+  },
+];
+
+const HERO_HEADING_ROTATION_MS = 4200;
+const HERO_HEADING_TRANSITION_MS = 700;
+const heroSizingSlide = heroSlides.reduce((tallestSlide, currentSlide) => {
+  const tallestScore =
+    tallestSlide.headingLines.join("").length + tallestSlide.description.length;
+  const currentScore =
+    currentSlide.headingLines.join("").length + currentSlide.description.length;
+
+  return currentScore > tallestScore ? currentSlide : tallestSlide;
+}, heroSlides[0]);
 
 function PublicLandingPage() {
   const location = useLocation();
+  const [activeHeadingIndex, setActiveHeadingIndex] = useState(0);
+  const [previousHeadingIndex, setPreviousHeadingIndex] = useState(null);
 
   useEffect(() => {
     const sectionId = location.state?.scrollToSection;
@@ -18,26 +49,82 @@ function PublicLandingPage() {
     }
   }, [location.state]);
 
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setActiveHeadingIndex((currentIndex) => {
+        setPreviousHeadingIndex(currentIndex);
+        return (currentIndex + 1) % heroSlides.length;
+      });
+    }, HERO_HEADING_ROTATION_MS);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
+
+  useEffect(() => {
+    if (previousHeadingIndex === null) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setPreviousHeadingIndex(null);
+    }, HERO_HEADING_TRANSITION_MS);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [previousHeadingIndex]);
+
   return (
     <div className="landing-page">
       <section className="landing-hero" id="home">
         <div className="landing-hero-copy">
           <span className="landing-kicker">Smart Campus Operations Hub</span>
-          <h1 className="landing-title">
-            <span className="landing-title-line landing-title-line-primary">
-              One Platform to Manage
+          <h1 className="landing-title-stage" aria-live="polite">
+            <span aria-hidden="true" className="landing-title-sizer">
+              <span className="landing-title-stack">
+                <span className="landing-title-line landing-title-line-primary">
+                  {heroSizingSlide.headingLines[0]}
+                </span>
+                <span className="landing-title-line landing-title-line-primary">
+                  {heroSizingSlide.headingLines[1]}
+                </span>
+                <span className="landing-title-line landing-title-line-secondary">
+                  {heroSizingSlide.headingLines[2]}
+                </span>
+              </span>
+              <span className="landing-slide-description">
+                {heroSizingSlide.description}
+              </span>
             </span>
-            <span className="landing-title-line landing-title-line-primary">
-              Campus Services
-            </span>
-            <span className="landing-title-line landing-title-line-secondary">
-              Bookings and Support.
-            </span>
+
+            {heroSlides.map((slide, index) => {
+              const slideState =
+                index === activeHeadingIndex
+                  ? "is-active"
+                  : index === previousHeadingIndex
+                    ? "is-previous"
+                    : "";
+
+              return (
+                <span
+                  key={slide.headingLines.join("-")}
+                  aria-hidden={index !== activeHeadingIndex}
+                  className={`landing-title-slide ${slideState}`.trim()}
+                >
+                  <span className="landing-title-stack">
+                    <span className="landing-title-line landing-title-line-primary">
+                      {slide.headingLines[0]}
+                    </span>
+                    <span className="landing-title-line landing-title-line-primary">
+                      {slide.headingLines[1]}
+                    </span>
+                    <span className="landing-title-line landing-title-line-secondary">
+                      {slide.headingLines[2]}
+                    </span>
+                  </span>
+                  <span className="landing-slide-description">{slide.description}</span>
+                </span>
+              );
+            })}
           </h1>
-          <p className="landing-support-copy">
-            Smart Campus Operations Hub centralizes campus services so users can manage
-            requests, bookings, and support tasks from one secure place.
-          </p>
 
           <div className="landing-actions">
             <Link className="landing-cta-button" to="/login">
