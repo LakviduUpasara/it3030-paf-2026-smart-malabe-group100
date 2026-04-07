@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   HiOutlineHome,
@@ -16,12 +17,61 @@ const publicNavigationItems = [
   { label: "Contact Us", sectionId: "contact", icon: HiOutlinePhone },
 ];
 
-function Navbar({ onOpenLoginModal }) {
+function Navbar() {
   const { isAuthenticated, user, logout, isLoading } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const isLoginPage = location.pathname === "/login";
   const isSignupPage = location.pathname === "/signup";
-  const isPublicPage = !isAuthenticated && (location.pathname === "/" || isSignupPage);
+  const isPublicPage = !isAuthenticated && ["/", "/login", "/signup"].includes(location.pathname);
+  const [activePublicSection, setActivePublicSection] = useState(
+    isLoginPage || isSignupPage ? null : "home"
+  );
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      return undefined;
+    }
+
+    if (isLoginPage || isSignupPage) {
+      setActivePublicSection(null);
+      return undefined;
+    }
+
+    if (location.pathname !== "/") {
+      setActivePublicSection(null);
+      return undefined;
+    }
+
+    const sections = publicNavigationItems
+      .map((item) => document.getElementById(item.sectionId))
+      .filter(Boolean);
+
+    if (!sections.length) {
+      setActivePublicSection("home");
+      return undefined;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visibleEntries = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+
+        if (visibleEntries.length > 0) {
+          setActivePublicSection(visibleEntries[0].target.id);
+        }
+      },
+      {
+        rootMargin: "-20% 0px -55% 0px",
+        threshold: [0.2, 0.35, 0.5, 0.7],
+      }
+    );
+
+    sections.forEach((section) => observer.observe(section));
+
+    return () => observer.disconnect();
+  }, [isAuthenticated, isLoginPage, isSignupPage, location.pathname]);
 
   const handleLogout = async () => {
     await logout();
@@ -29,6 +79,8 @@ function Navbar({ onOpenLoginModal }) {
   };
 
   const handlePublicNavigation = (sectionId) => {
+    setActivePublicSection(sectionId);
+
     if (location.pathname !== "/") {
       navigate("/", { state: { scrollToSection: sectionId } });
       return;
@@ -80,9 +132,12 @@ function Navbar({ onOpenLoginModal }) {
           {publicNavigationItems.map((item) => (
             <button
               key={item.sectionId}
-              className="nav-link nav-link-button nav-link-button-public"
+              className={`nav-link nav-link-button nav-link-button-public ${
+                activePublicSection === item.sectionId ? "active" : ""
+              }`.trim()}
               onClick={() => handlePublicNavigation(item.sectionId)}
               type="button"
+              aria-current={activePublicSection === item.sectionId ? "page" : undefined}
             >
               <item.icon className="nav-link-icon" aria-hidden="true" />
               <span>{item.label}</span>
@@ -110,8 +165,9 @@ function Navbar({ onOpenLoginModal }) {
           <div className="navbar-auth-actions">
             <Button
               className="auth-nav-button"
-              onClick={() => onOpenLoginModal?.()}
+              onClick={() => navigate("/login")}
               variant="primary"
+              aria-current={isLoginPage ? "page" : undefined}
             >
               Login
             </Button>
@@ -119,6 +175,7 @@ function Navbar({ onOpenLoginModal }) {
               className="auth-nav-button auth-nav-button-transparent"
               onClick={() => navigate("/signup")}
               variant={isSignupPage ? "secondary" : "primary"}
+              aria-current={isSignupPage ? "page" : undefined}
             >
               Sign Up
             </Button>

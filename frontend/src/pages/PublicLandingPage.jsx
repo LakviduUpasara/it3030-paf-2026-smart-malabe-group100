@@ -1,8 +1,7 @@
 import { useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
-import Button from "../components/Button";
 
-function PublicLandingPage({ onOpenLoginModal }) {
+function PublicLandingPage() {
   const location = useLocation();
 
   useEffect(() => {
@@ -41,9 +40,9 @@ function PublicLandingPage({ onOpenLoginModal }) {
           </p>
 
           <div className="landing-actions">
-            <Button className="landing-cta-button" onClick={onOpenLoginModal} variant="primary">
+            <Link className="landing-cta-button" to="/login">
               Login
-            </Button>
+            </Link>
             <Link className="landing-secondary-button" to="/signup">
               Sign Up
             </Link>

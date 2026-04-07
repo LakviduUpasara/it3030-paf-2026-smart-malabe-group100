@@ -19,20 +19,20 @@ import AdminRoute from "./AdminRoute";
 import ProtectedRoute from "./ProtectedRoute";
 import { getDefaultRouteForRole, ROLES } from "../utils/roleUtils";
 
-function PublicHomeRoute({ onOpenLoginModal }) {
+function PublicHomeRoute() {
   const { isAuthenticated, user } = useAuth();
 
   if (isAuthenticated) {
     return <Navigate replace to={getDefaultRouteForRole(user?.role)} />;
   }
 
-  return <PublicLandingPage onOpenLoginModal={onOpenLoginModal} />;
+  return <PublicLandingPage />;
 }
 
-function AppRoutes({ onOpenLoginModal }) {
+function AppRoutes() {
   return (
     <Routes>
-      <Route index element={<PublicHomeRoute onOpenLoginModal={onOpenLoginModal} />} />
+      <Route index element={<PublicHomeRoute />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
       <Route path="/access-denied" element={<AccessDeniedPage />} />

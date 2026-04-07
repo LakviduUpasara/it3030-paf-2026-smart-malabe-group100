@@ -1,11 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import Button from "../components/Button";
 import Card from "../components/Card";
 import LoadingSpinner from "../components/LoadingSpinner";
 import { useAuth } from "../hooks/useAuth";
-import { inferRoleFromEmail } from "../utils/mockData";
-import { getDefaultRouteForRole, getRoleDescription } from "../utils/roleUtils";
+import { getDefaultRouteForRole } from "../utils/roleUtils";
 
 const initialFormState = {
   name: "",
@@ -29,8 +28,11 @@ function SignupPage() {
   } = useAuth();
   const navigate = useNavigate();
   const normalizedEmail = formState.email.trim().toLowerCase();
-  const previewRole = inferRoleFromEmail(normalizedEmail || "user@smartcampus.edu");
   const activeError = localError || error;
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
 
   if (isAuthenticated) {
     return <Navigate replace to={getDefaultRouteForRole(user?.role)} />;
@@ -91,33 +93,14 @@ function SignupPage() {
   };
 
   return (
-    <section className="auth-screen auth-screen-signup">
-      <div className="auth-hero-copy">
-        <span className="auth-hero-kicker">Create your Smart Campus access</span>
-        <h1 className="auth-hero-title">Get Started in One Secure Place.</h1>
-        <p className="auth-hero-description">
-          Create your account to manage requests, bookings, resource access, and
-          campus notifications from one system.
-        </p>
-        <p className="auth-hero-footnote">Role based access is assigned from your campus identity.</p>
-      </div>
-
-      <div className="auth-card-wrap">
+    <section className="auth-screen auth-screen-centered">
+      <div className="auth-card-wrap auth-card-wrap-centered">
         <Card className="auth-card glass-card">
-          <div className="auth-badge-row">
-            <span className={`role-chip role-${previewRole.toLowerCase()}`}>{previewRole}</span>
-          </div>
-
           <div className="auth-heading">
             <h1 className="auth-title">Sign Up</h1>
             <p className="auth-subtitle">
-              Create a secure campus account and continue to your workspace.
+              Create your Smart Campus account and continue to your workspace.
             </p>
-          </div>
-
-          <div className="login-role-preview">
-            <strong>Detected access level</strong>
-            <span>{getRoleDescription(previewRole)}</span>
           </div>
 
           <form className="login-form" onSubmit={handleSubmit}>
@@ -309,7 +292,7 @@ function SignupPage() {
                   />
                 </svg>
               </span>
-              <span className="social-button-label">Sign up with Google</span>
+              <span className="social-button-label">Continue with Google</span>
             </button>
 
             <button
@@ -326,9 +309,14 @@ function SignupPage() {
                   />
                 </svg>
               </span>
-              <span className="social-button-label">Sign up with Apple</span>
+              <span className="social-button-label">Continue with Apple</span>
             </button>
           </div>
+
+          <p className="login-demo-note">
+            Use your official campus email to activate the correct role and continue
+            into your Smart Campus workspace.
+          </p>
 
           <p className="auth-switch-copy">
             Already have an account?{" "}
