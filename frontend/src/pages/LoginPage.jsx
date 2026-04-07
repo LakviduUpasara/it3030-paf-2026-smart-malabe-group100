@@ -15,6 +15,7 @@ const initialCredentials = {
 function LoginPage() {
   const [credentials, setCredentials] = useState(initialCredentials);
   const [localError, setLocalError] = useState("");
+  const [rememberMe, setRememberMe] = useState(true);
   const {
     isAuthenticated,
     user,
@@ -87,25 +88,29 @@ function LoginPage() {
 
   return (
     <section className="auth-screen auth-screen-login">
-      <div className="auth-card-wrap">
+      <div className="auth-login-hero">
+        <div className="auth-hero-copy">
+          <span className="auth-hero-kicker">Welcome to Smart Campus</span>
+          <h1 className="auth-hero-title">Campus Services, One Login.</h1>
+          <p className="auth-hero-description">
+            Access campus support, booking workflows, service requests, and your role
+            based dashboard securely.
+          </p>
+          <p className="auth-hero-footnote">Authorized university members only.</p>
+        </div>
+      </div>
+
+      <div className="auth-card-wrap auth-card-wrap-popup">
         <Card className="auth-card glass-card">
           <div className="auth-badge-row">
-            <span className="eyebrow-pill auth-eyebrow">Smart Campus Operations Hub</span>
             <span className={`role-chip role-${previewRole.toLowerCase()}`}>{previewRole}</span>
           </div>
 
           <div className="auth-heading">
-            <h1 className="auth-title">Login to your campus workspace</h1>
+            <h1 className="auth-title">Login</h1>
             <p className="auth-subtitle">
-              Secure access for bookings, maintenance tickets, approvals, and campus
-              notifications from one role-aware platform.
+              Sign in to continue to your Smart Campus workspace.
             </p>
-          </div>
-
-          <div className="auth-highlight-strip">
-            <span>Campus-wide access</span>
-            <span>Protected routes</span>
-            <span>Google and Apple sign-in</span>
           </div>
 
           <div className="login-role-preview">
@@ -115,7 +120,7 @@ function LoginPage() {
 
           <form className="login-form" onSubmit={handleCredentialLogin}>
             <label className="field field-annotated">
-              <span>Email address</span>
+              <span>Campus Email</span>
               <div className="input-shell">
                 <span className="input-icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -142,7 +147,7 @@ function LoginPage() {
                   className="login-input"
                   name="email"
                   onChange={handleFieldChange}
-                  placeholder="name@smartcampus.edu"
+                  placeholder="e.g., name@campus.edu"
                   type="email"
                   value={credentials.email}
                 />
@@ -186,6 +191,20 @@ function LoginPage() {
                 />
               </div>
             </label>
+
+            <div className="auth-form-utility">
+              <label className="auth-checkbox">
+                <input
+                  checked={rememberMe}
+                  onChange={(event) => setRememberMe(event.target.checked)}
+                  type="checkbox"
+                />
+                <span>Remember Me</span>
+              </label>
+              <button className="auth-link-button" type="button">
+                Forgot password?
+              </button>
+            </div>
 
             {activeError ? <p className="alert alert-error">{activeError}</p> : null}
 
@@ -252,9 +271,9 @@ function LoginPage() {
           </div>
 
           <p className="login-demo-note">
-            Demo access: use <strong>admin@smartcampus.edu</strong> for ADMIN,
-            <strong> technician@smartcampus.edu</strong> for TECHNICIAN, or any
-            other valid email for USER access.
+            Need access? Contact Campus IT Services. Demo access still supports
+            <strong> admin@smartcampus.edu</strong> and
+            <strong> technician@smartcampus.edu</strong>.
           </p>
 
           <p className="auth-switch-copy">

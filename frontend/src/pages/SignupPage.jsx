@@ -92,25 +92,27 @@ function SignupPage() {
 
   return (
     <section className="auth-screen auth-screen-signup">
+      <div className="auth-hero-copy">
+        <span className="auth-hero-kicker">Create your Smart Campus access</span>
+        <h1 className="auth-hero-title">Get Started in One Secure Place.</h1>
+        <p className="auth-hero-description">
+          Create your account to manage requests, bookings, resource access, and
+          campus notifications from one system.
+        </p>
+        <p className="auth-hero-footnote">Role based access is assigned from your campus identity.</p>
+      </div>
+
       <div className="auth-card-wrap">
         <Card className="auth-card glass-card">
           <div className="auth-badge-row">
-            <span className="eyebrow-pill auth-eyebrow">Create your campus account</span>
             <span className={`role-chip role-${previewRole.toLowerCase()}`}>{previewRole}</span>
           </div>
 
           <div className="auth-heading">
-            <h1 className="auth-title">Sign up for Smart Campus</h1>
+            <h1 className="auth-title">Sign Up</h1>
             <p className="auth-subtitle">
-              Create a secure account to manage resource bookings, maintenance
-              requests, and campus notifications from a single dashboard.
+              Create a secure campus account and continue to your workspace.
             </p>
-          </div>
-
-          <div className="auth-highlight-strip">
-            <span>Fast onboarding</span>
-            <span>Role-aware access</span>
-            <span>Scalable auth flow</span>
           </div>
 
           <div className="login-role-preview">
