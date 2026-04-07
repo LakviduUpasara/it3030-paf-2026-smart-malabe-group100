@@ -1,10 +1,25 @@
-const AUTH_KEY = "smart-campus-auth";
+export function readStorageValue(key) {
+  const rawValue = window.localStorage.getItem(key);
+  if (!rawValue) {
+    return null;
+  }
 
-export function getStoredAuth() {
-  return window.localStorage.getItem(AUTH_KEY) === "true";
+  try {
+    return JSON.parse(rawValue);
+  } catch (error) {
+    return rawValue;
+  }
 }
 
-export function setStoredAuth(value) {
-  window.localStorage.setItem(AUTH_KEY, String(value));
+export function writeStorageValue(key, value) {
+  if (value === null || value === undefined) {
+    window.localStorage.removeItem(key);
+    return;
+  }
+
+  window.localStorage.setItem(key, JSON.stringify(value));
 }
 
+export function clearStorage(key) {
+  window.localStorage.removeItem(key);
+}
