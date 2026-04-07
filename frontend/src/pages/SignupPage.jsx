@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import Button from "../components/Button";
 import Card from "../components/Card";
 import LoadingSpinner from "../components/LoadingSpinner";
@@ -7,18 +7,20 @@ import { useAuth } from "../hooks/useAuth";
 import { inferRoleFromEmail } from "../utils/mockData";
 import { getDefaultRouteForRole, getRoleDescription } from "../utils/roleUtils";
 
-const initialCredentials = {
+const initialFormState = {
+  name: "",
   email: "",
   password: "",
+  confirmPassword: "",
 };
 
-function LoginPage() {
-  const [credentials, setCredentials] = useState(initialCredentials);
+function SignupPage() {
+  const [formState, setFormState] = useState(initialFormState);
   const [localError, setLocalError] = useState("");
   const {
     isAuthenticated,
     user,
-    login,
+    register,
     loginWithGoogle,
     loginWithApple,
     clearError,
@@ -26,8 +28,7 @@ function LoginPage() {
     error,
   } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
-  const normalizedEmail = credentials.email.trim().toLowerCase();
+  const normalizedEmail = formState.email.trim().toLowerCase();
   const previewRole = inferRoleFromEmail(normalizedEmail || "user@smartcampus.edu");
   const activeError = localError || error;
 
@@ -35,42 +36,46 @@ function LoginPage() {
     return <Navigate replace to={getDefaultRouteForRole(user?.role)} />;
   }
 
-  const redirectToWorkspace = (authenticatedUser) => {
-    const redirectTarget =
-      location.state?.from?.pathname || getDefaultRouteForRole(authenticatedUser.role);
-    navigate(redirectTarget, { replace: true });
-  };
-
   const handleFieldChange = (event) => {
     const { name, value } = event.target;
-    setCredentials((currentCredentials) => ({
-      ...currentCredentials,
+    setFormState((currentState) => ({
+      ...currentState,
       [name]: value,
     }));
     setLocalError("");
     clearError();
   };
 
-  const handleCredentialLogin = async (event) => {
+  const redirectToWorkspace = (authenticatedUser) => {
+    navigate(getDefaultRouteForRole(authenticatedUser.role), { replace: true });
+  };
+
+  const handleSubmit = async (event) => {
     event.preventDefault();
 
-    if (!normalizedEmail || !credentials.password.trim()) {
-      setLocalError("Enter your email address and password to continue.");
+    if (!formState.name.trim() || !normalizedEmail || !formState.password.trim()) {
+      setLocalError("Complete all sign up fields to continue.");
+      return;
+    }
+
+    if (formState.password !== formState.confirmPassword) {
+      setLocalError("Password confirmation does not match.");
       return;
     }
 
     try {
-      const authenticatedUser = await login({
+      const authenticatedUser = await register({
+        name: formState.name,
         email: normalizedEmail,
-        password: credentials.password,
+        password: formState.password,
       });
       redirectToWorkspace(authenticatedUser);
-    } catch (loginError) {
-      return loginError;
+    } catch (signupError) {
+      return signupError;
     }
   };
 
-  const handleProviderLogin = async (provider) => {
+  const handleProviderSignup = async (provider) => {
     setLocalError("");
     clearError();
 
@@ -80,32 +85,32 @@ function LoginPage() {
           ? await loginWithApple(normalizedEmail)
           : await loginWithGoogle(normalizedEmail);
       redirectToWorkspace(authenticatedUser);
-    } catch (loginError) {
-      return loginError;
+    } catch (signupError) {
+      return signupError;
     }
   };
 
   return (
-    <section className="auth-screen auth-screen-login">
+    <section className="auth-screen auth-screen-signup">
       <div className="auth-card-wrap">
         <Card className="auth-card glass-card">
           <div className="auth-badge-row">
-            <span className="eyebrow-pill auth-eyebrow">Smart Campus Operations Hub</span>
+            <span className="eyebrow-pill auth-eyebrow">Create your campus account</span>
             <span className={`role-chip role-${previewRole.toLowerCase()}`}>{previewRole}</span>
           </div>
 
           <div className="auth-heading">
-            <h1 className="auth-title">Login to your campus workspace</h1>
+            <h1 className="auth-title">Sign up for Smart Campus</h1>
             <p className="auth-subtitle">
-              Secure access for bookings, maintenance tickets, approvals, and campus
-              notifications from one role-aware platform.
+              Create a secure account to manage resource bookings, maintenance
+              requests, and campus notifications from a single dashboard.
             </p>
           </div>
 
           <div className="auth-highlight-strip">
-            <span>Campus-wide access</span>
-            <span>Protected routes</span>
-            <span>Google and Apple sign-in</span>
+            <span>Fast onboarding</span>
+            <span>Role-aware access</span>
+            <span>Scalable auth flow</span>
           </div>
 
           <div className="login-role-preview">
@@ -113,7 +118,34 @@ function LoginPage() {
             <span>{getRoleDescription(previewRole)}</span>
           </div>
 
-          <form className="login-form" onSubmit={handleCredentialLogin}>
+          <form className="login-form" onSubmit={handleSubmit}>
+            <label className="field field-annotated">
+              <span>Full name</span>
+              <div className="input-shell">
+                <span className="input-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path
+                      d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-6.75 8.25a6.75 6.75 0 0 1 13.5 0"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="1.5"
+                    />
+                  </svg>
+                </span>
+                <input
+                  autoComplete="name"
+                  className="login-input"
+                  name="name"
+                  onChange={handleFieldChange}
+                  placeholder="Your full name"
+                  type="text"
+                  value={formState.name}
+                />
+              </div>
+            </label>
+
             <label className="field field-annotated">
               <span>Email address</span>
               <div className="input-shell">
@@ -144,7 +176,7 @@ function LoginPage() {
                   onChange={handleFieldChange}
                   placeholder="name@smartcampus.edu"
                   type="email"
-                  value={credentials.email}
+                  value={formState.email}
                 />
               </div>
             </label>
@@ -176,13 +208,58 @@ function LoginPage() {
                   </svg>
                 </span>
                 <input
-                  autoComplete="current-password"
+                  autoComplete="new-password"
                   className="login-input"
                   name="password"
                   onChange={handleFieldChange}
-                  placeholder="Enter your password"
+                  placeholder="Create a password"
                   type="password"
-                  value={credentials.password}
+                  value={formState.password}
+                />
+              </div>
+            </label>
+
+            <label className="field field-annotated">
+              <span>Confirm password</span>
+              <div className="input-shell">
+                <span className="input-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path
+                      d="M7.25 10.75v-2a4.75 4.75 0 1 1 9.5 0v2"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="1.5"
+                    />
+                    <rect
+                      x="4.75"
+                      y="10.75"
+                      width="14.5"
+                      height="9.5"
+                      rx="2"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                    />
+                    <path
+                      d="m9.8 15.5 1.4 1.4 3-3"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="1.5"
+                    />
+                  </svg>
+                </span>
+                <input
+                  autoComplete="new-password"
+                  className="login-input"
+                  name="confirmPassword"
+                  onChange={handleFieldChange}
+                  placeholder="Confirm your password"
+                  type="password"
+                  value={formState.confirmPassword}
                 />
               </div>
             </label>
@@ -195,7 +272,7 @@ function LoginPage() {
               type="submit"
               variant="primary"
             >
-              Login
+              Sign Up
             </Button>
           </form>
 
@@ -207,7 +284,7 @@ function LoginPage() {
             <button
               className="social-button"
               disabled={isLoading}
-              onClick={() => handleProviderLogin("google")}
+              onClick={() => handleProviderSignup("google")}
               type="button"
             >
               <span className="social-icon" aria-hidden="true">
@@ -230,13 +307,13 @@ function LoginPage() {
                   />
                 </svg>
               </span>
-              <span className="social-button-label">Continue with Google</span>
+              <span className="social-button-label">Sign up with Google</span>
             </button>
 
             <button
               className="social-button"
               disabled={isLoading}
-              onClick={() => handleProviderLogin("apple")}
+              onClick={() => handleProviderSignup("apple")}
               type="button"
             >
               <span className="social-icon" aria-hidden="true">
@@ -247,28 +324,22 @@ function LoginPage() {
                   />
                 </svg>
               </span>
-              <span className="social-button-label">Continue with Apple</span>
+              <span className="social-button-label">Sign up with Apple</span>
             </button>
           </div>
 
-          <p className="login-demo-note">
-            Demo access: use <strong>admin@smartcampus.edu</strong> for ADMIN,
-            <strong> technician@smartcampus.edu</strong> for TECHNICIAN, or any
-            other valid email for USER access.
-          </p>
-
           <p className="auth-switch-copy">
-            Do not have an account?{" "}
-            <Link className="text-link" to="/signup">
-              Sign Up
+            Already have an account?{" "}
+            <Link className="text-link" to="/login">
+              Login
             </Link>
           </p>
 
-          {isLoading ? <LoadingSpinner label="Authenticating your access..." /> : null}
+          {isLoading ? <LoadingSpinner label="Creating your account..." /> : null}
         </Card>
       </div>
     </section>
   );
 }
 
-export default LoginPage;
+export default SignupPage;

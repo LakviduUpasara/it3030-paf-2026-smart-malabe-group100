@@ -12,6 +12,7 @@ import MyBookingsPage from "../pages/MyBookingsPage";
 import MyTicketsPage from "../pages/MyTicketsPage";
 import NotificationsPage from "../pages/NotificationsPage";
 import NotFoundPage from "../pages/NotFoundPage";
+import SignupPage from "../pages/SignupPage";
 import TechnicianDashboardPage from "../pages/TechnicianDashboardPage";
 import AdminRoute from "./AdminRoute";
 import ProtectedRoute from "./ProtectedRoute";
@@ -32,6 +33,7 @@ function AppRoutes() {
     <Routes>
       <Route index element={<RootRedirect />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/signup" element={<SignupPage />} />
       <Route path="/access-denied" element={<AccessDeniedPage />} />
 
       <Route

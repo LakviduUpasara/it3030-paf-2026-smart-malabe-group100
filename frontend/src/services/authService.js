@@ -38,6 +38,29 @@ export async function loginWithCredentials({ email, password }) {
   );
 }
 
+export async function registerAccount({ name, email, password }) {
+  const normalizedEmail = normalizeEmail(email || "");
+  const normalizedName = name?.trim();
+
+  return requestWithFallback(
+    () => api.post("/auth/register", { name: normalizedName, email: normalizedEmail, password }),
+    () => {
+      if (!normalizedName || !normalizedEmail || !password?.trim()) {
+        throw new Error("Name, email, and password are required.");
+      }
+
+      validateEmail(normalizedEmail, "Enter a valid email address.");
+
+      return buildMockAuthenticatedUser({
+        name: normalizedName,
+        email: normalizedEmail,
+        provider: "credentials",
+      });
+    },
+    "Registration failed.",
+  );
+}
+
 async function loginWithProvider(provider, email) {
   const normalizedEmail = normalizeEmail(email || "user@smartcampus.edu");
 

@@ -1,4 +1,4 @@
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { getDefaultRouteForRole, getNavigationItems } from "../utils/roleUtils";
 import Button from "./Button";
@@ -6,7 +6,10 @@ import NotificationDropdown from "./NotificationDropdown";
 
 function Navbar() {
   const { isAuthenticated, user, logout, isLoading } = useAuth();
+  const location = useLocation();
   const navigate = useNavigate();
+  const isLoginPage = location.pathname === "/login";
+  const isSignupPage = location.pathname === "/signup";
 
   const handleLogout = async () => {
     await logout();
@@ -61,9 +64,23 @@ function Navbar() {
             </Button>
           </>
         ) : (
-          <Button onClick={() => navigate("/login")} variant="secondary">
-            Login
-          </Button>
+          <div className="navbar-auth-actions">
+            <span className="navbar-auth-copy">
+              {isSignupPage ? "Already have an account?" : "Don't have an account?"}
+            </span>
+            <Button
+              onClick={() => navigate("/login")}
+              variant={isLoginPage ? "secondary" : "ghost"}
+            >
+              Login
+            </Button>
+            <Button
+              onClick={() => navigate("/signup")}
+              variant={isSignupPage ? "secondary" : "primary"}
+            >
+              Sign Up
+            </Button>
+          </div>
         )}
       </div>
     </header>
@@ -71,4 +88,3 @@ function Navbar() {
 }
 
 export default Navbar;
-

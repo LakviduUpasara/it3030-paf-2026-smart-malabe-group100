@@ -36,6 +36,9 @@ export function AuthProvider({ children }) {
       "Unable to sign in.",
     );
 
+  const register = async (payload) =>
+    authenticate(() => authService.registerAccount(payload), "Unable to create account.");
+
   const loginWithGoogle = async (email) =>
     authenticate(() => authService.loginWithGoogle(email), "Unable to sign in with Google.");
 
@@ -64,6 +67,7 @@ export function AuthProvider({ children }) {
     error,
     clearError,
     login,
+    register,
     loginWithGoogle,
     loginWithApple,
     logout,
