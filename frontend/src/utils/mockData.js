@@ -146,31 +146,72 @@ export const mockNotifications = [
   },
 ];
 
-export function buildMockGoogleUser(role) {
+export function inferRoleFromEmail(email = "") {
+  const normalizedEmail = email.trim().toLowerCase();
+  const identity = normalizedEmail.split("@")[0];
+
+  if (identity.startsWith("admin")) {
+    return ROLES.ADMIN;
+  }
+
+  if (identity.startsWith("tech") || identity.startsWith("technician")) {
+    return ROLES.TECHNICIAN;
+  }
+
+  return ROLES.USER;
+}
+
+export function getDefaultEmailForRole(role = ROLES.USER) {
   if (role === ROLES.ADMIN) {
-    return {
-      name: "Alicia Fernando",
-      email: "admin@smartcampus.edu",
-      role: ROLES.ADMIN,
-      provider: "google",
-    };
+    return "admin@smartcampus.edu";
   }
 
   if (role === ROLES.TECHNICIAN) {
-    return {
-      name: "Nimal Silva",
-      email: "technician@smartcampus.edu",
-      role: ROLES.TECHNICIAN,
-      provider: "google",
-    };
+    return "technician@smartcampus.edu";
   }
 
+  return "user@smartcampus.edu";
+}
+
+function toDisplayName(localPart) {
+  return localPart
+    .split(/[._-]/)
+    .filter(Boolean)
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(" ");
+}
+
+function getDisplayNameForRole(role, email) {
+  const identity = email.split("@")[0];
+
+  if (role === ROLES.ADMIN) {
+    return "Alicia Fernando";
+  }
+
+  if (role === ROLES.TECHNICIAN) {
+    return "Nimal Silva";
+  }
+
+  return toDisplayName(identity) || "Campus User";
+}
+
+export function buildMockAuthenticatedUser({ email, provider = "credentials" }) {
+  const normalizedEmail = (email || getDefaultEmailForRole()).trim().toLowerCase();
+  const role = inferRoleFromEmail(normalizedEmail);
+
   return {
-    name: "Kavindu Perera",
-    email: "user@smartcampus.edu",
-    role: ROLES.USER,
-    provider: "google",
+    name: getDisplayNameForRole(role, normalizedEmail),
+    email: normalizedEmail,
+    role,
+    provider,
   };
+}
+
+export function buildMockGoogleUser(role) {
+  return buildMockAuthenticatedUser({
+    email: getDefaultEmailForRole(role),
+    provider: "google",
+  });
 }
 
 export function buildCreatedBooking(payload) {
@@ -183,4 +224,3 @@ export function buildCreatedBooking(payload) {
     status: "Pending",
   };
 }
-

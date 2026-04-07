@@ -10,21 +10,37 @@ export function AuthProvider({ children }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const loginWithGoogle = async (role) => {
+  const clearError = () => {
+    setError("");
+  };
+
+  const authenticate = async (authAction, fallbackMessage) => {
     setIsLoading(true);
     setError("");
 
     try {
-      const authenticatedUser = await authService.loginWithGoogle(role);
+      const authenticatedUser = await authAction();
       setUser(authenticatedUser);
       return authenticatedUser;
     } catch (loginError) {
-      setError(loginError.message || "Unable to sign in.");
+      setError(loginError.message || fallbackMessage);
       throw loginError;
     } finally {
       setIsLoading(false);
     }
   };
+
+  const login = async (credentials) =>
+    authenticate(
+      () => authService.loginWithCredentials(credentials),
+      "Unable to sign in.",
+    );
+
+  const loginWithGoogle = async (email) =>
+    authenticate(() => authService.loginWithGoogle(email), "Unable to sign in with Google.");
+
+  const loginWithApple = async (email) =>
+    authenticate(() => authService.loginWithApple(email), "Unable to sign in with Apple.");
 
   const logout = async () => {
     setIsLoading(true);
@@ -46,7 +62,10 @@ export function AuthProvider({ children }) {
     isAuthenticated: Boolean(user?.email),
     isLoading,
     error,
+    clearError,
+    login,
     loginWithGoogle,
+    loginWithApple,
     logout,
   };
 
