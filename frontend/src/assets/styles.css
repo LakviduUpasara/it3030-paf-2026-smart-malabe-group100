@@ -86,8 +86,8 @@ a {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  padding: 1rem 1.5rem;
+  gap: 0.8rem;
+  padding: 0.8rem 1.2rem;
   backdrop-filter: blur(18px);
   background: rgba(248, 251, 254, 0.88);
   border-bottom: 1px solid var(--border);
@@ -101,11 +101,11 @@ a {
 }
 
 .navbar-auth-shell {
-  top: 1rem;
-  width: min(1840px, calc(100% - 2.5rem));
+  top: 0.8rem;
+  width: min(1640px, calc(100% - 2rem));
   margin: 0 auto;
-  border-radius: 28px;
-  padding: 1.15rem 1.6rem;
+  border-radius: 24px;
+  padding: 0.9rem 1.25rem;
 }
 
 .app-shell-auth .brand-button,
@@ -126,7 +126,7 @@ a {
 .brand-button {
   display: inline-flex;
   align-items: center;
-  gap: 0.9rem;
+  gap: 0.75rem;
   border: none;
   background: transparent;
   cursor: pointer;
@@ -140,40 +140,40 @@ a {
 }
 
 .brand-copy strong {
-  font-size: 1.05rem;
+  font-size: 0.98rem;
   line-height: 1.1;
 }
 
 .brand-button small {
   display: block;
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   line-height: 1.1;
 }
 
 .brand-logo-shell {
-  width: 62px;
-  height: 62px;
+  width: 54px;
+  height: 54px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 20px;
+  border-radius: 17px;
   flex-shrink: 0;
   box-shadow: 0 14px 28px rgba(7, 24, 48, 0.24);
   overflow: hidden;
 }
 
 .brand-logo {
-  width: 62px;
-  height: 62px;
+  width: 54px;
+  height: 54px;
   display: block;
-  border-radius: 20px;
+  border-radius: 17px;
 }
 
 .navbar-links {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.65rem;
+  gap: 0.45rem;
   justify-content: center;
 }
 
@@ -182,7 +182,7 @@ a {
 }
 
 .nav-link {
-  padding: 0.75rem 1rem;
+  padding: 0.62rem 0.88rem;
   border-radius: 999px;
   color: var(--muted);
   transition: 0.2s ease;
@@ -198,13 +198,13 @@ a {
 .nav-link-button-public {
   display: inline-flex;
   align-items: center;
-  gap: 0.55rem;
+  gap: 0.45rem;
   font-weight: 500;
 }
 
 .nav-link-icon {
-  width: 1.12rem;
-  height: 1.12rem;
+  width: 1rem;
+  height: 1rem;
   flex-shrink: 0;
   opacity: 0.94;
 }
@@ -223,13 +223,13 @@ a {
 .navbar-actions {
   display: flex;
   align-items: center;
-  gap: 0.8rem;
+  gap: 0.65rem;
 }
 
 .navbar-auth-actions {
   display: inline-flex;
   align-items: center;
-  gap: 0.95rem;
+  gap: 0.75rem;
   flex-wrap: wrap;
 }
 
@@ -240,11 +240,11 @@ a {
 }
 
 .auth-nav-button {
-  min-width: 116px;
+  min-width: 108px;
   justify-content: center;
-  padding: 0.95rem 1.45rem;
+  padding: 0.82rem 1.25rem;
   border-radius: 999px;
-  font-size: 0.98rem;
+  font-size: 0.94rem;
 }
 
 .auth-nav-button-transparent {
