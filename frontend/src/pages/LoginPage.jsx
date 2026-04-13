@@ -6,7 +6,7 @@ import { useAuth } from "../hooks/useAuth";
 import { getDefaultRouteForRole } from "../utils/roleUtils";
 
 function LoginPage() {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, pendingApproval, user } = useAuth();
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -14,6 +14,10 @@ function LoginPage() {
 
   if (isAuthenticated) {
     return <Navigate replace to={getDefaultRouteForRole(user?.role)} />;
+  }
+
+  if (pendingApproval?.status === "PENDING") {
+    return <Navigate replace to="/approval-pending" />;
   }
 
   return (

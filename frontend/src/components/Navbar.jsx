@@ -23,9 +23,11 @@ function Navbar() {
   const navigate = useNavigate();
   const isLoginPage = location.pathname === "/login";
   const isSignupPage = location.pathname === "/signup";
-  const isPublicPage = !isAuthenticated && ["/", "/login", "/signup"].includes(location.pathname);
+  const isApprovalPendingPage = location.pathname === "/approval-pending";
+  const isPublicPage =
+    !isAuthenticated && ["/", "/login", "/signup", "/approval-pending"].includes(location.pathname);
   const [activePublicSection, setActivePublicSection] = useState(
-    isLoginPage || isSignupPage ? null : "home"
+    isLoginPage || isSignupPage || isApprovalPendingPage ? null : "home"
   );
 
   useEffect(() => {
@@ -33,7 +35,7 @@ function Navbar() {
       return undefined;
     }
 
-    if (isLoginPage || isSignupPage) {
+    if (isLoginPage || isSignupPage || isApprovalPendingPage) {
       setActivePublicSection(null);
       return undefined;
     }
@@ -71,7 +73,7 @@ function Navbar() {
     sections.forEach((section) => observer.observe(section));
 
     return () => observer.disconnect();
-  }, [isAuthenticated, isLoginPage, isSignupPage, location.pathname]);
+  }, [isAuthenticated, isLoginPage, isSignupPage, isApprovalPendingPage, location.pathname]);
 
   const handleLogout = async () => {
     await logout();

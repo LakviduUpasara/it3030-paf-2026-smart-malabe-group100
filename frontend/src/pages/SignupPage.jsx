@@ -7,25 +7,23 @@ import { useAuth } from "../hooks/useAuth";
 import { getDefaultRouteForRole } from "../utils/roleUtils";
 
 const initialFormState = {
-  name: "",
+  fullName: "",
   email: "",
   password: "",
   confirmPassword: "",
+  campusId: "",
+  phoneNumber: "",
+  department: "",
+  reasonForAccess: "",
+  preferredTwoFactorMethod: "EMAIL_OTP",
 };
 
 function SignupPage() {
   const [formState, setFormState] = useState(initialFormState);
+  const [step, setStep] = useState(1);
   const [localError, setLocalError] = useState("");
-  const {
-    isAuthenticated,
-    user,
-    register,
-    loginWithGoogle,
-    loginWithApple,
-    clearError,
-    isLoading,
-    error,
-  } = useAuth();
+  const { isAuthenticated, pendingApproval, user, register, clearError, isLoading, error } =
+    useAuth();
   const navigate = useNavigate();
   const normalizedEmail = formState.email.trim().toLowerCase();
   const activeError = localError || error;
@@ -38,6 +36,10 @@ function SignupPage() {
     return <Navigate replace to={getDefaultRouteForRole(user?.role)} />;
   }
 
+  if (pendingApproval?.status === "PENDING") {
+    return <Navigate replace to="/approval-pending" />;
+  }
+
   const handleFieldChange = (event) => {
     const { name, value } = event.target;
     setFormState((currentState) => ({
@@ -48,48 +50,110 @@ function SignupPage() {
     clearError();
   };
 
-  const redirectToWorkspace = (authenticatedUser) => {
-    navigate(getDefaultRouteForRole(authenticatedUser.role), { replace: true });
-  };
-
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-
-    if (!formState.name.trim() || !normalizedEmail || !formState.password.trim()) {
-      setLocalError("Complete all sign up fields to continue.");
-      return;
+  const validateStepOne = () => {
+    if (!formState.fullName.trim() || !normalizedEmail || !formState.password.trim()) {
+      setLocalError("Complete your account details to continue.");
+      return false;
     }
 
     if (formState.password !== formState.confirmPassword) {
       setLocalError("Password confirmation does not match.");
+      return false;
+    }
+
+    return true;
+  };
+
+  const validateStepTwo = () => {
+    if (
+      !formState.campusId.trim() ||
+      !formState.phoneNumber.trim() ||
+      !formState.department.trim() ||
+      !formState.reasonForAccess.trim()
+    ) {
+      setLocalError("Complete the campus profile details before submitting the request.");
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleNextStep = () => {
+    if (!validateStepOne()) {
+      return;
+    }
+
+    setStep(2);
+    setLocalError("");
+  };
+
+  const handleBack = () => {
+    setStep(1);
+    setLocalError("");
+    clearError();
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    return submitSignupRequest("LOCAL");
+  };
+
+  const submitSignupRequest = async (authProvider) => {
+    if (!validateStepTwo()) {
       return;
     }
 
     try {
-      const authenticatedUser = await register({
-        name: formState.name,
+      const response = await register({
+        fullName: formState.fullName,
         email: normalizedEmail,
         password: formState.password,
+        campusId: formState.campusId,
+        phoneNumber: formState.phoneNumber,
+        department: formState.department,
+        reasonForAccess: formState.reasonForAccess,
+        authProvider,
+        preferredTwoFactorMethod: formState.preferredTwoFactorMethod,
       });
-      redirectToWorkspace(authenticatedUser);
-    } catch (signupError) {
-      return signupError;
+
+      if (response?.authStatus === "PENDING_APPROVAL") {
+        navigate("/approval-pending", { replace: true });
+      }
+    } catch (submitError) {
+      return submitError;
     }
   };
 
-  const handleProviderSignup = async (provider) => {
+  const handleGoogleSignup = async () => {
     setLocalError("");
     clearError();
 
-    try {
-      const authenticatedUser =
-        provider === "apple"
-          ? await loginWithApple(normalizedEmail)
-          : await loginWithGoogle(normalizedEmail);
-      redirectToWorkspace(authenticatedUser);
-    } catch (signupError) {
-      return signupError;
+    if (!validateStepOne()) {
+      return;
     }
+
+    if (step === 1) {
+      setStep(2);
+      return;
+    }
+
+    return submitSignupRequest("GOOGLE");
+  };
+
+  const handleAppleSignup = () => {
+    setLocalError("");
+    clearError();
+
+    if (!validateStepOne()) {
+      return;
+    }
+
+    if (step === 1) {
+      setStep(2);
+      return;
+    }
+
+    setLocalError("Apple sign-up is not configured in this build yet.");
   };
 
   return (
@@ -99,166 +163,272 @@ function SignupPage() {
           <div className="auth-heading">
             <h1 className="auth-title">Sign Up</h1>
             <p className="auth-subtitle">
-              Create your Smart Campus account and continue to your workspace.
+              Submit your account request in two steps. An administrator must approve
+              the request and assign your role before sign in is enabled.
             </p>
           </div>
 
+          <div className="auth-progress">
+            <span className={`auth-progress-step ${step === 1 ? "is-active" : ""}`.trim()}>
+              1. Account
+            </span>
+            <span className={`auth-progress-step ${step === 2 ? "is-active" : ""}`.trim()}>
+              2. Campus Profile
+            </span>
+          </div>
+
           <form className="login-form" onSubmit={handleSubmit}>
-            <label className="field field-annotated">
-              <span>Full name</span>
-              <div className="input-shell">
-                <span className="input-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path
-                      d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-6.75 8.25a6.75 6.75 0 0 1 13.5 0"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="1.5"
+            {step === 1 ? (
+              <>
+                <label className="field field-annotated">
+                  <span>Full name</span>
+                  <div className="input-shell">
+                    <span className="input-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path
+                          d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-6.75 8.25a6.75 6.75 0 0 1 13.5 0"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="1.5"
+                        />
+                      </svg>
+                    </span>
+                    <input
+                      autoComplete="name"
+                      className="login-input"
+                      name="fullName"
+                      onChange={handleFieldChange}
+                      placeholder="Your full name"
+                      type="text"
+                      value={formState.fullName}
                     />
-                  </svg>
-                </span>
-                <input
-                  autoComplete="name"
-                  className="login-input"
-                  name="name"
-                  onChange={handleFieldChange}
-                  placeholder="Your full name"
-                  type="text"
-                  value={formState.name}
-                />
-              </div>
-            </label>
+                  </div>
+                </label>
 
-            <label className="field field-annotated">
-              <span>Email address</span>
-              <div className="input-shell">
-                <span className="input-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path
-                      d="M4 6.75h16a1.25 1.25 0 0 1 1.25 1.25v8a1.25 1.25 0 0 1-1.25 1.25H4A1.25 1.25 0 0 1 2.75 16V8A1.25 1.25 0 0 1 4 6.75Z"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="1.5"
+                <label className="field field-annotated">
+                  <span>Email address</span>
+                  <div className="input-shell">
+                    <span className="input-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path
+                          d="M4 6.75h16a1.25 1.25 0 0 1 1.25 1.25v8a1.25 1.25 0 0 1-1.25 1.25H4A1.25 1.25 0 0 1 2.75 16V8A1.25 1.25 0 0 1 4 6.75Z"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="1.5"
+                        />
+                        <path
+                          d="m4 8 8 5 8-5"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="1.5"
+                        />
+                      </svg>
+                    </span>
+                    <input
+                      autoComplete="email"
+                      className="login-input"
+                      name="email"
+                      onChange={handleFieldChange}
+                      placeholder="name@smartcampus.edu"
+                      type="email"
+                      value={formState.email}
                     />
-                    <path
-                      d="m4 8 8 5 8-5"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="1.5"
-                    />
-                  </svg>
-                </span>
-                <input
-                  autoComplete="email"
-                  className="login-input"
-                  name="email"
-                  onChange={handleFieldChange}
-                  placeholder="name@smartcampus.edu"
-                  type="email"
-                  value={formState.email}
-                />
-              </div>
-            </label>
+                  </div>
+                </label>
 
-            <label className="field field-annotated">
-              <span>Password</span>
-              <div className="input-shell">
-                <span className="input-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path
-                      d="M7.25 10.75v-2a4.75 4.75 0 1 1 9.5 0v2"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="1.5"
+                <label className="field field-annotated">
+                  <span>Password</span>
+                  <div className="input-shell">
+                    <span className="input-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path
+                          d="M7.25 10.75v-2a4.75 4.75 0 1 1 9.5 0v2"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="1.5"
+                        />
+                        <rect
+                          x="4.75"
+                          y="10.75"
+                          width="14.5"
+                          height="9.5"
+                          rx="2"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                        />
+                        <circle cx="12" cy="15.5" r="1.1" fill="currentColor" />
+                      </svg>
+                    </span>
+                    <input
+                      autoComplete="new-password"
+                      className="login-input"
+                      name="password"
+                      onChange={handleFieldChange}
+                      placeholder="Create a password"
+                      type="password"
+                      value={formState.password}
                     />
-                    <rect
-                      x="4.75"
-                      y="10.75"
-                      width="14.5"
-                      height="9.5"
-                      rx="2"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                    />
-                    <circle cx="12" cy="15.5" r="1.1" fill="currentColor" />
-                  </svg>
-                </span>
-                <input
-                  autoComplete="new-password"
-                  className="login-input"
-                  name="password"
-                  onChange={handleFieldChange}
-                  placeholder="Create a password"
-                  type="password"
-                  value={formState.password}
-                />
-              </div>
-            </label>
+                  </div>
+                </label>
 
-            <label className="field field-annotated">
-              <span>Confirm password</span>
-              <div className="input-shell">
-                <span className="input-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path
-                      d="M7.25 10.75v-2a4.75 4.75 0 1 1 9.5 0v2"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="1.5"
+                <label className="field field-annotated">
+                  <span>Confirm password</span>
+                  <div className="input-shell">
+                    <span className="input-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path
+                          d="M7.25 10.75v-2a4.75 4.75 0 1 1 9.5 0v2"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="1.5"
+                        />
+                        <rect
+                          x="4.75"
+                          y="10.75"
+                          width="14.5"
+                          height="9.5"
+                          rx="2"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                        />
+                        <path
+                          d="m9.8 15.5 1.4 1.4 3-3"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="1.5"
+                        />
+                      </svg>
+                    </span>
+                    <input
+                      autoComplete="new-password"
+                      className="login-input"
+                      name="confirmPassword"
+                      onChange={handleFieldChange}
+                      placeholder="Confirm your password"
+                      type="password"
+                      value={formState.confirmPassword}
                     />
-                    <rect
-                      x="4.75"
-                      y="10.75"
-                      width="14.5"
-                      height="9.5"
-                      rx="2"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
+                  </div>
+                </label>
+              </>
+            ) : (
+              <>
+                <label className="field field-annotated">
+                  <span>Campus ID</span>
+                  <div className="input-shell">
+                    <input
+                      className="login-input"
+                      name="campusId"
+                      onChange={handleFieldChange}
+                      placeholder="IT23123456 / EMP-109"
+                      type="text"
+                      value={formState.campusId}
                     />
-                    <path
-                      d="m9.8 15.5 1.4 1.4 3-3"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="1.5"
+                  </div>
+                </label>
+
+                <label className="field field-annotated">
+                  <span>Phone number</span>
+                  <div className="input-shell">
+                    <input
+                      className="login-input"
+                      name="phoneNumber"
+                      onChange={handleFieldChange}
+                      placeholder="+94 77 123 4567"
+                      type="text"
+                      value={formState.phoneNumber}
                     />
-                  </svg>
-                </span>
-                <input
-                  autoComplete="new-password"
-                  className="login-input"
-                  name="confirmPassword"
-                  onChange={handleFieldChange}
-                  placeholder="Confirm your password"
-                  type="password"
-                  value={formState.confirmPassword}
-                />
-              </div>
-            </label>
+                  </div>
+                </label>
+
+                <label className="field field-annotated">
+                  <span>Department / Faculty</span>
+                  <div className="input-shell">
+                    <input
+                      className="login-input"
+                      name="department"
+                      onChange={handleFieldChange}
+                      placeholder="Computing / Facilities / Administration"
+                      type="text"
+                      value={formState.department}
+                    />
+                  </div>
+                </label>
+
+                <label className="field field-annotated">
+                  <span>Reason for access</span>
+                  <textarea
+                    className="auth-textarea"
+                    name="reasonForAccess"
+                    onChange={handleFieldChange}
+                    placeholder="Explain why you need Smart Campus Operations Hub access."
+                    rows="4"
+                    value={formState.reasonForAccess}
+                  />
+                </label>
+
+                <div className="field field-annotated">
+                  <span>Preferred 2-step verification method</span>
+                  <div className="auth-method-grid">
+                    <label className="auth-method-option">
+                      <input
+                        checked={formState.preferredTwoFactorMethod === "EMAIL_OTP"}
+                        name="preferredTwoFactorMethod"
+                        onChange={handleFieldChange}
+                        type="radio"
+                        value="EMAIL_OTP"
+                      />
+                      <span>Email verification</span>
+                      <small>Receive a one-time code during local sign in.</small>
+                    </label>
+                    <label className="auth-method-option">
+                      <input
+                        checked={
+                          formState.preferredTwoFactorMethod === "AUTHENTICATOR_APP"
+                        }
+                        name="preferredTwoFactorMethod"
+                        onChange={handleFieldChange}
+                        type="radio"
+                        value="AUTHENTICATOR_APP"
+                      />
+                      <span>Google Authenticator</span>
+                      <small>Use an authenticator app after local sign in.</small>
+                    </label>
+                  </div>
+                </div>
+              </>
+            )}
 
             {activeError ? <p className="alert alert-error">{activeError}</p> : null}
 
-            <Button
-              className="login-submit"
-              disabled={isLoading}
-              type="submit"
-              variant="primary"
-            >
-              Sign Up
-            </Button>
+            {step === 1 ? (
+              <Button className="login-submit" onClick={handleNextStep} type="button" variant="primary">
+                Continue
+              </Button>
+            ) : (
+              <div className="auth-actions-row">
+                <Button onClick={handleBack} type="button" variant="secondary">
+                  Back
+                </Button>
+                <Button className="login-submit" disabled={isLoading} type="submit" variant="primary">
+                  Submit Approval Request
+                </Button>
+              </div>
+            )}
           </form>
 
           <div className="auth-divider">
@@ -269,7 +439,7 @@ function SignupPage() {
             <button
               className="social-button"
               disabled={isLoading}
-              onClick={() => handleProviderSignup("google")}
+              onClick={handleGoogleSignup}
               type="button"
             >
               <span className="social-icon" aria-hidden="true">
@@ -292,30 +462,31 @@ function SignupPage() {
                   />
                 </svg>
               </span>
-              <span className="social-button-label">Continue with Google</span>
+              <span className="social-button-label">Sign up with Google</span>
             </button>
 
             <button
-              className="social-button"
+              className="social-button social-button-apple"
               disabled={isLoading}
-              onClick={() => handleProviderSignup("apple")}
+              onClick={handleAppleSignup}
               type="button"
             >
               <span className="social-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                   <path
-                    d="M16.72 12.74c.03 2.94 2.58 3.92 2.61 3.93-.02.07-.41 1.42-1.34 2.82-.8 1.21-1.64 2.41-2.95 2.43-1.29.02-1.7-.76-3.17-.76-1.47 0-1.93.74-3.15.79-1.27.05-2.23-1.27-3.04-2.47-1.66-2.44-2.93-6.88-1.22-9.85.85-1.47 2.38-2.4 4.03-2.43 1.25-.02 2.43.85 3.17.85.74 0 2.13-1.05 3.59-.9.61.03 2.32.25 3.42 1.86-.09.06-2.04 1.19-1.95 3.73Zm-2.22-6.16c.67-.81 1.12-1.94 1-3.06-.97.04-2.14.65-2.84 1.46-.62.72-1.17 1.87-1.02 2.97 1.08.08 2.19-.55 2.86-1.37Z"
+                    d="M16.62 12.52c.03 3.07 2.7 4.1 2.73 4.12-.02.07-.43 1.48-1.42 2.93-.86 1.25-1.75 2.5-3.15 2.53-1.38.03-1.82-.82-3.4-.82-1.58 0-2.07.79-3.37.85-1.35.05-2.38-1.35-3.25-2.59-1.78-2.57-3.14-7.27-1.31-10.44.91-1.58 2.53-2.58 4.29-2.61 1.34-.03 2.6.91 3.4.91.79 0 2.28-1.13 3.84-.96.65.03 2.48.26 3.66 2 .1.07-2.18 1.27-2.15 4.08Zm-2.14-8.91c.72-.88 1.21-2.11 1.08-3.33-1.03.04-2.29.68-3.03 1.56-.67.77-1.26 2.01-1.1 3.2 1.15.09 2.32-.58 3.05-1.43Z"
                     fill="currentColor"
                   />
                 </svg>
               </span>
-              <span className="social-button-label">Continue with Apple</span>
+              <span className="social-button-label">Sign up with Apple</span>
             </button>
           </div>
 
           <p className="login-demo-note">
-            Use your official campus email to activate the correct role and continue
-            into your Smart Campus workspace.
+            Admin will review your request, assign the correct role, and approve the
+            account before login is enabled. Google sign-up still follows the same
+            approval flow.
           </p>
 
           <p className="auth-switch-copy">
@@ -325,7 +496,7 @@ function SignupPage() {
             </Link>
           </p>
 
-          {isLoading ? <LoadingSpinner label="Creating your account..." /> : null}
+          {isLoading ? <LoadingSpinner label="Submitting your request..." /> : null}
         </Card>
       </div>
     </section>
