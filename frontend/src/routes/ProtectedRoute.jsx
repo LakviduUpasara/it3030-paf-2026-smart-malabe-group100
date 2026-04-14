@@ -6,13 +6,14 @@ function ProtectedRoute({ children, allowedRoles = [] }) {
   const { isAuthenticated, user } = useAuth();
   const location = useLocation();
 
-  if (!isAuthenticated) {
-    return <Navigate replace state={{ from: location }} to="/login" />;
-  }
-
-  if (!isRoleAllowed(user?.role, allowedRoles)) {
-    return <Navigate replace to="/access-denied" />;
-  }
+  // TEMP: bypass auth for development
+  // if (!isAuthenticated) {
+  //   return <Navigate replace state={{ from: location }} to="/login" />;
+  // }
+  //
+  // if (!isRoleAllowed(user?.role, allowedRoles)) {
+  //   return <Navigate replace to="/access-denied" />;
+  // }
 
   return children;
 }

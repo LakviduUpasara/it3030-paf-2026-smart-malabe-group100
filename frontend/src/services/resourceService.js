@@ -1,5 +1,10 @@
 import api, { createServiceError } from "./api";
 
+const TEMP_ADMIN_AUTH = {
+  username: "admin",
+  password: "admin123",
+};
+
 function buildQueryParams(filters = {}) {
   const params = {};
 
@@ -31,6 +36,19 @@ export async function getResources(filters = {}) {
     return response.data;
   } catch (error) {
     throw createServiceError(error, "Unable to load resources.");
+  }
+}
+
+export async function createResource(payload) {
+  try {
+    const response = await api.post("/resources", payload, {
+      // TEMP: use backend basic auth for resource writes during development/testing.
+      auth: TEMP_ADMIN_AUTH,
+    });
+
+    return response.data;
+  } catch (error) {
+    throw createServiceError(error, "Unable to create resource.");
   }
 }
 
