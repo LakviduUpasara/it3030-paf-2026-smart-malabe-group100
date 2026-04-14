@@ -65,7 +65,7 @@ public class GoogleIdentityVerifier {
             }
 
             return new VerifiedGoogleAccount(subject, email.trim().toLowerCase(), fullName, pictureUrl);
-        } catch (GeneralSecurityException | IOException ex) {
+        } catch (GeneralSecurityException | IOException | IllegalArgumentException ex) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "Google account verification failed.");
         }
     }
