@@ -21,21 +21,38 @@ public class GlobalExceptionHandler {
         }
 
         Map<String, Object> response = new HashMap<>();
-        response.put("timestamp", LocalDateTime.now());
+        response.put("message", "Validation failed");
         response.put("status", HttpStatus.BAD_REQUEST.value());
+        response.put("timestamp", LocalDateTime.now());
         response.put("errors", validationErrors);
 
         return ResponseEntity.badRequest().body(response);
     }
 
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleResourceNotFoundException(ResourceNotFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(buildErrorResponse(ex.getMessage(), HttpStatus.NOT_FOUND));
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Map<String, Object>> handleIllegalArgumentException(IllegalArgumentException ex) {
+        return ResponseEntity.badRequest()
+                .body(buildErrorResponse(ex.getMessage(), HttpStatus.BAD_REQUEST));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGenericException(Exception ex) {
-        Map<String, Object> response = new HashMap<>();
-        response.put("timestamp", LocalDateTime.now());
-        response.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());
-        response.put("message", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(buildErrorResponse(ex.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR));
+    }
 
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+    private Map<String, Object> buildErrorResponse(String message, HttpStatus status) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("message", message);
+        response.put("status", status.value());
+        response.put("timestamp", LocalDateTime.now());
+        return response;
     }
 }
 
