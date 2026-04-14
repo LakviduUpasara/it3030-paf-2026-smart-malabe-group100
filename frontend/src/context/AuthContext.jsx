@@ -23,13 +23,19 @@ export function AuthProvider({ children }) {
     setError("");
   };
 
-  const clearAuthState = () => {
+  const clearSessionState = () => {
     setUser(null);
     setSessionToken(null);
     setTwoFactorChallenge(null);
     clearStorage(STORAGE_KEYS.USER);
     clearStorage(STORAGE_KEYS.SESSION);
     clearStorage(STORAGE_KEYS.TWO_FACTOR_CHALLENGE);
+  };
+
+  const clearClientState = () => {
+    clearSessionState();
+    setPendingApproval(null);
+    clearStorage(STORAGE_KEYS.PENDING_APPROVAL);
   };
 
   const applyAuthFlowResponse = (response) => {
@@ -45,12 +51,12 @@ export function AuthProvider({ children }) {
         setTwoFactorChallenge(null);
         break;
       case "PENDING_APPROVAL":
-        clearAuthState();
+        clearClientState();
         setPendingApproval(response.pendingApproval);
         break;
       case "TWO_FACTOR_REQUIRED":
       case "AUTHENTICATOR_SETUP_REQUIRED":
-        clearAuthState();
+        clearClientState();
         setTwoFactorChallenge(response.twoFactorChallenge);
         break;
       default:
@@ -87,8 +93,28 @@ export function AuthProvider({ children }) {
       "Unable to submit your sign up request.",
     );
 
-  const loginWithGoogle = async (email) =>
-    performAuthAction(() => authService.loginWithGoogle(email), "Unable to sign in with Google.");
+  const prepareGoogleSignup = async (credential) => {
+    setIsLoading(true);
+    setError("");
+
+    try {
+      return await authService.prepareGoogleSignup(credential);
+    } catch (requestError) {
+      setError(requestError.message || "Unable to start Google sign up.");
+      throw requestError;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loginWithGoogle = async (credential) =>
+    performAuthAction(
+      () => authService.loginWithGoogle(credential),
+      "Unable to sign in with Google.",
+    );
+
+  const loginWithApple = async (email) =>
+    performAuthAction(() => authService.loginWithApple(email), "Unable to sign in with Apple.");
 
   const verifyTwoFactor = async (payload) =>
     performAuthAction(
@@ -131,7 +157,7 @@ export function AuthProvider({ children }) {
     } catch (logoutError) {
       setError(logoutError.message || "Unable to sign out cleanly.");
     } finally {
-      clearAuthState();
+      clearClientState();
       setIsLoading(false);
     }
   };
@@ -149,7 +175,9 @@ export function AuthProvider({ children }) {
     clearTwoFactor,
     login,
     register,
+    prepareGoogleSignup,
     loginWithGoogle,
+    loginWithApple,
     verifyTwoFactor,
     refreshPendingApproval,
     logout,

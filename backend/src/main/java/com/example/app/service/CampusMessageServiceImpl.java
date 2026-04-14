@@ -16,7 +16,7 @@ public class CampusMessageServiceImpl implements CampusMessageService {
 
     @Override
     public List<CampusMessageResponse> getAllMessages() {
-        return campusMessageRepository.findAll()
+        return campusMessageRepository.findAllByOrderByCreatedAtDesc()
                 .stream()
                 .map(this::mapToResponse)
                 .toList();
@@ -42,4 +42,3 @@ public class CampusMessageServiceImpl implements CampusMessageService {
                 .build();
     }
 }
-

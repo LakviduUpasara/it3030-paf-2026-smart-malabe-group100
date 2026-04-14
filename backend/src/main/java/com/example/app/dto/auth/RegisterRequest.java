@@ -18,8 +18,7 @@ public class RegisterRequest {
     @NotBlank(message = "Email is required.")
     private String email;
 
-    @NotBlank(message = "Password is required.")
-    @Size(min = 8, max = 100, message = "Password must be between 8 and 100 characters.")
+    @Size(max = 100, message = "Password must be 100 characters or fewer.")
     private String password;
 
     @NotBlank(message = "Campus ID is required.")
@@ -36,6 +35,8 @@ public class RegisterRequest {
     private String reasonForAccess;
 
     private AuthProvider authProvider;
+
+    private String socialSignupToken;
 
     @NotNull(message = "Select a preferred 2-step verification method.")
     private TwoFactorMethod preferredTwoFactorMethod;

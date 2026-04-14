@@ -8,9 +8,8 @@ import lombok.Getter;
 @Builder
 public class CampusMessageResponse {
 
-    private Long id;
+    private String id;
     private String title;
     private String content;
     private LocalDateTime createdAt;
 }
-

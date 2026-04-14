@@ -12,6 +12,7 @@ function ApprovalPendingPage() {
     error,
     isAuthenticated,
     isLoading,
+    logout,
     pendingApproval,
     refreshPendingApproval,
     user,
@@ -84,6 +85,11 @@ function ApprovalPendingPage() {
     navigate("/signup");
   };
 
+  const handleLogout = async () => {
+    await logout();
+    navigate("/login", { replace: true });
+  };
+
   if (!pendingApproval) {
     return (
       <section className="auth-screen auth-screen-centered">
@@ -116,6 +122,9 @@ function ApprovalPendingPage() {
               <span className={statusToneClass}>{pendingApproval.status}</span>
               <h2>{pendingApproval.applicantName}</h2>
               <p className="supporting-text">{pendingApproval.email}</p>
+              <p className="supporting-text">
+                Sign-in method: {pendingApproval.provider || "LOCAL"}
+              </p>
             </div>
 
             <div className="request-detail-grid">
@@ -165,6 +174,10 @@ function ApprovalPendingPage() {
                 variant="secondary"
               >
                 {isRefreshing ? "Refreshing..." : "Refresh Status"}
+              </Button>
+
+              <Button disabled={isLoading} onClick={handleLogout} variant="ghost">
+                {isLoading ? "Signing out..." : "Logout"}
               </Button>
             </div>
           </div>

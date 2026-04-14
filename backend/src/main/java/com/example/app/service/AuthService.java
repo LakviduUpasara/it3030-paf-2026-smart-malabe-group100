@@ -1,7 +1,9 @@
 package com.example.app.service;
 
 import com.example.app.dto.auth.AuthFlowResponse;
+import com.example.app.dto.auth.GoogleCredentialRequest;
 import com.example.app.dto.auth.GoogleLoginRequest;
+import com.example.app.dto.auth.GoogleSignupSessionResponse;
 import com.example.app.dto.auth.LoginRequest;
 import com.example.app.dto.auth.PendingApprovalResponse;
 import com.example.app.dto.auth.RegisterRequest;
@@ -14,7 +16,11 @@ public interface AuthService {
 
     AuthFlowResponse login(LoginRequest request);
 
-    AuthFlowResponse loginWithGoogle(GoogleLoginRequest request);
+    GoogleSignupSessionResponse prepareGoogleSignup(GoogleCredentialRequest request);
+
+    AuthFlowResponse loginWithGoogle(GoogleCredentialRequest request);
+
+    AuthFlowResponse loginWithApple(GoogleLoginRequest request);
 
     AuthFlowResponse verifyTwoFactor(VerifyTwoFactorRequest request);
 

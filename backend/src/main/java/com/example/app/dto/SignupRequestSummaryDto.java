@@ -11,8 +11,8 @@ import lombok.Getter;
 @Builder
 public class SignupRequestSummaryDto {
 
-    private Long requestId;
-    private Long userId;
+    private String requestId;
+    private String userId;
     private String fullName;
     private String email;
     private String campusId;

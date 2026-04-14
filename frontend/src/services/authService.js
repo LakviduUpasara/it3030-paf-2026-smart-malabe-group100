@@ -39,8 +39,10 @@ export async function loginWithCredentials({ email, password }) {
 export async function registerAccount(payload) {
   const normalizedName = payload.fullName?.trim();
   const normalizedEmail = normalizeEmail(payload.email || "");
+  const authProvider = payload.authProvider || "LOCAL";
+  const requiresPassword = authProvider === "LOCAL";
 
-  if (!normalizedName || !normalizedEmail || !payload.password?.trim()) {
+  if (!normalizedName || !normalizedEmail || (requiresPassword && !payload.password?.trim())) {
     throw new Error("Complete the required sign up details to continue.");
   }
 
@@ -74,8 +76,38 @@ async function loginWithProvider(provider, email) {
   }
 }
 
-export async function loginWithGoogle(email) {
-  return loginWithProvider("google", email);
+export async function prepareGoogleSignup(credential) {
+  if (!credential?.trim()) {
+    throw new Error("Google sign-in did not return a valid credential.");
+  }
+
+  try {
+    const response = await api.post("/auth/google/signup-session", {
+      credential: credential.trim(),
+    });
+    return response.data;
+  } catch (error) {
+    throw createServiceError(error, "Unable to start Google sign up.");
+  }
+}
+
+export async function loginWithGoogle(credential) {
+  if (!credential?.trim()) {
+    throw new Error("Google sign-in did not return a valid credential.");
+  }
+
+  try {
+    const response = await api.post("/auth/google", {
+      credential: credential.trim(),
+    });
+    return response.data;
+  } catch (error) {
+    throw createServiceError(error, "Google sign-in failed.");
+  }
+}
+
+export async function loginWithApple(email) {
+  return loginWithProvider("apple", email);
 }
 
 export async function verifyTwoFactor({ challengeId, code }) {
@@ -141,7 +173,7 @@ export async function logout() {
   try {
     await api.post("/auth/logout");
   } catch (error) {
-    if (error?.response && error.response.status !== 404) {
+    if (error?.response && ![401, 403, 404].includes(error.response.status)) {
       throw createServiceError(error, "Logout failed.");
     }
   }

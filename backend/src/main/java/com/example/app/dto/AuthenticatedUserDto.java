@@ -11,7 +11,7 @@ import lombok.Getter;
 @Builder
 public class AuthenticatedUserDto {
 
-    private Long id;
+    private String id;
     private String fullName;
     private String email;
     private Role role;

@@ -17,7 +17,6 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -27,7 +26,6 @@ public class AdminSignupRequestServiceImpl implements AdminSignupRequestService 
     private final UserAccountRepository userAccountRepository;
 
     @Override
-    @Transactional(readOnly = true)
     public List<SignupRequestSummaryResponse> getPendingRequests() {
         return signupRequestRepository.findByStatusOrderByRequestedAtAsc(SignupRequestStatus.PENDING).stream()
                 .map(this::toSummaryResponse)
@@ -35,7 +33,6 @@ public class AdminSignupRequestServiceImpl implements AdminSignupRequestService 
     }
 
     @Override
-    @Transactional
     public SignupRequestSummaryResponse approveRequest(String requestId, SignupRequestDecisionRequest request) {
         SignupRequest signupRequest = getPendingRequest(requestId);
 
@@ -46,7 +43,8 @@ public class AdminSignupRequestServiceImpl implements AdminSignupRequestService 
         UserAccount userAccount = UserAccount.builder()
                 .fullName(signupRequest.getFullName())
                 .email(signupRequest.getEmail())
-                .passwordHash(signupRequest.getPasswordHash())
+                .providerSubject(signupRequest.getProviderSubject())
+                .passwordHash(signupRequest.getAuthProvider() == AuthProvider.LOCAL ? signupRequest.getPasswordHash() : null)
                 .role(request.getAssignedRole())
                 .status(AccountStatus.ACTIVE)
                 .provider(signupRequest.getAuthProvider() == null ? AuthProvider.LOCAL : signupRequest.getAuthProvider())
@@ -64,7 +62,6 @@ public class AdminSignupRequestServiceImpl implements AdminSignupRequestService 
     }
 
     @Override
-    @Transactional
     public SignupRequestSummaryResponse rejectRequest(String requestId, SignupRequestRejectRequest request) {
         SignupRequest signupRequest = getPendingRequest(requestId);
         signupRequest.setStatus(SignupRequestStatus.REJECTED);
@@ -90,6 +87,7 @@ public class AdminSignupRequestServiceImpl implements AdminSignupRequestService 
                 .id(signupRequest.getId())
                 .fullName(signupRequest.getFullName())
                 .email(signupRequest.getEmail())
+                .authProvider(signupRequest.getAuthProvider() == null ? AuthProvider.LOCAL : signupRequest.getAuthProvider())
                 .campusId(signupRequest.getCampusId())
                 .phoneNumber(signupRequest.getPhoneNumber())
                 .department(signupRequest.getDepartment())

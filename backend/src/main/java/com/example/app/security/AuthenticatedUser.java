@@ -14,7 +14,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 @AllArgsConstructor
 public class AuthenticatedUser implements UserDetails {
 
-    private final Long userId;
+    private final String userId;
     private final String email;
     private final String fullName;
     private final Role role;

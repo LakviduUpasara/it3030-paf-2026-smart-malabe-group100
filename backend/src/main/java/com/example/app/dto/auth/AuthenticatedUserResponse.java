@@ -15,7 +15,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class AuthenticatedUserResponse {
 
-    private Long id;
+    private String id;
     private String name;
     private String email;
     private Role role;

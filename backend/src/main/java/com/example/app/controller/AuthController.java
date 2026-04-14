@@ -1,7 +1,9 @@
 package com.example.app.controller;
 
 import com.example.app.dto.auth.AuthFlowResponse;
+import com.example.app.dto.auth.GoogleCredentialRequest;
 import com.example.app.dto.auth.GoogleLoginRequest;
+import com.example.app.dto.auth.GoogleSignupSessionResponse;
 import com.example.app.dto.auth.LoginRequest;
 import com.example.app.dto.auth.PendingApprovalResponse;
 import com.example.app.dto.auth.RegisterRequest;
@@ -41,9 +43,21 @@ public class AuthController {
         return ResponseEntity.ok(authService.login(request));
     }
 
+    @PostMapping("/google/signup-session")
+    public ResponseEntity<GoogleSignupSessionResponse> prepareGoogleSignup(
+            @Valid @RequestBody GoogleCredentialRequest request
+    ) {
+        return ResponseEntity.ok(authService.prepareGoogleSignup(request));
+    }
+
     @PostMapping("/google")
-    public ResponseEntity<AuthFlowResponse> loginWithGoogle(@Valid @RequestBody GoogleLoginRequest request) {
+    public ResponseEntity<AuthFlowResponse> loginWithGoogle(@Valid @RequestBody GoogleCredentialRequest request) {
         return ResponseEntity.ok(authService.loginWithGoogle(request));
+    }
+
+    @PostMapping("/apple")
+    public ResponseEntity<AuthFlowResponse> loginWithApple(@Valid @RequestBody GoogleLoginRequest request) {
+        return ResponseEntity.ok(authService.loginWithApple(request));
     }
 
     @PostMapping("/verify-2fa")

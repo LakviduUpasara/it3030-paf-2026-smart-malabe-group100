@@ -1,6 +1,7 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import Button from "./Button";
+import GoogleIdentityButton from "./GoogleIdentityButton";
 import LoadingSpinner from "./LoadingSpinner";
 import { useAuth } from "../hooks/useAuth";
 import { getDefaultRouteForRole } from "../utils/roleUtils";
@@ -18,6 +19,7 @@ function LoginPanel({ showHeading = true }) {
   const {
     login,
     loginWithGoogle,
+    loginWithApple,
     verifyTwoFactor,
     clearError,
     clearTwoFactor,
@@ -80,26 +82,37 @@ function LoginPanel({ showHeading = true }) {
     }
   };
 
-  const handleGoogleLogin = async () => {
+  const handleGoogleLogin = async (credential) => {
     setLocalError("");
     clearError();
 
-    if (!normalizedEmail) {
-      setLocalError("Enter your approved campus email before continuing with Google.");
-      return;
-    }
-
     try {
-      const response = await loginWithGoogle(normalizedEmail);
+      const response = await loginWithGoogle(credential);
       handleAuthResponse(response);
     } catch (loginError) {
       return loginError;
     }
   };
 
-  const handleAppleLogin = () => {
-    setLocalError("Apple sign-in is not configured in this build yet.");
+  const handleAppleLogin = async () => {
+    return handleProviderLogin("Apple", loginWithApple);
+  };
+
+  const handleProviderLogin = async (providerLabel, loginAction) => {
+    setLocalError("");
     clearError();
+
+    if (!normalizedEmail) {
+      setLocalError(`Enter your approved campus email before continuing with ${providerLabel}.`);
+      return;
+    }
+
+    try {
+      const response = await loginAction(normalizedEmail);
+      handleAuthResponse(response);
+    } catch (loginError) {
+      return loginError;
+    }
   };
 
   const handleVerifyTwoFactor = async (event) => {
@@ -325,34 +338,12 @@ function LoginPanel({ showHeading = true }) {
           </div>
 
           <div className="social-auth-grid">
-            <button
-              className="social-button"
+            <GoogleIdentityButton
+              buttonText="continue_with"
               disabled={isLoading}
-              onClick={handleGoogleLogin}
-              type="button"
-            >
-              <span className="social-icon" aria-hidden="true">
-                <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                  <path
-                    fill="#FFC107"
-                    d="M43.611 20.083H42V20H24v8h11.303C33.655 32.657 29.221 36 24 36c-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.27 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"
-                  />
-                  <path
-                    fill="#FF3D00"
-                    d="M6.306 14.691l6.571 4.819C14.655 16.108 18.961 13 24 13c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.27 4 24 4c-7.682 0-14.348 4.337-17.694 10.691z"
-                  />
-                  <path
-                    fill="#4CAF50"
-                    d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238C29.143 35.091 26.715 36 24 36c-5.2 0-9.624-3.326-11.284-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z"
-                  />
-                  <path
-                    fill="#1976D2"
-                    d="M43.611 20.083H42V20H24v8h11.303c-.792 2.237-2.231 4.166-4.084 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"
-                  />
-                </svg>
-              </span>
-              <span className="social-button-label">Continue with Google</span>
-            </button>
+              onCredential={handleGoogleLogin}
+              onError={(message) => setLocalError(message)}
+            />
 
             <button
               className="social-button social-button-apple"
@@ -375,7 +366,7 @@ function LoginPanel({ showHeading = true }) {
           <p className="login-demo-note">
             Demo local admin: <strong>admin@smartcampus.edu</strong> /
             <strong> Admin@12345</strong>. Demo Google access also supports
-            <strong> google.admin@smartcampus.edu</strong>.
+            approved real Google accounts after Google OAuth verification.
           </p>
         </>
       )}

@@ -66,6 +66,30 @@ public class DataInitializer {
                         .authenticatorConfirmed(false)
                         .build());
             }
+
+            if (!userAccountRepository.existsByEmailIgnoreCase("apple.user@smartcampus.edu")) {
+                userAccountRepository.save(UserAccount.builder()
+                        .fullName("Apple Campus User")
+                        .email("apple.user@smartcampus.edu")
+                        .role(Role.USER)
+                        .status(AccountStatus.ACTIVE)
+                        .provider(AuthProvider.APPLE)
+                        .preferredTwoFactorMethod(TwoFactorMethod.EMAIL_OTP)
+                        .authenticatorConfirmed(false)
+                        .build());
+            }
+
+            if (!userAccountRepository.existsByEmailIgnoreCase("apple.admin@smartcampus.edu")) {
+                userAccountRepository.save(UserAccount.builder()
+                        .fullName("Apple Campus Admin")
+                        .email("apple.admin@smartcampus.edu")
+                        .role(Role.ADMIN)
+                        .status(AccountStatus.ACTIVE)
+                        .provider(AuthProvider.APPLE)
+                        .preferredTwoFactorMethod(TwoFactorMethod.EMAIL_OTP)
+                        .authenticatorConfirmed(false)
+                        .build());
+            }
         };
     }
 }

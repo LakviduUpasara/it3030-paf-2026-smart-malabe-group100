@@ -3,12 +3,15 @@ package com.example.app.service.impl;
 import com.example.app.dto.auth.AuthFlowResponse;
 import com.example.app.dto.auth.AuthFlowStatus;
 import com.example.app.dto.auth.AuthenticatedUserResponse;
+import com.example.app.dto.auth.GoogleCredentialRequest;
 import com.example.app.dto.auth.GoogleLoginRequest;
+import com.example.app.dto.auth.GoogleSignupSessionResponse;
 import com.example.app.dto.auth.LoginRequest;
 import com.example.app.dto.auth.PendingApprovalResponse;
 import com.example.app.dto.auth.RegisterRequest;
 import com.example.app.dto.auth.TwoFactorChallengeResponse;
 import com.example.app.dto.auth.VerifyTwoFactorRequest;
+import com.example.app.entity.GoogleSignupSession;
 import com.example.app.entity.SessionToken;
 import com.example.app.entity.SignupRequest;
 import com.example.app.entity.TwoFactorChallenge;
@@ -18,11 +21,14 @@ import com.example.app.entity.enums.AuthProvider;
 import com.example.app.entity.enums.SignupRequestStatus;
 import com.example.app.entity.enums.TwoFactorMethod;
 import com.example.app.exception.ApiException;
+import com.example.app.repository.GoogleSignupSessionRepository;
 import com.example.app.repository.SessionTokenRepository;
 import com.example.app.repository.SignupRequestRepository;
 import com.example.app.repository.TwoFactorChallengeRepository;
 import com.example.app.repository.UserAccountRepository;
 import com.example.app.security.AuthenticatedUser;
+import com.example.app.security.GoogleIdentityVerifier;
+import com.example.app.security.VerifiedGoogleAccount;
 import com.example.app.service.AuthService;
 import com.warrenstrange.googleauth.GoogleAuthenticator;
 import com.warrenstrange.googleauth.GoogleAuthenticatorKey;
@@ -38,7 +44,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -47,10 +52,12 @@ public class AuthServiceImpl implements AuthService {
 
     private final UserAccountRepository userAccountRepository;
     private final SignupRequestRepository signupRequestRepository;
+    private final GoogleSignupSessionRepository googleSignupSessionRepository;
     private final SessionTokenRepository sessionTokenRepository;
     private final TwoFactorChallengeRepository twoFactorChallengeRepository;
     private final PasswordEncoder passwordEncoder;
     private final GoogleAuthenticator googleAuthenticator;
+    private final GoogleIdentityVerifier googleIdentityVerifier;
 
     @Value("${app.auth.session-hours:12}")
     private long sessionHours;
@@ -61,11 +68,41 @@ public class AuthServiceImpl implements AuthService {
     @Value("${app.auth.dev-expose-otp:true}")
     private boolean exposeDevelopmentOtp;
 
+    @Value("${app.auth.google.signup-session-minutes:15}")
+    private long googleSignupSessionMinutes;
+
     @Override
-    @Transactional
     public AuthFlowResponse register(RegisterRequest request) {
-        String normalizedEmail = normalizeEmail(request.getEmail());
         AuthProvider authProvider = request.getAuthProvider() == null ? AuthProvider.LOCAL : request.getAuthProvider();
+        String normalizedPassword = request.getPassword() == null ? "" : request.getPassword().trim();
+        String normalizedEmail;
+        String normalizedFullName;
+        String providerSubject = null;
+        TwoFactorMethod preferredTwoFactorMethod;
+
+        if (authProvider == AuthProvider.GOOGLE) {
+            GoogleSignupSession signupSession = resolveGoogleSignupSession(request.getSocialSignupToken());
+            normalizedEmail = signupSession.getEmail();
+            normalizedFullName = signupSession.getFullName();
+            providerSubject = signupSession.getProviderSubject();
+            preferredTwoFactorMethod = TwoFactorMethod.AUTHENTICATOR_APP;
+        } else {
+            normalizedEmail = normalizeEmail(request.getEmail());
+            normalizedFullName = request.getFullName().trim();
+            preferredTwoFactorMethod = authProvider == AuthProvider.LOCAL
+                    ? request.getPreferredTwoFactorMethod()
+                    : TwoFactorMethod.AUTHENTICATOR_APP;
+        }
+
+        if (authProvider == AuthProvider.LOCAL) {
+            if (normalizedPassword.isBlank()) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "Password is required for local sign up.");
+            }
+
+            if (normalizedPassword.length() < 8 || normalizedPassword.length() > 100) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "Password must be between 8 and 100 characters.");
+            }
+        }
 
         if (userAccountRepository.existsByEmailIgnoreCase(normalizedEmail)) {
             throw new ApiException(HttpStatus.CONFLICT, "An approved account already exists for this email.");
@@ -78,26 +115,32 @@ public class AuthServiceImpl implements AuthService {
             return pendingResponse(signupRequest, "A registration request for this email is already pending review.");
         }
 
-        signupRequest.setFullName(request.getFullName().trim());
+        signupRequest.setFullName(normalizedFullName);
         signupRequest.setEmail(normalizedEmail);
-        signupRequest.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+        signupRequest.setProviderSubject(providerSubject);
+        signupRequest.setPasswordHash(authProvider == AuthProvider.LOCAL
+                ? passwordEncoder.encode(normalizedPassword)
+                : null);
         signupRequest.setCampusId(request.getCampusId().trim());
         signupRequest.setPhoneNumber(request.getPhoneNumber().trim());
         signupRequest.setDepartment(request.getDepartment().trim());
         signupRequest.setReasonForAccess(request.getReasonForAccess().trim());
         signupRequest.setAuthProvider(authProvider);
-        signupRequest.setPreferredTwoFactorMethod(request.getPreferredTwoFactorMethod());
+        signupRequest.setPreferredTwoFactorMethod(preferredTwoFactorMethod);
         signupRequest.setStatus(SignupRequestStatus.PENDING);
         signupRequest.setAssignedRole(null);
         signupRequest.setReviewerNote(null);
         signupRequest.setReviewedAt(null);
+        signupRequest.setRequestedAt(LocalDateTime.now());
 
         SignupRequest savedRequest = signupRequestRepository.save(signupRequest);
+        if (authProvider == AuthProvider.GOOGLE) {
+            googleSignupSessionRepository.deleteById(request.getSocialSignupToken());
+        }
         return pendingResponse(savedRequest, "Your sign up request has been sent to the campus administrator for approval.");
     }
 
     @Override
-    @Transactional
     public AuthFlowResponse login(LoginRequest request) {
         String normalizedEmail = normalizeEmail(request.getEmail());
         Optional<UserAccount> userAccountOptional = userAccountRepository.findByEmailIgnoreCase(normalizedEmail);
@@ -121,13 +164,47 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    @Transactional
-    public AuthFlowResponse loginWithGoogle(GoogleLoginRequest request) {
-        String normalizedEmail = normalizeEmail(request.getEmail());
-        Optional<UserAccount> userAccountOptional = userAccountRepository.findByEmailIgnoreCase(normalizedEmail);
+    public GoogleSignupSessionResponse prepareGoogleSignup(GoogleCredentialRequest request) {
+        VerifiedGoogleAccount googleAccount = googleIdentityVerifier.verify(request.getCredential());
+        googleSignupSessionRepository.deleteByExpiresAtBefore(LocalDateTime.now());
+        googleSignupSessionRepository.deleteByProviderAndProviderSubject(AuthProvider.GOOGLE, googleAccount.subject());
+
+        GoogleSignupSession signupSession = googleSignupSessionRepository.save(GoogleSignupSession.builder()
+                .id(UUID.randomUUID().toString())
+                .provider(AuthProvider.GOOGLE)
+                .providerSubject(googleAccount.subject())
+                .email(googleAccount.email())
+                .fullName(googleAccount.fullName())
+                .pictureUrl(googleAccount.pictureUrl())
+                .createdAt(LocalDateTime.now())
+                .expiresAt(LocalDateTime.now().plusMinutes(googleSignupSessionMinutes))
+                .build());
+
+        return GoogleSignupSessionResponse.builder()
+                .signupToken(signupSession.getId())
+                .fullName(signupSession.getFullName())
+                .email(signupSession.getEmail())
+                .pictureUrl(signupSession.getPictureUrl())
+                .provider(AuthProvider.GOOGLE)
+                .build();
+    }
+
+    @Override
+    public AuthFlowResponse loginWithGoogle(GoogleCredentialRequest request) {
+        VerifiedGoogleAccount googleAccount = googleIdentityVerifier.verify(request.getCredential());
+        Optional<UserAccount> userAccountOptional = userAccountRepository
+                .findByProviderAndProviderSubject(AuthProvider.GOOGLE, googleAccount.subject());
 
         if (userAccountOptional.isEmpty()) {
-            return resolveSignupRequestState(normalizedEmail, "No approved Google account was found for this email.");
+            userAccountOptional = userAccountRepository.findByEmailIgnoreCase(googleAccount.email())
+                    .filter(userAccount -> userAccount.getProvider() == AuthProvider.GOOGLE);
+        }
+
+        if (userAccountOptional.isEmpty()) {
+            return resolveSignupRequestState(
+                    googleAccount.email(),
+                    "No approved Google account was found for this email."
+            );
         }
 
         UserAccount userAccount = userAccountOptional.get();
@@ -137,11 +214,22 @@ public class AuthServiceImpl implements AuthService {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "Google sign-in is not configured for this account.");
         }
 
-        return authenticatedResponse(userAccount, "Google sign-in completed successfully.");
+        if (userAccount.getProviderSubject() == null || userAccount.getProviderSubject().isBlank()) {
+            userAccount.setProviderSubject(googleAccount.subject());
+            userAccountRepository.save(userAccount);
+        } else if (!userAccount.getProviderSubject().equals(googleAccount.subject())) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "This Google account does not match the approved campus account.");
+        }
+
+        return buildTwoFactorChallenge(userAccount);
     }
 
     @Override
-    @Transactional
+    public AuthFlowResponse loginWithApple(GoogleLoginRequest request) {
+        return loginWithSocialProvider(request, AuthProvider.APPLE, "Apple");
+    }
+
+    @Override
     public AuthFlowResponse verifyTwoFactor(VerifyTwoFactorRequest request) {
         TwoFactorChallenge challenge = twoFactorChallengeRepository.findById(request.getChallengeId())
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "2-step verification challenge was not found."));
@@ -154,7 +242,8 @@ public class AuthServiceImpl implements AuthService {
             throw new ApiException(HttpStatus.BAD_REQUEST, "This verification code has expired. Please sign in again.");
         }
 
-        UserAccount userAccount = challenge.getUser();
+        UserAccount userAccount = userAccountRepository.findById(challenge.getUserId())
+                .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "The account linked to this challenge no longer exists."));
         String normalizedCode = request.getCode().trim();
 
         if (challenge.getMethod() == TwoFactorMethod.EMAIL_OTP) {
@@ -188,7 +277,6 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    @Transactional
     public void logout(String bearerToken) {
         String tokenValue = extractBearerToken(bearerToken);
         if (tokenValue != null) {
@@ -197,7 +285,6 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public PendingApprovalResponse getSignupRequestStatus(String requestId, String email) {
         SignupRequest signupRequest = signupRequestRepository.findByIdAndEmailIgnoreCase(requestId, normalizeEmail(email))
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Sign up request was not found."));
@@ -206,7 +293,6 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public AuthFlowResponse getCurrentSession(AuthenticatedUser authenticatedUser) {
         UserAccount userAccount = userAccountRepository.findById(authenticatedUser.getUserId())
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "The current session is no longer valid."));
@@ -236,12 +322,14 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private AuthFlowResponse buildTwoFactorChallenge(UserAccount userAccount) {
-        twoFactorChallengeRepository.deleteByUser(userAccount);
+        twoFactorChallengeRepository.deleteByUserId(userAccount.getId());
 
+        // Persist the challenge as a small Mongo document so 2FA can be resumed safely.
         TwoFactorChallenge challenge = TwoFactorChallenge.builder()
                 .id(UUID.randomUUID().toString())
-                .user(userAccount)
+                .userId(userAccount.getId())
                 .method(userAccount.getPreferredTwoFactorMethod())
+                .createdAt(LocalDateTime.now())
                 .expiresAt(LocalDateTime.now().plusMinutes(challengeMinutes))
                 .used(false)
                 .build();
@@ -277,10 +365,11 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private AuthFlowResponse authenticatedResponse(UserAccount userAccount, String message) {
-        sessionTokenRepository.deleteByUser(userAccount);
+        sessionTokenRepository.deleteByUserId(userAccount.getId());
         SessionToken sessionToken = sessionTokenRepository.save(SessionToken.builder()
                 .token(UUID.randomUUID() + "-" + UUID.randomUUID())
-                .user(userAccount)
+                .userId(userAccount.getId())
+                .createdAt(LocalDateTime.now())
                 .expiresAt(LocalDateTime.now().plusHours(sessionHours))
                 .build());
 
@@ -317,6 +406,7 @@ public class AuthServiceImpl implements AuthService {
                 .requestId(signupRequest.getId())
                 .applicantName(signupRequest.getFullName())
                 .email(signupRequest.getEmail())
+                .provider(signupRequest.getAuthProvider() == null ? AuthProvider.LOCAL : signupRequest.getAuthProvider())
                 .status(signupRequest.getStatus())
                 .assignedRole(signupRequest.getAssignedRole())
                 .reviewerNote(signupRequest.getReviewerNote())
@@ -381,5 +471,56 @@ public class AuthServiceImpl implements AuthService {
 
     private String normalizeEmail(String email) {
         return email == null ? "" : email.trim().toLowerCase();
+    }
+
+    private GoogleSignupSession resolveGoogleSignupSession(String signupToken) {
+        if (signupToken == null || signupToken.isBlank()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Reconnect your Google account before submitting the sign up request.");
+        }
+
+        GoogleSignupSession signupSession = googleSignupSessionRepository
+                .findByIdAndProvider(signupToken.trim(), AuthProvider.GOOGLE)
+                .orElseThrow(() -> new ApiException(
+                        HttpStatus.UNAUTHORIZED,
+                        "The Google sign-up session is missing or expired. Connect Google again to continue."
+                ));
+
+        if (signupSession.getExpiresAt() != null && signupSession.getExpiresAt().isBefore(LocalDateTime.now())) {
+            googleSignupSessionRepository.deleteById(signupSession.getId());
+            throw new ApiException(
+                    HttpStatus.UNAUTHORIZED,
+                    "The Google sign-up session has expired. Connect Google again to continue."
+            );
+        }
+
+        return signupSession;
+    }
+
+    private AuthFlowResponse loginWithSocialProvider(
+            GoogleLoginRequest request,
+            AuthProvider authProvider,
+            String providerLabel
+    ) {
+        String normalizedEmail = normalizeEmail(request.getEmail());
+        Optional<UserAccount> userAccountOptional = userAccountRepository.findByEmailIgnoreCase(normalizedEmail);
+
+        if (userAccountOptional.isEmpty()) {
+            return resolveSignupRequestState(
+                    normalizedEmail,
+                    "No approved " + providerLabel + " account was found for this email."
+            );
+        }
+
+        UserAccount userAccount = userAccountOptional.get();
+        ensureActiveUser(userAccount);
+
+        if (userAccount.getProvider() != authProvider) {
+            throw new ApiException(
+                    HttpStatus.UNAUTHORIZED,
+                    providerLabel + " sign-in is not configured for this account."
+            );
+        }
+
+        return buildTwoFactorChallenge(userAccount);
     }
 }

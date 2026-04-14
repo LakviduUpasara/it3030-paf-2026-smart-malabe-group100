@@ -145,6 +145,10 @@ function ManageSignupRequestsPage() {
                   <p>{request.preferredTwoFactorMethod}</p>
                 </div>
                 <div>
+                  <strong>Provider</strong>
+                  <p>{request.authProvider || "LOCAL"}</p>
+                </div>
+                <div>
                   <strong>Submitted</strong>
                   <p>{new Date(request.requestedAt).toLocaleString()}</p>
                 </div>

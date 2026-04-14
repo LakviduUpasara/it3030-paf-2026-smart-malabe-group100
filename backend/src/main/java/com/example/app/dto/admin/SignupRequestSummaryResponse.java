@@ -3,6 +3,7 @@ package com.example.app.dto.admin;
 import com.example.app.entity.enums.Role;
 import com.example.app.entity.enums.SignupRequestStatus;
 import com.example.app.entity.enums.TwoFactorMethod;
+import com.example.app.entity.enums.AuthProvider;
 import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -18,6 +19,7 @@ public class SignupRequestSummaryResponse {
     private String id;
     private String fullName;
     private String email;
+    private AuthProvider authProvider;
     private String campusId;
     private String phoneNumber;
     private String department;

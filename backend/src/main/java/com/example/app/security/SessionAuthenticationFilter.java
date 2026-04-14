@@ -1,7 +1,9 @@
 package com.example.app.security;
 
 import com.example.app.entity.SessionToken;
+import com.example.app.entity.UserAccount;
 import com.example.app.repository.SessionTokenRepository;
+import com.example.app.repository.UserAccountRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -22,6 +24,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public class SessionAuthenticationFilter extends OncePerRequestFilter {
 
     private final SessionTokenRepository sessionTokenRepository;
+    private final UserAccountRepository userAccountRepository;
 
     @Override
     protected void doFilterInternal(
@@ -37,7 +40,12 @@ public class SessionAuthenticationFilter extends OncePerRequestFilter {
                     .filter(token -> token.getExpiresAt().isAfter(LocalDateTime.now()));
 
             sessionToken.ifPresent(token -> {
-                AuthenticatedUser authenticatedUser = AuthenticatedUser.from(token.getUser());
+                Optional<UserAccount> userAccount = userAccountRepository.findById(token.getUserId());
+                if (userAccount.isEmpty()) {
+                    return;
+                }
+
+                AuthenticatedUser authenticatedUser = AuthenticatedUser.from(userAccount.get());
                 UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                         authenticatedUser,
                         tokenValue,
