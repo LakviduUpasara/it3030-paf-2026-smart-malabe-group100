@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
-import Button from "../components/Button";
 import Card from "../components/Card";
 import LoadingSpinner from "../components/LoadingSpinner";
-import { getManagedTickets, resolveTicket } from "../services/ticketService";
-import { toToken } from "../utils/formatters";
+import TicketCard from "../components/TicketCard";
+import { getTickets } from "../services/ticketService";
 
 function ManageTicketsPage() {
   const [tickets, setTickets] = useState([]);
@@ -18,13 +17,13 @@ function ManageTicketsPage() {
       setError("");
 
       try {
-        const data = await getManagedTickets();
+        const data = await getTickets();
         if (active) {
-          setTickets(data);
+          setTickets(Array.isArray(data) ? data : []);
         }
       } catch (loadError) {
         if (active) {
-          setError(loadError.message);
+          setError(loadError.message || "Failed to load tickets.");
         }
       } finally {
         if (active) {
@@ -40,45 +39,21 @@ function ManageTicketsPage() {
     };
   }, []);
 
-  const handleResolve = async (ticketId) => {
-    try {
-      await resolveTicket(ticketId);
-      setTickets((previousTickets) =>
-        previousTickets.map((ticket) =>
-          ticket.id === ticketId ? { ...ticket, status: "Resolved" } : ticket,
-        ),
-      );
-    } catch (resolveError) {
-      setError(resolveError.message);
-    }
-  };
-
   if (loading) {
-    return <LoadingSpinner label="Loading managed tickets..." />;
+    return <LoadingSpinner label="Loading tickets..." />;
   }
 
   return (
-    <Card title="Manage Tickets" subtitle="Monitor and resolve operational incidents">
+    <Card title="Manage Tickets" subtitle="View all incident tickets">
       {error ? <p className="alert alert-error">{error}</p> : null}
+
+      {!error && tickets.length === 0 ? (
+        <p className="supporting-text">No tickets yet.</p>
+      ) : null}
+
       <div className="list-stack">
-        {tickets.map((ticket) => (
-          <article className="list-row align-start" key={ticket.id}>
-            <div>
-              <strong>{ticket.title}</strong>
-              <p className="supporting-text">
-                {ticket.location} | {ticket.category}
-              </p>
-              <p className="supporting-text">Assigned to: {ticket.assignee}</p>
-            </div>
-            <div className="inline-actions">
-              <span className={`status-badge ${toToken(ticket.status)}`}>
-                {ticket.status}
-              </span>
-              {ticket.status !== "Resolved" ? (
-                <Button onClick={() => handleResolve(ticket.id)}>Mark Resolved</Button>
-              ) : null}
-            </div>
-          </article>
+        {tickets.map((ticket, index) => (
+          <TicketCard key={ticket.id != null ? ticket.id : `ticket-${index}`} ticket={ticket} />
         ))}
       </div>
     </Card>
@@ -86,4 +61,3 @@ function ManageTicketsPage() {
 }
 
 export default ManageTicketsPage;
-
