@@ -101,7 +101,7 @@ npm start
 
 | Member | Role | Contribution |
 |---|---|---|
-| Member 1 | Placeholder | Backend module ownership |
+| Member 1 | Placeholder | Facilities catalogue + resource management endpoints |
 | Member 2 | Placeholder | Frontend module ownership |
 | Member 3 | Placeholder | Documentation and testing |
 | Member 4 | Placeholder | Integration and deployment |
