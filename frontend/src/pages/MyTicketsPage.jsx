@@ -16,6 +16,55 @@ const initialForm = {
   preferredContactDetails: "",
 };
 
+const META_MARKER = "\n\n__META__\n";
+
+function buildDescription(formData) {
+  const main = formData.description.trim();
+  const meta = [
+    `location:${formData.location.trim()}`,
+    `category:${formData.category.trim()}`,
+    `priority:${formData.priority}`,
+    `contactMethod:${formData.preferredContactMethod}`,
+    `contactDetails:${formData.preferredContactDetails.trim()}`,
+  ].join("\n");
+  return `${main}${META_MARKER}${meta}`;
+}
+
+function parseTicketDescription(description) {
+  const text = description ?? "";
+  if (!text.includes("__META__")) {
+    return {
+      body: text.trim(),
+      location: "",
+      category: "",
+      priority: "Normal",
+      contactMethod: "",
+      contactDetails: "",
+    };
+  }
+  const [body, metaBlock] = text.split(META_MARKER);
+  const out = {
+    body: (body || "").trim(),
+    location: "",
+    category: "",
+    priority: "Normal",
+    contactMethod: "",
+    contactDetails: "",
+  };
+  for (const line of (metaBlock || "").split("\n")) {
+    const idx = line.indexOf(":");
+    if (idx === -1) continue;
+    const key = line.slice(0, idx).trim();
+    const val = line.slice(idx + 1).trim();
+    if (key === "location") out.location = val;
+    else if (key === "category") out.category = val;
+    else if (key === "priority") out.priority = val;
+    else if (key === "contactMethod") out.contactMethod = val;
+    else if (key === "contactDetails") out.contactDetails = val;
+  }
+  return out;
+}
+
 function MyTicketsPage() {
   const [tickets, setTickets] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -34,7 +83,6 @@ function MyTicketsPage() {
       setError("");
 
       try {
-        // ✅ FIX: axios response
         const res = await getMyTickets();
         const data = res.data;
 
@@ -61,8 +109,8 @@ function MyTicketsPage() {
 
   const handleChange = (event) => {
     const { name, value } = event.target;
-    setFormData((prev) => ({
-      ...prev,
+    setFormData((previous) => ({
+      ...previous,
       [name]: value,
     }));
   };
@@ -74,7 +122,7 @@ function MyTicketsPage() {
     if (imageFiles.length !== fileList.length) {
       setError("Only image attachments are allowed.");
     } else if (fileList.length > 3) {
-      setError("You can upload up to 3 images.");
+      setError("You can upload up to 3 images per ticket.");
     } else {
       setError("");
     }
@@ -89,37 +137,39 @@ function MyTicketsPage() {
     setSuccessMessage("");
 
     try {
-      // ✅ FIX: axios response
+      if (attachments.length > 3) {
+        throw new Error("You can upload up to 3 images per ticket.");
+      }
+
       const res = await createTicket({
         title: formData.title.trim(),
-        description: formData.description.trim(),
-        status: "OPEN",
+        description: buildDescription(formData),
       });
 
       const ticket = res.data;
 
       let uploadedCount = 0;
-
-      if (ticket?.id && attachments.length > 0) {
+      if (ticket?.id != null && attachments.length > 0) {
         await Promise.all(
           attachments.map(async (file) => {
             await uploadFile(ticket.id, file);
-            uploadedCount++;
-          })
+            uploadedCount += 1;
+          }),
         );
       }
 
-      setSuccessMessage("✅ Ticket created successfully!");
-
-      // ✅ safer update
-      setTickets((prev) => [ticket, ...prev]);
-
+      const idPart = ticket?.id != null ? ` (#${ticket.id})` : "";
+      const attachmentPart =
+        uploadedCount > 0
+          ? ` with ${uploadedCount} image attachment${uploadedCount > 1 ? "s" : ""}`
+          : "";
+      setSuccessMessage(`Ticket submitted successfully${idPart}${attachmentPart}.`);
+      setTickets((previous) => [ticket, ...previous]);
       setFormData(initialForm);
       setAttachments([]);
       setIsFormOpen(false);
-
-    } catch (err) {
-      setError(err.message || "Failed to create ticket");
+    } catch (submitError) {
+      setError(submitError.message || "Unable to create ticket.");
     } finally {
       setIsSubmitting(false);
     }
@@ -131,69 +181,201 @@ function MyTicketsPage() {
 
   return (
     <>
-      {/* HEADER */}
-      <section className="my-tickets-header-section">
-        <div className="my-tickets-hero-main">
-          <img src={maintenanceIllustration} alt="" />
-          <div>
-            <h2>My Tickets</h2>
-            <p>Track maintenance and incident requests</p>
+      <section className="my-tickets-header-section" aria-label="My Tickets overview">
+        <div className="my-tickets-header-inner">
+          <div className="my-tickets-hero-main">
+            <div className="my-tickets-hero-illustration" aria-hidden="true">
+              <img alt="" src={maintenanceIllustration} />
+            </div>
+            <div className="my-tickets-hero-copy">
+              <h2>My Tickets</h2>
+              <p>Track maintenance and incident requests</p>
+            </div>
+            <div className="my-tickets-hero-action">
+              <Button
+                className="my-tickets-create-top-button"
+                onClick={() => setIsFormOpen((previous) => !previous)}
+                variant={isFormOpen ? "ghost" : "primary"}
+              >
+                {isFormOpen ? "Cancel" : "Create Ticket"}
+              </Button>
+            </div>
           </div>
-
-          <Button onClick={() => setIsFormOpen(!isFormOpen)}>
-            {isFormOpen ? "Cancel" : "Create Ticket"}
-          </Button>
         </div>
       </section>
 
-      {/* CONTENT */}
-      <Card>
-        {successMessage && <p className="alert alert-success">{successMessage}</p>}
-        {error && <p className="alert alert-error">{error}</p>}
+      <Card className="my-tickets-content-card">
+        {successMessage ? <p className="alert alert-success">{successMessage}</p> : null}
+        {error ? <p className="alert alert-error">{error}</p> : null}
 
         {tickets.length === 0 ? (
-          <p>No tickets yet</p>
+          <p className="supporting-text">No tickets yet. Use &quot;Create Ticket&quot; to submit a request.</p>
         ) : (
-          <div>
-            {tickets.map((ticket) => (
-              <div key={ticket.id}>
-                <strong>{ticket.title}</strong>
-                <p>{ticket.description}</p>
-                <span>{ticket.status}</span>
-              </div>
-            ))}
+          <div className="list-stack">
+            {tickets.map((ticket, index) => {
+              const parsed = parseTicketDescription(ticket.description);
+              return (
+                <article
+                  className="my-ticket-item"
+                  key={ticket.id != null ? ticket.id : `my-ticket-${index}`}
+                >
+                  <div className="my-ticket-main">
+                    <strong>{ticket.title || "Untitled Ticket"}</strong>
+                    <p className="supporting-text">
+                      {parsed.location || "Campus"} | {parsed.category || "General"}
+                    </p>
+                    <p className="supporting-text">
+                      Priority: {parsed.priority || "Normal"} | Assignee: {ticket.assignee || "Pending assignment"}
+                    </p>
+                    {parsed.contactMethod || parsed.contactDetails ? (
+                      <p className="supporting-text">
+                        Preferred contact: {parsed.contactMethod || "N/A"}{" "}
+                        {parsed.contactDetails ? `(${parsed.contactDetails})` : ""}
+                      </p>
+                    ) : null}
+                  </div>
+                  <span className={`status-badge ${toToken(ticket.status || "open")}`}>
+                    {ticket.status || "Open"}
+                  </span>
+                </article>
+              );
+            })}
           </div>
         )}
       </Card>
 
-      {/* MODAL */}
-      {isFormOpen && (
-        <div className="modal">
-          <form onSubmit={handleSubmit}>
-            <input
-              name="title"
-              placeholder="Title"
-              value={formData.title}
-              onChange={handleChange}
-              required
-            />
+      {isFormOpen ? (
+        <div
+          className="modal-backdrop"
+          onClick={() => !isSubmitting && setIsFormOpen(false)}
+          role="presentation"
+        >
+          <div
+            className="modal-panel"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="create-ticket-title"
+          >
+            <div className="modal-header">
+              <h3 id="create-ticket-title">Create Ticket</h3>
+              <button
+                className="modal-close"
+                disabled={isSubmitting}
+                onClick={() => setIsFormOpen(false)}
+                type="button"
+              >
+                ×
+              </button>
+            </div>
+            <div className="modal-content">
+              <form
+                className="form-grid my-tickets-create-form my-tickets-create-form-modal"
+                onSubmit={handleSubmit}
+              >
+                <label className="field">
+                  <span>Resource / Location</span>
+                  <input
+                    name="location"
+                    onChange={handleChange}
+                    placeholder="e.g. Lecture Hall A, Library 2nd Floor"
+                    required
+                    type="text"
+                    value={formData.location}
+                  />
+                </label>
 
-            <textarea
-              name="description"
-              placeholder="Description"
-              value={formData.description}
-              onChange={handleChange}
-              required
-            />
+                <label className="field">
+                  <span>Category</span>
+                  <input
+                    name="category"
+                    onChange={handleChange}
+                    placeholder="e.g. Electrical, Projector, Network"
+                    required
+                    type="text"
+                    value={formData.category}
+                  />
+                </label>
 
-            <input type="file" multiple onChange={handleAttachmentChange} />
+                <label className="field field-full">
+                  <span>Title</span>
+                  <input
+                    name="title"
+                    onChange={handleChange}
+                    placeholder="Short summary of the issue"
+                    required
+                    type="text"
+                    value={formData.title}
+                  />
+                </label>
 
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Submitting..." : "Submit"}
-            </Button>
-          </form>
+                <label className="field">
+                  <span>Priority</span>
+                  <select name="priority" onChange={handleChange} value={formData.priority}>
+                    <option value="Low">Low</option>
+                    <option value="Normal">Normal</option>
+                    <option value="High">High</option>
+                    <option value="Critical">Critical</option>
+                  </select>
+                </label>
+
+                <label className="field">
+                  <span>Preferred Contact Method</span>
+                  <select
+                    name="preferredContactMethod"
+                    onChange={handleChange}
+                    value={formData.preferredContactMethod}
+                  >
+                    <option value="Phone">Phone</option>
+                    <option value="Email">Email</option>
+                    <option value="WhatsApp">WhatsApp</option>
+                  </select>
+                </label>
+
+                <label className="field field-full">
+                  <span>Preferred Contact Details</span>
+                  <input
+                    name="preferredContactDetails"
+                    onChange={handleChange}
+                    placeholder="Phone number, email, or WhatsApp number"
+                    required
+                    type="text"
+                    value={formData.preferredContactDetails}
+                  />
+                </label>
+
+                <label className="field field-full">
+                  <span>Description</span>
+                  <textarea
+                    name="description"
+                    onChange={handleChange}
+                    placeholder="What happened, where, and any relevant details"
+                    required
+                    rows="5"
+                    value={formData.description}
+                  />
+                </label>
+
+                <label className="field field-full">
+                  <span>Evidence Images (up to 3)</span>
+                  <input accept="image/*" multiple onChange={handleAttachmentChange} type="file" />
+                  {attachments.length > 0 ? (
+                    <small className="supporting-text">
+                      Selected: {attachments.map((file) => file.name).join(", ")}
+                    </small>
+                  ) : null}
+                </label>
+
+                <div className="field-full">
+                  <Button disabled={isSubmitting} type="submit" variant="primary">
+                    {isSubmitting ? "Submitting..." : "Submit Ticket"}
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </div>
         </div>
-      )}
+      ) : null}
     </>
   );
 }
