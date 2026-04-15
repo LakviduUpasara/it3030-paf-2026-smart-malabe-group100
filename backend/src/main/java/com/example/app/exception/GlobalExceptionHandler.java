@@ -63,6 +63,13 @@ public class GlobalExceptionHandler {
                 .body(buildErrorResponse(ex.getMessage(), HttpStatus.NOT_FOUND));
     }
 
+    @ExceptionHandler(ModuleOfferingNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleModuleOfferingNotFoundException(
+            ModuleOfferingNotFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(buildErrorResponse(ex.getMessage(), HttpStatus.NOT_FOUND));
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, Object>> handleIllegalArgumentException(IllegalArgumentException ex) {
         return ResponseEntity.badRequest()
