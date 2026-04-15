@@ -71,9 +71,9 @@ function SocialAccountChooserModal({
 
       <div className="provider-chooser-footer">
         <p>
-          After the provider account is selected, Smart Campus opens the campus
-          profile form and keeps 2-step verification on Google Authenticator for
-          the first approved sign-in.
+          After the provider account is selected, Smart Campus opens the
+          remaining campus profile fields and lets the applicant choose the
+          preferred 2-step verification method before submitting the request.
         </p>
         <button className="auth-link-button" onClick={onClose} type="button">
           Cancel

@@ -1,5 +1,6 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import QRCode from "qrcode";
 import Button from "./Button";
 import GoogleIdentityButton from "./GoogleIdentityButton";
 import LoadingSpinner from "./LoadingSpinner";
@@ -14,6 +15,7 @@ const initialCredentials = {
 function LoginPanel({ showHeading = true }) {
   const [credentials, setCredentials] = useState(initialCredentials);
   const [verificationCode, setVerificationCode] = useState("");
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState("");
   const [localError, setLocalError] = useState("");
   const [rememberMe, setRememberMe] = useState(true);
   const {
@@ -31,6 +33,42 @@ function LoginPanel({ showHeading = true }) {
   const location = useLocation();
   const normalizedEmail = credentials.email.trim().toLowerCase();
   const activeError = localError || error;
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadQrCode = async () => {
+      if (!twoFactorChallenge?.qrCodeUri) {
+        setQrCodeDataUrl("");
+        return;
+      }
+
+      try {
+        const nextQrCode = await QRCode.toDataURL(twoFactorChallenge.qrCodeUri, {
+          margin: 1,
+          width: 176,
+          color: {
+            dark: "#16304a",
+            light: "#ffffff",
+          },
+        });
+
+        if (isMounted) {
+          setQrCodeDataUrl(nextQrCode);
+        }
+      } catch {
+        if (isMounted) {
+          setQrCodeDataUrl("");
+        }
+      }
+    };
+
+    loadQrCode();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [twoFactorChallenge]);
 
   const redirectToWorkspace = (authenticatedUser) => {
     const redirectTarget =
@@ -136,6 +174,7 @@ function LoginPanel({ showHeading = true }) {
 
   const handleBackToLogin = () => {
     setVerificationCode("");
+    setQrCodeDataUrl("");
     setLocalError("");
     clearError();
     clearTwoFactor();
@@ -161,6 +200,24 @@ function LoginPanel({ showHeading = true }) {
           <div className="auth-help-panel">
             <p className="supporting-text">{twoFactorChallenge.deliveryHint}</p>
 
+            {qrCodeDataUrl ? (
+              <div className="authenticator-setup-card">
+                <div className="authenticator-setup-qr">
+                  <img
+                    alt="Google Authenticator QR code"
+                    className="authenticator-qr-image"
+                    src={qrCodeDataUrl}
+                  />
+                </div>
+                <div className="authenticator-setup-copy">
+                  <strong>Scan with Google Authenticator</strong>
+                  <p>
+                    Open Google Authenticator, tap the plus button, then scan this QR code.
+                  </p>
+                </div>
+              </div>
+            ) : null}
+
             {twoFactorChallenge.debugCode ? (
               <p className="auth-inline-code">
                 Demo email verification code: <strong>{twoFactorChallenge.debugCode}</strong>
@@ -169,7 +226,11 @@ function LoginPanel({ showHeading = true }) {
 
             {twoFactorChallenge.manualEntryKey ? (
               <div className="auth-inline-block">
-                <strong>Authenticator setup key</strong>
+                <strong>Manual setup key</strong>
+                <p className="supporting-text">
+                  If scanning is unavailable, add an account manually in Google Authenticator
+                  and paste this key.
+                </p>
                 <code>{twoFactorChallenge.manualEntryKey}</code>
               </div>
             ) : null}

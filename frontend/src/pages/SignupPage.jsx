@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
+import { FaApple } from "react-icons/fa6";
+import { FcGoogle } from "react-icons/fc";
+import {
+  HiOutlineCheckBadge,
+  HiOutlineEnvelope,
+  HiOutlineShieldCheck,
+} from "react-icons/hi2";
 import Button from "../components/Button";
 import Card from "../components/Card";
 import GoogleIdentityButton from "../components/GoogleIdentityButton";
@@ -10,9 +17,25 @@ import { getDefaultRouteForRole } from "../utils/roleUtils";
 
 const AUTH_PROVIDERS = { LOCAL: "LOCAL", GOOGLE: "GOOGLE", APPLE: "APPLE" };
 const SOCIAL_COPY = {
-  GOOGLE: { label: "Google" },
-  APPLE: { label: "Apple" },
+  GOOGLE: { label: "Google", icon: FcGoogle },
+  APPLE: { label: "Apple", icon: FaApple },
 };
+const TWO_FACTOR_OPTIONS = [
+  {
+    value: "EMAIL_OTP",
+    title: "Email verification code",
+    description: "Get a one-time code in your approved inbox.",
+    badge: "Inbox",
+    icon: HiOutlineEnvelope,
+  },
+  {
+    value: "AUTHENTICATOR_APP",
+    title: "Authenticator app",
+    description: "Use a TOTP app for the rotating 6-digit code.",
+    badge: "App",
+    icon: HiOutlineShieldCheck,
+  },
+];
 const PROVIDER_ACCOUNT_CHOICES = {
   GOOGLE: [
     {
@@ -89,6 +112,11 @@ function SignupPage() {
   const navigate = useNavigate();
   const isSocial = provider !== AUTH_PROVIDERS.LOCAL;
   const activeError = localError || error;
+  const shouldShowLoginHint = /already has an approved smart campus account|already have an account|please log in instead/i.test(
+    activeError,
+  );
+  const providerMeta = SOCIAL_COPY[provider];
+  const ProviderIcon = providerMeta?.icon;
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -218,6 +246,12 @@ function SignupPage() {
       }));
       setStep(2);
     } catch (signupError) {
+      if (signupError?.status === 409) {
+        setProvider(AUTH_PROVIDERS.LOCAL);
+        setStep(1);
+        setSocialSignupToken("");
+        setLocalError(signupError.message || "This Google account already has access. Please log in instead.");
+      }
       return signupError;
     }
   };
@@ -276,6 +310,55 @@ function SignupPage() {
     }
   };
 
+  const openConnectedAccountSwitcher = () => {
+    if (provider === AUTH_PROVIDERS.GOOGLE) {
+      backToLocalSignup();
+      return;
+    }
+
+    openSocialChooser(provider);
+  };
+
+  const renderConnectedAccountCard = ({ compact = false } = {}) => (
+    <div className={`connected-account-card ${compact ? "connected-account-card-compact" : ""}`.trim()}>
+      <div className="connected-account-main">
+        <div className={`connected-account-brand connected-account-brand-${provider.toLowerCase()}`} aria-hidden="true">
+          {ProviderIcon ? <ProviderIcon /> : null}
+        </div>
+        <div className="connected-account-copy">
+          <span className="connected-account-kicker">{providerMeta.label} account connected</span>
+          <strong className="connected-account-name">{formState.fullName}</strong>
+          <div className="connected-account-email">
+            <HiOutlineEnvelope />
+            <span>{formState.email}</span>
+          </div>
+        </div>
+        <span className="connected-account-status">
+          <HiOutlineCheckBadge />
+          <span>Verified</span>
+        </span>
+      </div>
+
+      <div className={`auth-actions-row connected-account-actions ${compact ? "connected-account-actions-compact" : ""}`.trim()}>
+        {!compact ? (
+          <Button className="connected-account-primary" onClick={() => setStep(2)} type="button" variant="primary">
+            Continue to Campus Profile
+          </Button>
+        ) : null}
+        <Button className="connected-account-switch" onClick={openConnectedAccountSwitcher} type="button" variant="secondary">
+          {provider === AUTH_PROVIDERS.GOOGLE
+            ? "Use Another Google Account"
+            : `Change ${providerMeta.label} Account`}
+        </Button>
+        {!compact ? (
+          <Button className="connected-account-link" onClick={backToLocalSignup} type="button" variant="ghost">
+            Use Email and Password
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  );
+
   return (
     <section className="auth-screen auth-screen-centered">
       <div className="auth-card-wrap auth-card-wrap-centered">
@@ -284,7 +367,7 @@ function SignupPage() {
             <h1 className="auth-title">Sign Up</h1>
             <p className="auth-subtitle">
               {isSocial
-                ? `${SOCIAL_COPY[provider].label} account verified. Complete the campus profile and send the approval request. Email is pulled from the provider automatically.`
+                ? `${SOCIAL_COPY[provider].label} account verified. Complete the remaining campus profile fields and submit the approval request.`
                 : "Submit your account request in two steps. An administrator must approve the request and assign your role before sign in is enabled."}
             </p>
           </div>
@@ -300,15 +383,15 @@ function SignupPage() {
 
           <form className="login-form" onSubmit={submitSignup} ref={formRef}>
             {step === 1 && !isSocial ? (
-              <>
-                <label className="field field-annotated">
+              <div className="auth-form-grid">
+                <label className="field field-annotated field-full">
                   <span>Full name</span>
                   <div className="input-shell">
                     <input className="login-input" name="fullName" onChange={handleChange} onInput={handleChange} placeholder="Your full name" type="text" value={formState.fullName} />
                   </div>
                 </label>
 
-                <label className="field field-annotated">
+                <label className="field field-annotated field-full">
                   <span>Email address</span>
                   <div className="input-shell">
                     <input className="login-input" name="email" onChange={handleChange} onInput={handleChange} placeholder="name@smartcampus.edu" type="email" value={formState.email} />
@@ -328,61 +411,18 @@ function SignupPage() {
                     <input className="login-input" name="confirmPassword" onChange={handleChange} onInput={handleChange} placeholder="Confirm your password" type="password" value={formState.confirmPassword} />
                   </div>
                 </label>
-              </>
-            ) : null}
-
-            {step === 1 && isSocial ? (
-              <div className="auth-provider-summary">
-                <span className="status-pill status-approved">
-                  {SOCIAL_COPY[provider].label} Account Connected
-                </span>
-                <strong className="auth-provider-title">{formState.fullName}</strong>
-                <p className="supporting-text">{formState.email}</p>
-                <p className="auth-provider-helper">
-                  Provider authentication is complete. Continue to the campus profile, or reconnect the account without typing the email again.
-                </p>
-                <div className="auth-actions-row">
-                  <Button onClick={() => setStep(2)} type="button" variant="primary">Continue to Campus Profile</Button>
-                  <Button
-                    onClick={() =>
-                      provider === AUTH_PROVIDERS.GOOGLE
-                        ? backToLocalSignup()
-                        : openSocialChooser(provider)
-                    }
-                    type="button"
-                    variant="secondary"
-                  >
-                    Change Account
-                  </Button>
-                  <Button onClick={backToLocalSignup} type="button" variant="ghost">Use Email and Password</Button>
-                </div>
               </div>
             ) : null}
 
+            {step === 1 && isSocial ? (
+              renderConnectedAccountCard()
+            ) : null}
+
             {step === 2 ? (
-              <>
+              <div className="auth-form-grid">
                 {isSocial ? (
-                  <div className="auth-provider-summary auth-provider-summary-compact">
-                    <span className="status-pill status-approved">
-                      {SOCIAL_COPY[provider].label} Account Connected
-                    </span>
-                    <div className="auth-provider-grid">
-                      <div>
-                        <strong>{formState.fullName}</strong>
-                        <p className="supporting-text">{formState.email}</p>
-                      </div>
-                      <Button
-                        onClick={() =>
-                          provider === AUTH_PROVIDERS.GOOGLE
-                            ? backToLocalSignup()
-                            : openSocialChooser(provider)
-                        }
-                        type="button"
-                        variant="secondary"
-                      >
-                        Change Account
-                      </Button>
-                    </div>
+                  <div className="field-full">
+                    {renderConnectedAccountCard({ compact: true })}
                   </div>
                 ) : null}
 
@@ -407,41 +447,63 @@ function SignupPage() {
                   </div>
                 </label>
 
-                <label className="field field-annotated">
+                <label className="field field-annotated field-full">
                   <span>Reason for access</span>
                   <textarea className="auth-textarea" name="reasonForAccess" onChange={handleChange} onInput={handleChange} placeholder="Explain why you need Smart Campus Operations Hub access." rows="4" value={formState.reasonForAccess} />
                 </label>
 
-                <div className="field field-annotated">
-                  <span>Preferred 2-step verification method</span>
-                  {isSocial ? (
-                    <div className="auth-method-lock">
-                      <strong>Google Authenticator is enabled for social sign-up</strong>
-                      <p>
-                        After administrator approval and the first social login, Smart Campus
-                        will show the setup key for Google Authenticator and ask for the
-                        generated 6-digit code.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="auth-method-grid">
-                      <label className="auth-method-option">
-                        <input checked={formState.preferredTwoFactorMethod === "EMAIL_OTP"} name="preferredTwoFactorMethod" onChange={handleChange} type="radio" value="EMAIL_OTP" />
-                        <span>Email verification</span>
-                        <small>Receive a one-time code during sign in.</small>
-                      </label>
-                      <label className="auth-method-option">
-                        <input checked={formState.preferredTwoFactorMethod === "AUTHENTICATOR_APP"} name="preferredTwoFactorMethod" onChange={handleChange} type="radio" value="AUTHENTICATOR_APP" />
-                        <span>Google Authenticator</span>
-                        <small>Use an authenticator app for the second step.</small>
-                      </label>
-                    </div>
-                  )}
+                <div className="field field-annotated field-full">
+                  <div className="field-section-heading">
+                    <span>2-step verification</span>
+                    <p>Choose how Smart Campus verifies secure sign-in.</p>
+                  </div>
+                  <div className="auth-method-grid">
+                    {TWO_FACTOR_OPTIONS.map((option) => {
+                      const OptionIcon = option.icon;
+                      const isSelected = formState.preferredTwoFactorMethod === option.value;
+
+                      return (
+                        <label
+                          key={option.value}
+                          className={`auth-method-option ${isSelected ? "is-selected" : ""}`.trim()}
+                        >
+                          <input
+                            checked={isSelected}
+                            name="preferredTwoFactorMethod"
+                            onChange={handleChange}
+                            type="radio"
+                            value={option.value}
+                          />
+                          <div className="auth-method-option-top">
+                            <span className="auth-method-icon" aria-hidden="true">
+                              <OptionIcon />
+                            </span>
+                            <span className="auth-method-badge">{option.badge}</span>
+                          </div>
+                          <div className="auth-method-option-copy">
+                            <span>{option.title}</span>
+                            <small>{option.description}</small>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
                 </div>
-              </>
+              </div>
             ) : null}
 
-            {activeError ? <p className="alert alert-error">{activeError}</p> : null}
+            {activeError ? (
+              <div className="auth-inline-alert">
+                <p className="alert alert-error">{activeError}</p>
+                {shouldShowLoginHint ? (
+                  <div className="auth-inline-alert-actions">
+                    <Link className="text-link" to="/login">
+                      Already have an account? Go to Login
+                    </Link>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
 
             {step === 1 && !isSocial ? (
               <Button className="login-submit" onClick={goToProfileStep} type="button" variant="primary">

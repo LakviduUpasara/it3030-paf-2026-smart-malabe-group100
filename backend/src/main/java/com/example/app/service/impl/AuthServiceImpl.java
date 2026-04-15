@@ -78,20 +78,18 @@ public class AuthServiceImpl implements AuthService {
         String normalizedEmail;
         String normalizedFullName;
         String providerSubject = null;
-        TwoFactorMethod preferredTwoFactorMethod;
+        TwoFactorMethod preferredTwoFactorMethod = request.getPreferredTwoFactorMethod() == null
+                ? TwoFactorMethod.AUTHENTICATOR_APP
+                : request.getPreferredTwoFactorMethod();
 
         if (authProvider == AuthProvider.GOOGLE) {
             GoogleSignupSession signupSession = resolveGoogleSignupSession(request.getSocialSignupToken());
             normalizedEmail = signupSession.getEmail();
             normalizedFullName = signupSession.getFullName();
             providerSubject = signupSession.getProviderSubject();
-            preferredTwoFactorMethod = TwoFactorMethod.AUTHENTICATOR_APP;
         } else {
             normalizedEmail = normalizeEmail(request.getEmail());
             normalizedFullName = request.getFullName().trim();
-            preferredTwoFactorMethod = authProvider == AuthProvider.LOCAL
-                    ? request.getPreferredTwoFactorMethod()
-                    : TwoFactorMethod.AUTHENTICATOR_APP;
         }
 
         if (authProvider == AuthProvider.LOCAL) {
@@ -166,6 +164,31 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public GoogleSignupSessionResponse prepareGoogleSignup(GoogleCredentialRequest request) {
         VerifiedGoogleAccount googleAccount = googleIdentityVerifier.verify(request.getCredential());
+        Optional<UserAccount> approvedAccount = userAccountRepository
+                .findByProviderAndProviderSubject(AuthProvider.GOOGLE, googleAccount.subject());
+
+        if (approvedAccount.isEmpty()) {
+            approvedAccount = userAccountRepository.findByEmailIgnoreCase(googleAccount.email());
+        }
+
+        if (approvedAccount.isPresent()) {
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "This Google account already has an approved Smart Campus account. Please log in instead."
+            );
+        }
+
+        Optional<SignupRequest> existingSignupRequest = signupRequestRepository
+                .findByEmailIgnoreCase(googleAccount.email());
+
+        if (existingSignupRequest.isPresent()
+                && existingSignupRequest.get().getStatus() == SignupRequestStatus.PENDING) {
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "A sign up request for this Google account is already pending administrator approval."
+            );
+        }
+
         googleSignupSessionRepository.deleteByExpiresAtBefore(LocalDateTime.now());
         googleSignupSessionRepository.deleteByProviderAndProviderSubject(AuthProvider.GOOGLE, googleAccount.subject());
 
