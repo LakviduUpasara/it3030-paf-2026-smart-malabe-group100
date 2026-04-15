@@ -2,12 +2,17 @@ import { useEffect, useState } from "react";
 import Button from "../components/Button";
 import Card from "../components/Card";
 import LoadingSpinner from "../components/LoadingSpinner";
-import { createTicket, getMyTickets } from "../services/ticketService";
+import { createTicket, getMyTickets, uploadFile } from "../services/ticketService";
 import { toToken } from "../utils/formatters";
 
 const initialForm = {
   title: "",
+  location: "",
+  category: "",
+  priority: "Normal",
   description: "",
+  preferredContactMethod: "Phone",
+  preferredContactDetails: "",
 };
 
 function MyTicketsPage() {
@@ -18,6 +23,7 @@ function MyTicketsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [attachments, setAttachments] = useState([]);
 
   useEffect(() => {
     let active = true;
@@ -57,6 +63,21 @@ function MyTicketsPage() {
     }));
   };
 
+  const handleAttachmentChange = (event) => {
+    const fileList = Array.from(event.target.files || []);
+    const imageFiles = fileList.filter((file) => file.type.startsWith("image/"));
+
+    if (imageFiles.length !== fileList.length) {
+      setError("Only image attachments are allowed.");
+    } else if (fileList.length > 3) {
+      setError("You can upload up to 3 images per ticket.");
+    } else {
+      setError("");
+    }
+
+    setAttachments(imageFiles.slice(0, 3));
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     setIsSubmitting(true);
@@ -64,14 +85,36 @@ function MyTicketsPage() {
     setSuccessMessage("");
 
     try {
+      if (attachments.length > 3) {
+        throw new Error("You can upload up to 3 images per ticket.");
+      }
+
       const ticket = await createTicket({
         title: formData.title.trim(),
+        location: formData.location.trim(),
+        category: formData.category.trim(),
+        priority: formData.priority,
         description: formData.description.trim(),
+        preferredContactMethod: formData.preferredContactMethod,
+        preferredContactDetails: formData.preferredContactDetails.trim(),
       });
+
+      let uploadedCount = 0;
+      if (ticket?.id != null && attachments.length > 0) {
+        await Promise.all(
+          attachments.map(async (file) => {
+            await uploadFile(ticket.id, file);
+            uploadedCount += 1;
+          }),
+        );
+      }
+
       const idPart = ticket?.id != null ? ` (#${ticket.id})` : "";
-      setSuccessMessage(`Ticket submitted successfully${idPart}.`);
-      setTickets((previous) => [ticket, ...previous]);
+      const attachmentPart = uploadedCount > 0 ? ` with ${uploadedCount} image attachment${uploadedCount > 1 ? "s" : ""}` : "";
+      setSuccessMessage(`Ticket submitted successfully${idPart}${attachmentPart}.`);
+      setTickets((previous) => [{ ...ticket, ...formData }, ...previous]);
       setFormData(initialForm);
+      setAttachments([]);
       setIsFormOpen(false);
     } catch (submitError) {
       setError(submitError.message || "Unable to create ticket.");
@@ -99,6 +142,30 @@ function MyTicketsPage() {
 
       {isFormOpen ? (
         <form className="form-grid my-tickets-create-form" onSubmit={handleSubmit}>
+          <label className="field">
+            <span>Resource / Location</span>
+            <input
+              name="location"
+              onChange={handleChange}
+              placeholder="e.g. Lecture Hall A, Library 2nd Floor"
+              required
+              type="text"
+              value={formData.location}
+            />
+          </label>
+
+          <label className="field">
+            <span>Category</span>
+            <input
+              name="category"
+              onChange={handleChange}
+              placeholder="e.g. Electrical, Projector, Network"
+              required
+              type="text"
+              value={formData.category}
+            />
+          </label>
+
           <label className="field field-full">
             <span>Title</span>
             <input
@@ -108,6 +175,37 @@ function MyTicketsPage() {
               required
               type="text"
               value={formData.title}
+            />
+          </label>
+
+          <label className="field">
+            <span>Priority</span>
+            <select name="priority" onChange={handleChange} value={formData.priority}>
+              <option value="Low">Low</option>
+              <option value="Normal">Normal</option>
+              <option value="High">High</option>
+              <option value="Critical">Critical</option>
+            </select>
+          </label>
+
+          <label className="field">
+            <span>Preferred Contact Method</span>
+            <select name="preferredContactMethod" onChange={handleChange} value={formData.preferredContactMethod}>
+              <option value="Phone">Phone</option>
+              <option value="Email">Email</option>
+              <option value="WhatsApp">WhatsApp</option>
+            </select>
+          </label>
+
+          <label className="field field-full">
+            <span>Preferred Contact Details</span>
+            <input
+              name="preferredContactDetails"
+              onChange={handleChange}
+              placeholder="Phone number, email, or WhatsApp number"
+              required
+              type="text"
+              value={formData.preferredContactDetails}
             />
           </label>
 
@@ -121,6 +219,14 @@ function MyTicketsPage() {
               rows="5"
               value={formData.description}
             />
+          </label>
+
+          <label className="field field-full">
+            <span>Evidence Images (up to 3)</span>
+            <input accept="image/*" multiple onChange={handleAttachmentChange} type="file" />
+            {attachments.length > 0 ? (
+              <small className="supporting-text">Selected: {attachments.map((file) => file.name).join(", ")}</small>
+            ) : null}
           </label>
 
           <div className="field-full">
@@ -145,6 +251,11 @@ function MyTicketsPage() {
                 <p className="supporting-text">
                   Priority: {ticket.priority || "Normal"} | Assignee: {ticket.assignee || "Pending assignment"}
                 </p>
+                {ticket.preferredContactMethod || ticket.preferredContactDetails ? (
+                  <p className="supporting-text">
+                    Preferred contact: {ticket.preferredContactMethod || "N/A"} {ticket.preferredContactDetails ? `(${ticket.preferredContactDetails})` : ""}
+                  </p>
+                ) : null}
               </div>
               <span className={`status-badge ${toToken(ticket.status || "open")}`}>{ticket.status || "Open"}</span>
             </article>
