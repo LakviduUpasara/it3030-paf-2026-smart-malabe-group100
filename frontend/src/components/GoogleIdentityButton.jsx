@@ -37,8 +37,12 @@ function loadGoogleScript() {
 function GoogleIdentityButton({
   buttonText = "continue_with",
   disabled = false,
+  minWidth = 240,
+  maxWidth = 396,
   onCredential,
   onError,
+  size = "large",
+  theme = "outline",
 }) {
   const containerRef = useRef(null);
   const onCredentialRef = useRef(onCredential);
@@ -78,13 +82,13 @@ function GoogleIdentityButton({
         });
 
         const parentWidth = containerRef.current.parentElement?.clientWidth || 360;
-        const buttonWidth = Math.max(240, Math.min(parentWidth, 396));
+        const buttonWidth = Math.max(minWidth, Math.min(parentWidth, maxWidth));
 
         containerRef.current.innerHTML = "";
         window.google.accounts.id.renderButton(containerRef.current, {
           type: "standard",
-          theme: "outline",
-          size: "large",
+          theme,
+          size,
           shape: "pill",
           text: buttonText,
           logo_alignment: "left",
@@ -103,7 +107,7 @@ function GoogleIdentityButton({
     return () => {
       isActive = false;
     };
-  }, [buttonText, clientId, disabled]);
+  }, [buttonText, clientId, disabled, maxWidth, minWidth, size, theme]);
 
   if (!clientId) {
     return (

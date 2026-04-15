@@ -117,6 +117,7 @@ function SignupPage() {
   );
   const providerMeta = SOCIAL_COPY[provider];
   const ProviderIcon = providerMeta?.icon;
+  const stepLabel = step === 1 ? "Account setup" : "Campus profile";
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -361,29 +362,37 @@ function SignupPage() {
 
   return (
     <section className="auth-screen auth-screen-centered">
-      <div className="auth-card-wrap auth-card-wrap-centered">
-        <Card className="auth-card glass-card">
-          <div className="auth-heading">
-            <h1 className="auth-title">Sign Up</h1>
-            <p className="auth-subtitle">
-              {isSocial
-                ? `${SOCIAL_COPY[provider].label} account verified. Complete the remaining campus profile fields and submit the approval request.`
-                : "Submit your account request in two steps. An administrator must approve the request and assign your role before sign in is enabled."}
-            </p>
+      <div className="auth-card-wrap auth-card-wrap-centered signup-card-wrap">
+        <Card className="auth-card glass-card signup-premium-card">
+          <div className="signup-shell-head">
+            <span className="signup-eyebrow">Campus Access</span>
+            <div className="auth-heading signup-heading">
+              <h1 className="auth-title signup-title">Create your Smart Campus account</h1>
+              <p className="auth-subtitle signup-subtitle">
+                {isSocial
+                  ? `${SOCIAL_COPY[provider].label} account verified. Complete the remaining details and send your request.`
+                  : "Use email or a connected account, then submit your campus access request for approval."}
+              </p>
+            </div>
           </div>
 
-          <div className="auth-progress">
-            <span className={`auth-progress-step ${step === 1 ? "is-active" : ""}`.trim()}>
-              {isSocial ? `1. ${SOCIAL_COPY[provider].label} Account` : "1. Account"}
-            </span>
-            <span className={`auth-progress-step ${step === 2 ? "is-active" : ""}`.trim()}>
-              2. Campus Profile
-            </span>
+          <div className="signup-stagebar" aria-label={`Step ${step} of 2`}>
+            <div className="signup-stagebar-meta">
+              <strong>Step {step} of 2</strong>
+              <span>{stepLabel}</span>
+            </div>
+            <div className="signup-stagebar-track" aria-hidden="true">
+              <span className={`signup-stagebar-fill signup-stagebar-fill-step-${step}`.trim()} />
+            </div>
+            <div className="signup-stagebar-labels">
+              <span className={step === 1 ? "is-active" : ""}>Account</span>
+              <span className={step === 2 ? "is-active" : ""}>Profile</span>
+            </div>
           </div>
 
           <form className="login-form" onSubmit={submitSignup} ref={formRef}>
             {step === 1 && !isSocial ? (
-              <div className="auth-form-grid">
+              <div className="auth-form-grid signup-form-grid">
                 <label className="field field-annotated field-full">
                   <span>Full name</span>
                   <div className="input-shell">
@@ -419,7 +428,7 @@ function SignupPage() {
             ) : null}
 
             {step === 2 ? (
-              <div className="auth-form-grid">
+              <div className="auth-form-grid signup-form-grid">
                 {isSocial ? (
                   <div className="field-full">
                     {renderConnectedAccountCard({ compact: true })}
@@ -506,15 +515,15 @@ function SignupPage() {
             ) : null}
 
             {step === 1 && !isSocial ? (
-              <Button className="login-submit" onClick={goToProfileStep} type="button" variant="primary">
+              <Button className="login-submit signup-submit" onClick={goToProfileStep} type="button" variant="primary">
                 Continue
               </Button>
             ) : null}
 
             {step === 2 ? (
-              <div className="auth-actions-row">
+              <div className="auth-actions-row signup-form-actions">
                 <Button onClick={() => setStep(1)} type="button" variant="secondary">Back</Button>
-                <Button className="login-submit" disabled={isLoading} type="submit" variant="primary">
+                <Button className="login-submit signup-submit" disabled={isLoading} type="submit" variant="primary">
                   Submit Approval Request
                 </Button>
               </div>
@@ -522,27 +531,34 @@ function SignupPage() {
           </form>
 
           {!isSocial && step === 1 ? (
-            <>
+            <div className="signup-social-panel">
               <div className="auth-divider">
                 <span>or continue with</span>
               </div>
-              <div className="social-auth-grid">
+              <div className="social-auth-grid signup-social-grid">
                 <GoogleIdentityButton
                   buttonText="signup_with"
                   disabled={isLoading}
+                  minWidth={220}
+                  maxWidth={340}
                   onCredential={handleGoogleSignup}
                   onError={(message) => setLocalError(message)}
+                  size="medium"
                 />
                 <button className="social-button social-button-apple" disabled={isLoading} onClick={() => openSocialChooser(AUTH_PROVIDERS.APPLE)} type="button">
-                  <span className="social-button-label">Sign up with Apple</span>
+                  <span className="social-button-icon-shell" aria-hidden="true">
+                    <FaApple />
+                  </span>
+                  <span className="social-button-copy">
+                    <span className="social-button-label">Sign up with Apple</span>
+                    <small className="social-button-caption">Use your Apple ID</small>
+                  </span>
                 </button>
               </div>
               <p className="login-demo-note">
-                Google sign-up uses a real Google account chooser and brings back the verified
-                profile automatically. Apple sign-up remains a placeholder until Apple Sign In is
-                configured.
+                Use a verified Google or Apple account for faster account setup.
               </p>
-            </>
+            </div>
           ) : null}
 
           <p className="auth-switch-copy">
