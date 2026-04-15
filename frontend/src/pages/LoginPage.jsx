@@ -22,8 +22,8 @@ function LoginPage() {
 
   return (
     <section className="auth-screen auth-screen-centered">
-      <div className="auth-card-wrap auth-card-wrap-centered">
-        <Card className="auth-card glass-card">
+      <div className="auth-card-wrap auth-card-wrap-centered signup-card-wrap login-card-wrap">
+        <Card className="auth-card glass-card signup-premium-card login-premium-card">
           <LoginPanel />
         </Card>
       </div>

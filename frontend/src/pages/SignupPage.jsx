@@ -13,6 +13,7 @@ import GoogleIdentityButton from "../components/GoogleIdentityButton";
 import LoadingSpinner from "../components/LoadingSpinner";
 import SocialAccountChooserModal from "../components/SocialAccountChooserModal";
 import { useAuth } from "../hooks/useAuth";
+import { getPasswordStrength } from "../utils/passwordStrength";
 import { getDefaultRouteForRole } from "../utils/roleUtils";
 
 const AUTH_PROVIDERS = { LOCAL: "LOCAL", GOOGLE: "GOOGLE", APPLE: "APPLE" };
@@ -118,6 +119,20 @@ function SignupPage() {
   const providerMeta = SOCIAL_COPY[provider];
   const ProviderIcon = providerMeta?.icon;
   const stepLabel = step === 1 ? "Account setup" : "Campus profile";
+  const passwordStrength = getPasswordStrength(formState.password);
+  const passwordHasValue = formState.password.trim().length > 0;
+  const confirmPasswordHasValue = formState.confirmPassword.trim().length > 0;
+  const passwordsMatch =
+    confirmPasswordHasValue && formState.password === formState.confirmPassword;
+  const isFormDirty =
+    step > 1 ||
+    provider !== AUTH_PROVIDERS.LOCAL ||
+    socialSignupToken ||
+    Object.entries(formState).some(([key, value]) =>
+      key === "preferredTwoFactorMethod"
+        ? value !== initialForm.preferredTwoFactorMethod
+        : String(value).trim() !== "",
+    );
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -221,12 +236,17 @@ function SignupPage() {
     clearTransientErrors();
   };
 
-  const backToLocalSignup = () => {
+  const resetSignupFlow = () => {
+    setFormState(initialForm);
     setProvider(AUTH_PROVIDERS.LOCAL);
     setStep(1);
     setSocialSignupToken("");
     clearTransientErrors();
     setChooserProvider(null);
+  };
+
+  const backToLocalSignup = () => {
+    resetSignupFlow();
   };
 
   const handleGoogleSignup = async (credential) => {
@@ -365,7 +385,18 @@ function SignupPage() {
       <div className="auth-card-wrap auth-card-wrap-centered signup-card-wrap">
         <Card className="auth-card glass-card signup-premium-card">
           <div className="signup-shell-head">
-            <span className="signup-eyebrow">Campus Access</span>
+            <div className="signup-shell-head-top">
+              <span className="signup-eyebrow">Campus Access</span>
+              {isFormDirty ? (
+                <button
+                  className="signup-reset-button"
+                  onClick={resetSignupFlow}
+                  type="button"
+                >
+                  Start over
+                </button>
+              ) : null}
+            </div>
             <div className="auth-heading signup-heading">
               <h1 className="auth-title signup-title">Create your Smart Campus account</h1>
               <p className="auth-subtitle signup-subtitle">
@@ -412,6 +443,32 @@ function SignupPage() {
                   <div className="input-shell">
                     <input className="login-input" name="password" onChange={handleChange} onInput={handleChange} placeholder="Create a password" type="password" value={formState.password} />
                   </div>
+                  {passwordHasValue ? (
+                    <div className="password-strength-panel" aria-live="polite">
+                      <div className="password-strength-head">
+                        <strong>Password strength</strong>
+                        <span className={`password-strength-badge password-strength-${passwordStrength.tone}`.trim()}>
+                          {passwordStrength.label}
+                        </span>
+                      </div>
+                      <div className="password-strength-meter" aria-hidden="true">
+                        <span
+                          className={`password-strength-meter-fill password-strength-${passwordStrength.tone}`.trim()}
+                          style={{ width: `${passwordStrength.progress}%` }}
+                        />
+                      </div>
+                      <div className="password-strength-checks">
+                        {passwordStrength.checks.map((check) => (
+                          <span
+                            key={check.id}
+                            className={`password-check ${check.passed ? "is-passed" : ""}`.trim()}
+                          >
+                            {check.label}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </label>
 
                 <label className="field field-annotated">
@@ -419,6 +476,11 @@ function SignupPage() {
                   <div className="input-shell">
                     <input className="login-input" name="confirmPassword" onChange={handleChange} onInput={handleChange} placeholder="Confirm your password" type="password" value={formState.confirmPassword} />
                   </div>
+                  {confirmPasswordHasValue ? (
+                    <p className={`password-match-note ${passwordsMatch ? "is-match" : "is-mismatch"}`.trim()}>
+                      {passwordsMatch ? "Passwords match." : "Passwords do not match yet."}
+                    </p>
+                  ) : null}
                 </label>
               </div>
             ) : null}

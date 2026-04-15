@@ -1,6 +1,8 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
+import { FaApple } from "react-icons/fa6";
+import { HiOutlineEye, HiOutlineEyeSlash } from "react-icons/hi2";
 import Button from "./Button";
 import GoogleIdentityButton from "./GoogleIdentityButton";
 import LoadingSpinner from "./LoadingSpinner";
@@ -18,6 +20,7 @@ function LoginPanel({ showHeading = true }) {
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState("");
   const [localError, setLocalError] = useState("");
   const [rememberMe, setRememberMe] = useState(true);
+  const [showPassword, setShowPassword] = useState(false);
   const {
     login,
     loginWithGoogle,
@@ -181,17 +184,24 @@ function LoginPanel({ showHeading = true }) {
   };
 
   return (
-    <>
+    <div className="login-premium-shell">
       {showHeading ? (
-        <div className="auth-heading">
-          <h1 className="auth-title">
-            {twoFactorChallenge ? "2-Step Verification" : "Login"}
-          </h1>
-          <p className="auth-subtitle">
-            {twoFactorChallenge
-              ? "Finish the verification step required for secure campus access."
-              : "Sign in to continue to your Smart Campus workspace."}
-          </p>
+        <div className="signup-shell-head login-shell-head">
+          <div className="signup-shell-head-top">
+            <span className="signup-eyebrow login-eyebrow">
+              {twoFactorChallenge ? "Secure Verification" : "Campus Login"}
+            </span>
+          </div>
+          <div className="auth-heading signup-heading login-heading">
+            <h1 className="auth-title signup-title login-title-premium">
+              {twoFactorChallenge ? "Complete verification" : "Welcome back"}
+            </h1>
+            <p className="auth-subtitle signup-subtitle login-subtitle-premium">
+              {twoFactorChallenge
+                ? "Verify your account to finish signing in to Smart Campus."
+                : "Sign in with your approved campus account to continue to your workspace."}
+            </p>
+          </div>
         </div>
       ) : null}
 
@@ -278,11 +288,12 @@ function LoginPanel({ showHeading = true }) {
 
           {activeError ? <p className="alert alert-error">{activeError}</p> : null}
 
-          <div className="auth-actions-row">
-            <Button disabled={isLoading} type="submit" variant="primary">
+          <div className="auth-actions-row signup-form-actions">
+            <Button className="signup-submit" disabled={isLoading} type="submit" variant="primary">
               Verify and Continue
             </Button>
             <Button
+              className="login-secondary-action"
               disabled={isLoading}
               onClick={handleBackToLogin}
               type="button"
@@ -362,9 +373,17 @@ function LoginPanel({ showHeading = true }) {
                   name="password"
                   onChange={handleFieldChange}
                   placeholder="Enter your password"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   value={credentials.password}
                 />
+                <button
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  className="input-action-button"
+                  onClick={() => setShowPassword((current) => !current)}
+                  type="button"
+                >
+                  {showPassword ? <HiOutlineEyeSlash /> : <HiOutlineEye />}
+                </button>
               </div>
             </label>
 
@@ -385,7 +404,7 @@ function LoginPanel({ showHeading = true }) {
             {activeError ? <p className="alert alert-error">{activeError}</p> : null}
 
             <Button
-              className="login-submit"
+              className="login-submit signup-submit"
               disabled={isLoading}
               type="submit"
               variant="primary"
@@ -402,8 +421,11 @@ function LoginPanel({ showHeading = true }) {
             <GoogleIdentityButton
               buttonText="continue_with"
               disabled={isLoading}
+              maxWidth={340}
+              minWidth={220}
               onCredential={handleGoogleLogin}
               onError={(message) => setLocalError(message)}
+              size="medium"
             />
 
             <button
@@ -412,35 +434,31 @@ function LoginPanel({ showHeading = true }) {
               onClick={handleAppleLogin}
               type="button"
             >
-              <span className="social-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path
-                    d="M16.62 12.52c.03 3.07 2.7 4.1 2.73 4.12-.02.07-.43 1.48-1.42 2.93-.86 1.25-1.75 2.5-3.15 2.53-1.38.03-1.82-.82-3.4-.82-1.58 0-2.07.79-3.37.85-1.35.05-2.38-1.35-3.25-2.59-1.78-2.57-3.14-7.27-1.31-10.44.91-1.58 2.53-2.58 4.29-2.61 1.34-.03 2.6.91 3.4.91.79 0 2.28-1.13 3.84-.96.65.03 2.48.26 3.66 2 .1.07-2.18 1.27-2.15 4.08Zm-2.14-8.91c.72-.88 1.21-2.11 1.08-3.33-1.03.04-2.29.68-3.03 1.56-.67.77-1.26 2.01-1.1 3.2 1.15.09 2.32-.58 3.05-1.43Z"
-                    fill="currentColor"
-                  />
-                </svg>
+              <span className="social-button-icon-shell" aria-hidden="true">
+                <FaApple />
               </span>
-              <span className="social-button-label">Continue with Apple</span>
+              <span className="social-button-copy">
+                <span className="social-button-label">Continue with Apple</span>
+                <small className="social-button-caption">Use your approved Apple ID</small>
+              </span>
             </button>
           </div>
 
-          <p className="login-demo-note">
-            Demo local admin: <strong>admin@smartcampus.edu</strong> /
-            <strong> Admin@12345</strong>. Demo Google access also supports
-            approved real Google accounts after Google OAuth verification.
+          <p className="login-demo-note auth-assist-note">
+            Test admin access: <strong>admin@smartcampus.edu</strong> / <strong>Admin@12345</strong>.
           </p>
         </>
       )}
 
       <p className="auth-switch-copy">
-        Do not have an account?{" "}
+        Need access?{" "}
         <Link className="text-link" to="/signup">
-          Sign Up
+          Create an account
         </Link>
       </p>
 
       {isLoading ? <LoadingSpinner label="Authenticating your access..." /> : null}
-    </>
+    </div>
   );
 }
 
