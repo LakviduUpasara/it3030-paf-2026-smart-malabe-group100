@@ -4,6 +4,7 @@ import Card from "../components/Card";
 import LoadingSpinner from "../components/LoadingSpinner";
 import { createTicket, getMyTickets, uploadFile } from "../services/ticketService";
 import { toToken } from "../utils/formatters";
+import maintenanceIllustration from "../assets/maintenance1.png";
 
 const initialForm = {
   title: "",
@@ -128,141 +129,167 @@ function MyTicketsPage() {
   }
 
   return (
-    <Card
-      title="My Tickets"
-      subtitle="Track maintenance and incident requests"
-      actions={
-        <Button onClick={() => setIsFormOpen((previous) => !previous)} variant={isFormOpen ? "ghost" : "primary"}>
-          {isFormOpen ? "Cancel" : "Create Ticket"}
-        </Button>
-      }
-    >
-      {successMessage ? <p className="alert alert-success">{successMessage}</p> : null}
-      {error ? <p className="alert alert-error">{error}</p> : null}
+    <>
+      <section className="my-tickets-header-section" aria-label="My Tickets overview">
+        <div className="my-tickets-header-inner">
+          
+          <div className="my-tickets-hero-main">
+            <div className="my-tickets-hero-illustration" aria-hidden="true">
+              <img alt="" src={maintenanceIllustration} />
+            </div>
+            <div className="my-tickets-hero-copy">
+              <h2>My Tickets</h2>
+              <p>Track maintenance and incident requests</p>
+            </div>
+            <div className="my-tickets-hero-action">
+              <Button className="my-tickets-create-top-button" onClick={() => setIsFormOpen((previous) => !previous)} variant={isFormOpen ? "ghost" : "primary"}>
+                {isFormOpen ? "Cancel" : "Create Ticket"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <Card className="my-tickets-content-card">
+        {successMessage ? <p className="alert alert-success">{successMessage}</p> : null}
+        {error ? <p className="alert alert-error">{error}</p> : null}
+
+        {tickets.length === 0 ? (
+          <p className="supporting-text">No tickets yet. Use "Create Ticket" to submit a request.</p>
+        ) : (
+          <div className="list-stack">
+            {tickets.map((ticket, index) => (
+              <article className="my-ticket-item" key={ticket.id != null ? ticket.id : `my-ticket-${index}`}>
+                <div className="my-ticket-main">
+                  <strong>{ticket.title || "Untitled Ticket"}</strong>
+                  <p className="supporting-text">
+                    {ticket.location || "Campus"} | {ticket.category || "General"}
+                  </p>
+                  <p className="supporting-text">
+                    Priority: {ticket.priority || "Normal"} | Assignee: {ticket.assignee || "Pending assignment"}
+                  </p>
+                  {ticket.preferredContactMethod || ticket.preferredContactDetails ? (
+                    <p className="supporting-text">
+                      Preferred contact: {ticket.preferredContactMethod || "N/A"} {ticket.preferredContactDetails ? `(${ticket.preferredContactDetails})` : ""}
+                    </p>
+                  ) : null}
+                </div>
+                <span className={`status-badge ${toToken(ticket.status || "open")}`}>{ticket.status || "Open"}</span>
+              </article>
+            ))}
+          </div>
+        )}
+      </Card>
 
       {isFormOpen ? (
-        <form className="form-grid my-tickets-create-form" onSubmit={handleSubmit}>
-          <label className="field">
-            <span>Resource / Location</span>
-            <input
-              name="location"
-              onChange={handleChange}
-              placeholder="e.g. Lecture Hall A, Library 2nd Floor"
-              required
-              type="text"
-              value={formData.location}
-            />
-          </label>
+        <div className="modal-backdrop" onClick={() => !isSubmitting && setIsFormOpen(false)} role="presentation">
+          <div className="modal-panel" onClick={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="create-ticket-title">
+            <div className="modal-header">
+              <h3 id="create-ticket-title">Create Ticket</h3>
+              <button className="modal-close" disabled={isSubmitting} onClick={() => setIsFormOpen(false)} type="button">
+                x
+              </button>
+            </div>
+            <div className="modal-content">
+              <form className="form-grid my-tickets-create-form my-tickets-create-form-modal" onSubmit={handleSubmit}>
+                <label className="field">
+                  <span>Resource / Location</span>
+                  <input
+                    name="location"
+                    onChange={handleChange}
+                    placeholder="e.g. Lecture Hall A, Library 2nd Floor"
+                    required
+                    type="text"
+                    value={formData.location}
+                  />
+                </label>
 
-          <label className="field">
-            <span>Category</span>
-            <input
-              name="category"
-              onChange={handleChange}
-              placeholder="e.g. Electrical, Projector, Network"
-              required
-              type="text"
-              value={formData.category}
-            />
-          </label>
+                <label className="field">
+                  <span>Category</span>
+                  <input
+                    name="category"
+                    onChange={handleChange}
+                    placeholder="e.g. Electrical, Projector, Network"
+                    required
+                    type="text"
+                    value={formData.category}
+                  />
+                </label>
 
-          <label className="field field-full">
-            <span>Title</span>
-            <input
-              name="title"
-              onChange={handleChange}
-              placeholder="Short summary of the issue"
-              required
-              type="text"
-              value={formData.title}
-            />
-          </label>
+                <label className="field field-full">
+                  <span>Title</span>
+                  <input
+                    name="title"
+                    onChange={handleChange}
+                    placeholder="Short summary of the issue"
+                    required
+                    type="text"
+                    value={formData.title}
+                  />
+                </label>
 
-          <label className="field">
-            <span>Priority</span>
-            <select name="priority" onChange={handleChange} value={formData.priority}>
-              <option value="Low">Low</option>
-              <option value="Normal">Normal</option>
-              <option value="High">High</option>
-              <option value="Critical">Critical</option>
-            </select>
-          </label>
+                <label className="field">
+                  <span>Priority</span>
+                  <select name="priority" onChange={handleChange} value={formData.priority}>
+                    <option value="Low">Low</option>
+                    <option value="Normal">Normal</option>
+                    <option value="High">High</option>
+                    <option value="Critical">Critical</option>
+                  </select>
+                </label>
 
-          <label className="field">
-            <span>Preferred Contact Method</span>
-            <select name="preferredContactMethod" onChange={handleChange} value={formData.preferredContactMethod}>
-              <option value="Phone">Phone</option>
-              <option value="Email">Email</option>
-              <option value="WhatsApp">WhatsApp</option>
-            </select>
-          </label>
+                <label className="field">
+                  <span>Preferred Contact Method</span>
+                  <select name="preferredContactMethod" onChange={handleChange} value={formData.preferredContactMethod}>
+                    <option value="Phone">Phone</option>
+                    <option value="Email">Email</option>
+                    <option value="WhatsApp">WhatsApp</option>
+                  </select>
+                </label>
 
-          <label className="field field-full">
-            <span>Preferred Contact Details</span>
-            <input
-              name="preferredContactDetails"
-              onChange={handleChange}
-              placeholder="Phone number, email, or WhatsApp number"
-              required
-              type="text"
-              value={formData.preferredContactDetails}
-            />
-          </label>
+                <label className="field field-full">
+                  <span>Preferred Contact Details</span>
+                  <input
+                    name="preferredContactDetails"
+                    onChange={handleChange}
+                    placeholder="Phone number, email, or WhatsApp number"
+                    required
+                    type="text"
+                    value={formData.preferredContactDetails}
+                  />
+                </label>
 
-          <label className="field field-full">
-            <span>Description</span>
-            <textarea
-              name="description"
-              onChange={handleChange}
-              placeholder="What happened, where, and any relevant details"
-              required
-              rows="5"
-              value={formData.description}
-            />
-          </label>
+                <label className="field field-full">
+                  <span>Description</span>
+                  <textarea
+                    name="description"
+                    onChange={handleChange}
+                    placeholder="What happened, where, and any relevant details"
+                    required
+                    rows="5"
+                    value={formData.description}
+                  />
+                </label>
 
-          <label className="field field-full">
-            <span>Evidence Images (up to 3)</span>
-            <input accept="image/*" multiple onChange={handleAttachmentChange} type="file" />
-            {attachments.length > 0 ? (
-              <small className="supporting-text">Selected: {attachments.map((file) => file.name).join(", ")}</small>
-            ) : null}
-          </label>
+                <label className="field field-full">
+                  <span>Evidence Images (up to 3)</span>
+                  <input accept="image/*" multiple onChange={handleAttachmentChange} type="file" />
+                  {attachments.length > 0 ? (
+                    <small className="supporting-text">Selected: {attachments.map((file) => file.name).join(", ")}</small>
+                  ) : null}
+                </label>
 
-          <div className="field-full">
-            <Button disabled={isSubmitting} type="submit" variant="primary">
-              {isSubmitting ? "Submitting..." : "Submit Ticket"}
-            </Button>
+                <div className="field-full">
+                  <Button disabled={isSubmitting} type="submit" variant="primary">
+                    {isSubmitting ? "Submitting..." : "Submit Ticket"}
+                  </Button>
+                </div>
+              </form>
+            </div>
           </div>
-        </form>
-      ) : null}
-
-      {tickets.length === 0 ? (
-        <p className="supporting-text">No tickets yet. Use "Create Ticket" to submit a request.</p>
-      ) : (
-        <div className="list-stack">
-          {tickets.map((ticket, index) => (
-            <article className="my-ticket-item" key={ticket.id != null ? ticket.id : `my-ticket-${index}`}>
-              <div className="my-ticket-main">
-                <strong>{ticket.title || "Untitled Ticket"}</strong>
-                <p className="supporting-text">
-                  {ticket.location || "Campus"} | {ticket.category || "General"}
-                </p>
-                <p className="supporting-text">
-                  Priority: {ticket.priority || "Normal"} | Assignee: {ticket.assignee || "Pending assignment"}
-                </p>
-                {ticket.preferredContactMethod || ticket.preferredContactDetails ? (
-                  <p className="supporting-text">
-                    Preferred contact: {ticket.preferredContactMethod || "N/A"} {ticket.preferredContactDetails ? `(${ticket.preferredContactDetails})` : ""}
-                  </p>
-                ) : null}
-              </div>
-              <span className={`status-badge ${toToken(ticket.status || "open")}`}>{ticket.status || "Open"}</span>
-            </article>
-          ))}
         </div>
-      )}
-    </Card>
+      ) : null}
+    </>
   );
 }
 
