@@ -18,22 +18,27 @@ function AdminDashboardPage() {
       setError("");
 
       try {
-        const [resources, bookings, tickets] = await Promise.all([
+        // ✅ FIX: axios response handling
+        const [resResources, resBookings, resTickets] = await Promise.all([
           getResources(),
           getPendingBookings(),
           getManagedTickets(),
         ]);
 
+        const resources = resResources.data;
+        const bookings = resBookings.data;
+        const tickets = resTickets.data;
+
         if (active) {
           setSummary({
-            resources: resources.length,
-            approvals: bookings.length,
-            tickets: tickets.length,
+            resources: Array.isArray(resources) ? resources.length : 0,
+            approvals: Array.isArray(bookings) ? bookings.length : 0,
+            tickets: Array.isArray(tickets) ? tickets.length : 0,
           });
         }
       } catch (loadError) {
         if (active) {
-          setError(loadError.message);
+          setError(loadError.message || "Failed to load dashboard.");
         }
       } finally {
         if (active) {
@@ -55,26 +60,29 @@ function AdminDashboardPage() {
 
   return (
     <div className="page-stack">
-      {error ? <p className="alert alert-error">{error}</p> : null}
+      {error && <p className="alert alert-error">{error}</p>}
+
       <div className="grid grid-three">
         <Card className="stat-card">
           <p className="stat-label">Tracked Resources</p>
           <strong className="stat-value">{summary?.resources || 0}</strong>
         </Card>
+
         <Card className="stat-card">
           <p className="stat-label">Pending Approvals</p>
           <strong className="stat-value">{summary?.approvals || 0}</strong>
         </Card>
+
         <Card className="stat-card">
           <p className="stat-label">Open Tickets</p>
           <strong className="stat-value">{summary?.tickets || 0}</strong>
         </Card>
       </div>
 
-      <Card title="Admin Overview" subtitle="Operational controls for campus management">
+      <Card title="Admin Overview">
         <p className="supporting-text">
-          Use the admin menu to manage assets, review booking requests, and coordinate
-          ticket responses across the campus.
+          Use the admin menu to manage assets, review booking requests, and
+          coordinate ticket responses across the campus.
         </p>
       </Card>
     </div>
@@ -82,4 +90,3 @@ function AdminDashboardPage() {
 }
 
 export default AdminDashboardPage;
-
