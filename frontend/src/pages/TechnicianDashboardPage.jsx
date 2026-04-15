@@ -7,13 +7,6 @@ import { addUpdate, getTickets, updateStatus, uploadFile } from "../services/tic
 
 const STATUS_OPTIONS = ["OPEN", "IN_PROGRESS", "CLOSED"];
 
-function statusSelectOptions(current) {
-  if (current && !STATUS_OPTIONS.includes(current)) {
-    return [current, ...STATUS_OPTIONS];
-  }
-  return STATUS_OPTIONS;
-}
-
 function TechnicianDashboardPage() {
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -23,7 +16,6 @@ function TechnicianDashboardPage() {
   const [statusDraftById, setStatusDraftById] = useState({});
   const [messagesById, setMessagesById] = useState({});
   const [filesById, setFilesById] = useState({});
-  const [fileInputReset, setFileInputReset] = useState({});
 
   useEffect(() => {
     let active = true;
@@ -33,247 +25,169 @@ function TechnicianDashboardPage() {
       setError("");
 
       try {
-        const data = await getTickets();
+        // ✅ FIX
+        const res = await getTickets();
+        const data = res.data;
+
         if (active) {
           const list = Array.isArray(data) ? data : [];
           setTickets(list);
-          setStatusDraftById((previous) => {
-            const next = { ...previous };
-            for (const t of list) {
-              if (next[t.id] === undefined) {
-                next[t.id] = t.status ?? "OPEN";
-              }
-            }
-            return next;
+
+          const draft = {};
+          list.forEach((t) => {
+            draft[t.id] = t.status || "OPEN";
           });
+          setStatusDraftById(draft);
         }
-      } catch (loadError) {
+      } catch (err) {
         if (active) {
-          setError(loadError.message || "Failed to load tickets.");
+          setError(err.message || "Failed to load tickets.");
         }
       } finally {
-        if (active) {
-          setLoading(false);
-        }
+        if (active) setLoading(false);
       }
     }
 
     loadTickets();
-
-    return () => {
-      active = false;
-    };
+    return () => (active = false);
   }, []);
 
-  const handleStatusDraftChange = (ticketId, value) => {
-    setStatusDraftById((previous) => ({ ...previous, [ticketId]: value }));
-  };
-
+  // ✅ STATUS UPDATE
   const handleApplyStatus = async (ticketId) => {
     const nextStatus = statusDraftById[ticketId];
-    if (!nextStatus) {
-      return;
-    }
 
-    setFeedback({ type: "", text: "" });
     setPendingKey(`${ticketId}-status`);
+    setFeedback({});
 
     try {
       await updateStatus(ticketId, nextStatus);
-      setTickets((previous) =>
-        previous.map((ticket) =>
-          ticket.id === ticketId ? { ...ticket, status: nextStatus } : ticket,
-        ),
+
+      setTickets((prev) =>
+        prev.map((t) =>
+          t.id === ticketId ? { ...t, status: nextStatus } : t
+        )
       );
-      setFeedback({
-        type: "success",
-        text: `Ticket #${ticketId} status updated to ${nextStatus}.`,
-      });
-    } catch (actionError) {
-      setFeedback({ type: "error", text: actionError.message || "Update failed." });
+
+      setFeedback({ type: "success", text: "Status updated!" });
+    } catch (err) {
+      setFeedback({ type: "error", text: err.message });
     } finally {
       setPendingKey(null);
     }
   };
 
-  const handleMessageChange = (ticketId, value) => {
-    setMessagesById((previous) => ({ ...previous, [ticketId]: value }));
-  };
-
+  // ✅ ADD UPDATE
   const handleAddUpdate = async (ticketId) => {
-    const message = (messagesById[ticketId] || "").trim();
-    if (!message) {
-      setFeedback({ type: "error", text: "Enter an update message before sending." });
-      return;
-    }
+    const message = messagesById[ticketId];
 
-    setFeedback({ type: "", text: "" });
+    if (!message) return;
+
     setPendingKey(`${ticketId}-update`);
 
     try {
-      await addUpdate(ticketId, { message, updatedBy: "Technician" });
-      setMessagesById((previous) => ({ ...previous, [ticketId]: "" }));
-      setFeedback({ type: "success", text: `Update recorded for ticket #${ticketId}.` });
-    } catch (actionError) {
-      setFeedback({ type: "error", text: actionError.message || "Could not add update." });
+      await addUpdate(ticketId, {
+        message,
+        updatedBy: "Technician",
+      });
+
+      setMessagesById((prev) => ({ ...prev, [ticketId]: "" }));
+      setFeedback({ type: "success", text: "Update added!" });
+    } catch (err) {
+      setFeedback({ type: "error", text: err.message });
     } finally {
       setPendingKey(null);
     }
   };
 
-  const handleFileChange = (ticketId, event) => {
-    const file = event.target.files?.[0];
-    setFilesById((previous) => ({
-      ...previous,
-      [ticketId]: file ?? null,
-    }));
-  };
-
+  // ✅ FILE UPLOAD
   const handleUploadAttachment = async (ticketId) => {
     const file = filesById[ticketId];
-    if (!file) {
-      setFeedback({ type: "error", text: "Choose a file to upload." });
-      return;
-    }
+    if (!file) return;
 
-    setFeedback({ type: "", text: "" });
     setPendingKey(`${ticketId}-upload`);
 
     try {
       await uploadFile(ticketId, file);
-      setFilesById((previous) => {
-        const next = { ...previous };
+      setFeedback({ type: "success", text: "File uploaded!" });
+
+      setFilesById((prev) => {
+        const next = { ...prev };
         delete next[ticketId];
         return next;
       });
-      setFileInputReset((previous) => ({
-        ...previous,
-        [ticketId]: (previous[ticketId] || 0) + 1,
-      }));
-      setFeedback({
-        type: "success",
-        text: `Attachment uploaded for ticket #${ticketId}.`,
-      });
-    } catch (actionError) {
-      setFeedback({ type: "error", text: actionError.message || "Upload failed." });
+    } catch (err) {
+      setFeedback({ type: "error", text: err.message });
     } finally {
       setPendingKey(null);
     }
   };
 
-  if (loading) {
-    return <LoadingSpinner label="Loading technician queue..." />;
-  }
+  if (loading) return <LoadingSpinner label="Loading..." />;
 
   return (
-    <Card
-      title="Technician Dashboard"
-      subtitle="Update status, add notes, and upload attachments for incident tickets"
-    >
-      {error ? <p className="alert alert-error">{error}</p> : null}
-      {feedback.text ? (
-        <p
-          className={
-            feedback.type === "success" ? "alert alert-success" : "alert alert-error"
-          }
-        >
+    <Card title="Technician Dashboard">
+      {error && <p className="alert alert-error">{error}</p>}
+      {feedback.text && (
+        <p className={`alert ${feedback.type === "success" ? "alert-success" : "alert-error"}`}>
           {feedback.text}
         </p>
-      ) : null}
+      )}
 
-      {!error && tickets.length === 0 ? (
-        <p className="supporting-text">No tickets in the queue.</p>
-      ) : null}
+      {tickets.map((ticket) => (
+        <div key={ticket.id} style={{ marginBottom: "20px" }}>
+          <TicketCard ticket={ticket} />
 
-      <div className="list-stack">
-        {tickets.map((ticket) => {
-          const draft = statusDraftById[ticket.id] ?? ticket.status ?? "OPEN";
-          const busyStatus = pendingKey === `${ticket.id}-status`;
-          const busyUpdate = pendingKey === `${ticket.id}-update`;
-          const busyUpload = pendingKey === `${ticket.id}-upload`;
-          const busyRow = busyStatus || busyUpdate || busyUpload;
+          {/* STATUS */}
+          <select
+            value={statusDraftById[ticket.id]}
+            onChange={(e) =>
+              setStatusDraftById((prev) => ({
+                ...prev,
+                [ticket.id]: e.target.value,
+              }))
+            }
+          >
+            {STATUS_OPTIONS.map((s) => (
+              <option key={s}>{s}</option>
+            ))}
+          </select>
 
-          return (
-            <article
-              className="list-row align-start"
-              key={ticket.id}
-              style={{ flexWrap: "wrap", gap: "1rem" }}
-            >
-              <TicketCard ticket={ticket} variant="compact" />
+          <Button onClick={() => handleApplyStatus(ticket.id)}>
+            Update Status
+          </Button>
 
-              <div className="form-grid" style={{ flex: "1 1 280px", maxWidth: "420px" }}>
-                <label className="field field-full">
-                  <span>Change status</span>
-                  <div className="inline-actions" style={{ flexWrap: "wrap", gap: "0.5rem" }}>
-                    <select
-                      onChange={(event) => handleStatusDraftChange(ticket.id, event.target.value)}
-                      value={draft}
-                    >
-                      {statusSelectOptions(ticket.status).map((option) => (
-                        <option key={option} value={option}>
-                          {String(option).replace(/_/g, " ")}
-                        </option>
-                      ))}
-                    </select>
-                    <Button
-                      disabled={busyRow}
-                      onClick={() => handleApplyStatus(ticket.id)}
-                      type="button"
-                      variant="secondary"
-                    >
-                      {busyStatus ? "Saving…" : "Update status"}
-                    </Button>
-                  </div>
-                </label>
+          {/* MESSAGE */}
+          <textarea
+            placeholder="Add update"
+            value={messagesById[ticket.id] || ""}
+            onChange={(e) =>
+              setMessagesById((prev) => ({
+                ...prev,
+                [ticket.id]: e.target.value,
+              }))
+            }
+          />
 
-                <label className="field field-full">
-                  <span>Technician update</span>
-                  <textarea
-                    onChange={(event) => handleMessageChange(ticket.id, event.target.value)}
-                    placeholder="Notes for the requester or team"
-                    rows="3"
-                    value={messagesById[ticket.id] ?? ""}
-                  />
-                </label>
-                <div>
-                  <Button
-                    disabled={busyRow}
-                    onClick={() => handleAddUpdate(ticket.id)}
-                    type="button"
-                    variant="primary"
-                  >
-                    {busyUpdate ? "Sending…" : "Add update"}
-                  </Button>
-                </div>
+          <Button onClick={() => handleAddUpdate(ticket.id)}>
+            Add Update
+          </Button>
 
-                <label className="field field-full">
-                  <span>Attachment</span>
-                  <div className="inline-actions" style={{ flexWrap: "wrap", gap: "0.5rem" }}>
-                    <input
-                      key={`${ticket.id}-${fileInputReset[ticket.id] || 0}`}
-                      accept="*/*"
-                      disabled={busyRow}
-                      onChange={(event) => handleFileChange(ticket.id, event)}
-                      type="file"
-                    />
-                    <Button
-                      disabled={busyRow}
-                      onClick={() => handleUploadAttachment(ticket.id)}
-                      type="button"
-                      variant="secondary"
-                    >
-                      {busyUpload ? "Uploading…" : "Upload file"}
-                    </Button>
-                  </div>
-                  {filesById[ticket.id] ? (
-                    <p className="supporting-text">Selected: {filesById[ticket.id].name}</p>
-                  ) : null}
-                </label>
-              </div>
-            </article>
-          );
-        })}
-      </div>
+          {/* FILE */}
+          <input
+            type="file"
+            onChange={(e) =>
+              setFilesById((prev) => ({
+                ...prev,
+                [ticket.id]: e.target.files[0],
+              }))
+            }
+          />
+
+          <Button onClick={() => handleUploadAttachment(ticket.id)}>
+            Upload File
+          </Button>
+        </div>
+      ))}
     </Card>
   );
 }

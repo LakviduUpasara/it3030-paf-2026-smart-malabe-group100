@@ -17,7 +17,10 @@ function ManageTicketsPage() {
       setError("");
 
       try {
-        const data = await getTickets();
+        // ✅ FIXED: axios response handling
+        const res = await getTickets();
+        const data = res.data;
+
         if (active) {
           setTickets(Array.isArray(data) ? data : []);
         }
@@ -39,21 +42,29 @@ function ManageTicketsPage() {
     };
   }, []);
 
+  // ✅ Loading UI
   if (loading) {
     return <LoadingSpinner label="Loading tickets..." />;
   }
 
   return (
     <Card title="Manage Tickets" subtitle="View all incident tickets">
-      {error ? <p className="alert alert-error">{error}</p> : null}
+      
+      {/* ✅ Error message */}
+      {error && <p className="alert alert-error">{error}</p>}
 
-      {!error && tickets.length === 0 ? (
+      {/* ✅ Empty state */}
+      {!error && tickets.length === 0 && (
         <p className="supporting-text">No tickets yet.</p>
-      ) : null}
+      )}
 
+      {/* ✅ Ticket list */}
       <div className="list-stack">
         {tickets.map((ticket, index) => (
-          <TicketCard key={ticket.id != null ? ticket.id : `ticket-${index}`} ticket={ticket} />
+          <TicketCard
+            key={ticket.id != null ? ticket.id : `ticket-${index}`}
+            ticket={ticket}
+          />
         ))}
       </div>
     </Card>

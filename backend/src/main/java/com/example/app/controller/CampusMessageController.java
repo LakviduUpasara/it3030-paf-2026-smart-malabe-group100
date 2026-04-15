@@ -1,4 +1,4 @@
-package com.example.app.controller;
+/*package com.example.app.controller;
 
 import com.example.app.dto.CampusMessageRequest;
 import com.example.app.dto.CampusMessageResponse;
@@ -33,3 +33,4 @@ public class CampusMessageController {
     }
 }
 
+*/
