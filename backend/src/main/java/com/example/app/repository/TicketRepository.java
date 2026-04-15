@@ -1,12 +1,11 @@
 package com.example.app.repository;
 
 import com.example.app.entity.Ticket;
-import java.util.List;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
+import org.springframework.data.mongodb.repository.MongoRepository;
 
-@Repository
-public interface TicketRepository extends JpaRepository<Ticket, Long> {
+import java.util.List;
+
+public interface TicketRepository extends MongoRepository<Ticket, String> {
 
     List<Ticket> findByCreatedByUserIdOrderByCreatedAtDesc(String createdByUserId);
 }

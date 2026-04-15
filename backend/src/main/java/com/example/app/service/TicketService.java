@@ -16,14 +16,14 @@ public interface TicketService {
     List<TicketResponse> getAllTickets();
 
     // Get ticket by ID
-    TicketResponse getTicketById(Long id);
+    TicketResponse getTicketById(String id);
 
     // Update ticket status
-    void updateTicketStatus(Long id, String status);
+    void updateTicketStatus(String id, String status);
 
     // Add technician update
-    void addUpdateToTicket(Long id, UpdateRequest request);
+    void addUpdateToTicket(String id, UpdateRequest request);
 
     // Upload attachment
-    void uploadAttachment(Long id, MultipartFile file);
+    void uploadAttachment(String id, MultipartFile file);
 }

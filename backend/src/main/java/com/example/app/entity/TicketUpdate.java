@@ -1,30 +1,22 @@
 package com.example.app.entity;
 
-import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
-@Entity
+/**
+ * Embedded subdocument within {@link Ticket#updates}.
+ */
 public class TicketUpdate {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-
+    private String id;
     private String message;
     private String updatedBy;
-
     private LocalDateTime timestamp;
 
-    @ManyToOne
-    private Ticket ticket;
-
-    // ✅ GETTERS & SETTERS
-
-    public Long getId() {
+    public String getId() {
         return id;
     }
 
-    public void setId(Long id) {
+    public void setId(String id) {
         this.id = id;
     }
 
@@ -50,13 +42,5 @@ public class TicketUpdate {
 
     public void setTimestamp(LocalDateTime timestamp) {
         this.timestamp = timestamp;
-    }
-
-    public Ticket getTicket() {
-        return ticket;
-    }
-
-    public void setTicket(Ticket ticket) {
-        this.ticket = ticket;
     }
 }

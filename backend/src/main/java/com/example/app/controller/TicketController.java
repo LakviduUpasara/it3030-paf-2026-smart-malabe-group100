@@ -34,13 +34,13 @@ public class TicketController {
 
     // ✅ GET SINGLE TICKET
     @GetMapping("/{id}")
-    public ResponseEntity<TicketResponse> getTicketById(@PathVariable Long id) {
+    public ResponseEntity<TicketResponse> getTicketById(@PathVariable String id) {
         return ResponseEntity.ok(service.getTicketById(id));
     }
 
     // ✅ UPDATE STATUS (Technician)
     @PutMapping("/{id}/status")
-    public ResponseEntity<String> updateStatus(@PathVariable Long id,
+    public ResponseEntity<String> updateStatus(@PathVariable String id,
                                                @RequestParam String status) {
         service.updateTicketStatus(id, status);
         return ResponseEntity.ok("Status updated");
@@ -48,7 +48,7 @@ public class TicketController {
 
     // ✅ ADD TECHNICIAN UPDATE
     @PostMapping("/{id}/updates")
-    public ResponseEntity<String> addUpdate(@PathVariable Long id,
+    public ResponseEntity<String> addUpdate(@PathVariable String id,
                                            @RequestBody UpdateRequest request) {
         service.addUpdateToTicket(id, request);
         return ResponseEntity.ok("Update added");
@@ -56,7 +56,7 @@ public class TicketController {
 
     // ✅ UPLOAD ATTACHMENT
     @PostMapping("/{id}/attachments")
-    public ResponseEntity<String> uploadAttachment(@PathVariable Long id,
+    public ResponseEntity<String> uploadAttachment(@PathVariable String id,
                                                    @RequestParam("file") MultipartFile file) {
         service.uploadAttachment(id, file);
         return ResponseEntity.ok("File uploaded successfully");
