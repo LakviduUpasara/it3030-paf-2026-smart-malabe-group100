@@ -87,4 +87,12 @@ public class AuthController {
     ) {
         return ResponseEntity.ok(authService.getSignupRequestStatus(requestId, email));
     }
+
+    @PostMapping("/signup-requests/{requestId}/activate")
+    public ResponseEntity<AuthFlowResponse> activateApprovedSignup(
+            @PathVariable String requestId,
+            @RequestParam String email
+    ) {
+        return ResponseEntity.ok(authService.activateApprovedSignup(requestId, email));
+    }
 }

@@ -138,6 +138,12 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const activateApprovedSignup = async (lookup) =>
+    performAuthAction(
+      () => authService.activateApprovedSignup(lookup),
+      "Unable to open the approved workspace.",
+    );
+
   const clearPendingApproval = () => {
     setPendingApproval(null);
     clearStorage(STORAGE_KEYS.PENDING_APPROVAL);
@@ -180,6 +186,7 @@ export function AuthProvider({ children }) {
     loginWithApple,
     verifyTwoFactor,
     refreshPendingApproval,
+    activateApprovedSignup,
     logout,
   };
 

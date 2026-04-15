@@ -142,6 +142,21 @@ export async function getSignupRequestStatus({ requestId, email }) {
   }
 }
 
+export async function activateApprovedSignup({ requestId, email }) {
+  try {
+    const response = await api.post(
+      `/auth/signup-requests/${requestId}/activate`,
+      null,
+      {
+        params: { email: normalizeEmail(email || "") },
+      },
+    );
+    return response.data;
+  } catch (error) {
+    throw createServiceError(error, "Unable to open the approved workspace.");
+  }
+}
+
 export async function getPendingSignupRequests() {
   try {
     const response = await api.get("/admin/signup-requests");

@@ -28,5 +28,7 @@ public interface AuthService {
 
     PendingApprovalResponse getSignupRequestStatus(String requestId, String email);
 
+    AuthFlowResponse activateApprovedSignup(String requestId, String email);
+
     AuthFlowResponse getCurrentSession(AuthenticatedUser authenticatedUser);
 }

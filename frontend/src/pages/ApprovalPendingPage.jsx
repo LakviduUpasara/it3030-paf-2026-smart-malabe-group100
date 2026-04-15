@@ -8,6 +8,7 @@ import { getDefaultRouteForRole } from "../utils/roleUtils";
 
 function ApprovalPendingPage() {
   const {
+    activateApprovedSignup,
     clearPendingApproval,
     error,
     isAuthenticated,
@@ -19,6 +20,7 @@ function ApprovalPendingPage() {
   } = useAuth();
   const navigate = useNavigate();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isTransitioningToWorkspace, setIsTransitioningToWorkspace] = useState(false);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -42,6 +44,55 @@ function ApprovalPendingPage() {
     pendingApproval?.requestId,
     pendingApproval?.status,
     refreshPendingApproval,
+  ]);
+
+  useEffect(() => {
+    if (
+      !pendingApproval?.requestId
+      || !pendingApproval?.email
+      || pendingApproval.status !== "APPROVED"
+      || isAuthenticated
+      || isTransitioningToWorkspace
+    ) {
+      return;
+    }
+
+    let isActive = true;
+    setIsTransitioningToWorkspace(true);
+
+    activateApprovedSignup({
+      requestId: pendingApproval.requestId,
+      email: pendingApproval.email,
+    })
+      .then((response) => {
+        if (!isActive) {
+          return;
+        }
+
+        if (
+          response?.authStatus === "TWO_FACTOR_REQUIRED"
+          || response?.authStatus === "AUTHENTICATOR_SETUP_REQUIRED"
+        ) {
+          navigate("/login", { replace: true });
+        }
+      })
+      .catch(() => {
+        if (isActive) {
+          setIsTransitioningToWorkspace(false);
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [
+    activateApprovedSignup,
+    isAuthenticated,
+    isTransitioningToWorkspace,
+    navigate,
+    pendingApproval?.email,
+    pendingApproval?.requestId,
+    pendingApproval?.status,
   ]);
 
   const statusToneClass = useMemo(() => {
@@ -78,6 +129,32 @@ function ApprovalPendingPage() {
   const handleGoToLogin = () => {
     clearPendingApproval();
     navigate("/login");
+  };
+
+  const handleOpenWorkspace = async () => {
+    if (!pendingApproval?.requestId || !pendingApproval?.email) {
+      return;
+    }
+
+    setIsTransitioningToWorkspace(true);
+
+    try {
+      const response = await activateApprovedSignup({
+        requestId: pendingApproval.requestId,
+        email: pendingApproval.email,
+      });
+
+      if (
+        response?.authStatus === "TWO_FACTOR_REQUIRED"
+        || response?.authStatus === "AUTHENTICATOR_SETUP_REQUIRED"
+      ) {
+        navigate("/login", { replace: true });
+      }
+    } catch (activationError) {
+      return activationError;
+    } finally {
+      setIsTransitioningToWorkspace(false);
+    }
   };
 
   const handleCreateNewRequest = () => {
@@ -146,6 +223,16 @@ function ApprovalPendingPage() {
               </div>
             </div>
 
+            {pendingApproval.status === "APPROVED" ? (
+              <div className="auth-help-panel">
+                <strong>Workspace access is ready</strong>
+                <p className="supporting-text">
+                  Your account is approved. Smart Campus is preparing your role-based
+                  workspace and will continue with the required verification step if needed.
+                </p>
+              </div>
+            ) : null}
+
             {pendingApproval.reviewerNote ? (
               <div className="auth-help-panel">
                 <strong>Administrator note</strong>
@@ -157,8 +244,12 @@ function ApprovalPendingPage() {
 
             <div className="auth-actions-row">
               {pendingApproval.status === "APPROVED" ? (
-                <Button onClick={handleGoToLogin} variant="primary">
-                  Continue to Login
+                <Button
+                  disabled={isTransitioningToWorkspace || isLoading}
+                  onClick={handleOpenWorkspace}
+                  variant="primary"
+                >
+                  {isTransitioningToWorkspace ? "Opening Workspace..." : "Open My Workspace"}
                 </Button>
               ) : null}
 
@@ -169,14 +260,19 @@ function ApprovalPendingPage() {
               ) : null}
 
               <Button
-                disabled={pendingApproval.status !== "PENDING" || isRefreshing || isLoading}
+                disabled={
+                  pendingApproval.status !== "PENDING"
+                  || isRefreshing
+                  || isLoading
+                  || isTransitioningToWorkspace
+                }
                 onClick={handleRefresh}
                 variant="secondary"
               >
                 {isRefreshing ? "Refreshing..." : "Refresh Status"}
               </Button>
 
-              <Button disabled={isLoading} onClick={handleLogout} variant="ghost">
+              <Button disabled={isLoading || isTransitioningToWorkspace} onClick={handleLogout} variant="ghost">
                 {isLoading ? "Signing out..." : "Logout"}
               </Button>
             </div>

@@ -316,6 +316,29 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
+    public AuthFlowResponse activateApprovedSignup(String requestId, String email) {
+        SignupRequest signupRequest = signupRequestRepository.findByIdAndEmailIgnoreCase(requestId, normalizeEmail(email))
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Sign up request was not found."));
+
+        if (signupRequest.getStatus() == SignupRequestStatus.PENDING) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "This sign up request is still waiting for administrator approval.");
+        }
+
+        if (signupRequest.getStatus() == SignupRequestStatus.REJECTED) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "This sign up request was rejected and cannot open a workspace.");
+        }
+
+        UserAccount userAccount = userAccountRepository.findByEmailIgnoreCase(signupRequest.getEmail())
+                .orElseThrow(() -> new ApiException(
+                        HttpStatus.CONFLICT,
+                        "The approved account is not ready yet. Ask the administrator to review the approval again."
+                ));
+
+        ensureActiveUser(userAccount);
+        return buildTwoFactorChallenge(userAccount);
+    }
+
+    @Override
     public AuthFlowResponse getCurrentSession(AuthenticatedUser authenticatedUser) {
         UserAccount userAccount = userAccountRepository.findById(authenticatedUser.getUserId())
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "The current session is no longer valid."));
