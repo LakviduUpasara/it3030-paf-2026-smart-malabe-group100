@@ -35,6 +35,13 @@ public class GlobalExceptionHandler {
                 .body(buildErrorResponse(ex.getMessage(), HttpStatus.NOT_FOUND));
     }
 
+    @ExceptionHandler(DegreeProgramNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleDegreeProgramNotFoundException(
+            DegreeProgramNotFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(buildErrorResponse(ex.getMessage(), HttpStatus.NOT_FOUND));
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, Object>> handleIllegalArgumentException(IllegalArgumentException ex) {
         return ResponseEntity.badRequest()
