@@ -9,6 +9,7 @@ public class TicketResponse {
     private String description;
     private String status;
     private LocalDateTime createdAt;
+    private String createdByUserId;
 
     // getters & setters
     public Long getId() { return id; }
@@ -25,4 +26,7 @@ public class TicketResponse {
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+
+    public String getCreatedByUserId() { return createdByUserId; }
+    public void setCreatedByUserId(String createdByUserId) { this.createdByUserId = createdByUserId; }
 }

@@ -1,4 +1,4 @@
-import api, { createServiceError, requestWithFallback } from "./api";
+import api, { createServiceError } from "./api";
 import { buildMockAuthenticatedUser } from "../utils/mockData";
 
 function normalizeEmail(email) {
@@ -17,12 +17,43 @@ function validateEmail(email, fallbackMessage) {
   }
 }
 
+/**
+ * Flattens backend AuthFlowResponse into the shape stored in AuthContext (email/role at top level + token).
+ */
+export function mapAuthFlowToAuthUser(data) {
+  if (!data || typeof data !== "object") {
+    return data;
+  }
+
+  if (!data.authStatus) {
+    return data;
+  }
+
+  if (data.authStatus === "AUTHENTICATED" && data.user && data.token) {
+    const u = data.user;
+    return {
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      role: u.role,
+      provider: u.provider,
+      status: u.status,
+      token: data.token,
+    };
+  }
+
+  const message = data.message || "Sign-in could not be completed.";
+  throw new Error(message);
+}
+
 export async function loginWithCredentials({ email, password }) {
   const normalizedEmail = normalizeEmail(email || "");
 
-  return requestWithFallback(
-    () => api.post("/auth/login", { email: normalizedEmail, password }),
-    () => {
+  try {
+    const response = await api.post("/auth/login", { email: normalizedEmail, password });
+    return mapAuthFlowToAuthUser(response.data);
+  } catch (error) {
+    if (!error?.response || error.response.status === 404) {
       if (!normalizedEmail || !password?.trim()) {
         throw new Error("Email and password are required.");
       }
@@ -33,18 +64,24 @@ export async function loginWithCredentials({ email, password }) {
         email: normalizedEmail,
         provider: "credentials",
       });
-    },
-    "Email login failed.",
-  );
+    }
+    throw createServiceError(error, "Email login failed.");
+  }
 }
 
 export async function registerAccount({ name, email, password }) {
   const normalizedEmail = normalizeEmail(email || "");
   const normalizedName = name?.trim();
 
-  return requestWithFallback(
-    () => api.post("/auth/register", { name: normalizedName, email: normalizedEmail, password }),
-    () => {
+  try {
+    const response = await api.post("/auth/register", {
+      name: normalizedName,
+      email: normalizedEmail,
+      password,
+    });
+    return mapAuthFlowToAuthUser(response.data);
+  } catch (error) {
+    if (!error?.response || error.response.status === 404) {
       if (!normalizedName || !normalizedEmail || !password?.trim()) {
         throw new Error("Name, email, and password are required.");
       }
@@ -56,17 +93,19 @@ export async function registerAccount({ name, email, password }) {
         email: normalizedEmail,
         provider: "credentials",
       });
-    },
-    "Registration failed.",
-  );
+    }
+    throw createServiceError(error, "Registration failed.");
+  }
 }
 
 async function loginWithProvider(provider, email) {
   const normalizedEmail = normalizeEmail(email || "user@smartcampus.edu");
 
-  return requestWithFallback(
-    () => api.post(`/auth/${provider}`, { email: normalizedEmail }),
-    () => {
+  try {
+    const response = await api.post(`/auth/${provider}`, { email: normalizedEmail });
+    return mapAuthFlowToAuthUser(response.data);
+  } catch (error) {
+    if (!error?.response || error.response.status === 404) {
       validateEmail(
         normalizedEmail,
         `Enter a valid email address before using ${provider}.`,
@@ -76,9 +115,9 @@ async function loginWithProvider(provider, email) {
         email: normalizedEmail,
         provider,
       });
-    },
-    `${provider} sign-in failed.`,
-  );
+    }
+    throw createServiceError(error, `${provider} sign-in failed.`);
+  }
 }
 
 export async function loginWithGoogle(email) {

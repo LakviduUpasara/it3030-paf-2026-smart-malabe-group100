@@ -6,12 +6,20 @@ import com.example.app.dto.UpdateRequest;
 import com.example.app.entity.Attachment;
 import com.example.app.entity.Ticket;
 import com.example.app.entity.TicketUpdate;
+import com.example.app.entity.enums.Role;
+import com.example.app.exception.ApiException;
 import com.example.app.repository.AttachmentRepository;
 import com.example.app.repository.TicketRepository;
 import com.example.app.repository.TicketUpdateRepository;
+import com.example.app.security.AuthenticatedUser;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
@@ -21,6 +29,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
+@Transactional
 public class TicketServiceImpl implements TicketService {
 
     @Autowired
@@ -41,6 +50,8 @@ public class TicketServiceImpl implements TicketService {
         ticket.setDescription(request.getDescription());
         ticket.setStatus("OPEN");
         ticket.setCreatedAt(LocalDateTime.now());
+        AuthenticatedUser user = requireAuthenticatedUser();
+        ticket.setCreatedByUserId(user.getUserId());
 
         Ticket saved = ticketRepo.save(ticket);
 
@@ -50,10 +61,12 @@ public class TicketServiceImpl implements TicketService {
     // ✅ GET ALL TICKETS
     @Override
     public List<TicketResponse> getAllTickets() {
-        return ticketRepo.findAll()
-                .stream()
-                .map(this::mapToResponse)
-                .collect(Collectors.toList());
+        AuthenticatedUser user = requireAuthenticatedUser();
+        List<Ticket> list =
+                user.getRole() == Role.USER
+                        ? ticketRepo.findByCreatedByUserIdOrderByCreatedAtDesc(user.getUserId())
+                        : ticketRepo.findAll(Sort.by(Sort.Direction.DESC, "createdAt"));
+        return list.stream().map(this::mapToResponse).collect(Collectors.toList());
     }
 
     // ✅ GET TICKET BY ID
@@ -61,7 +74,8 @@ public class TicketServiceImpl implements TicketService {
     public TicketResponse getTicketById(Long id) {
 
         Ticket ticket = ticketRepo.findById(id)
-                .orElseThrow(() -> new RuntimeException("Ticket not found"));
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Ticket not found"));
+        assertCanViewTicket(ticket);
 
         return mapToResponse(ticket);
     }
@@ -71,7 +85,8 @@ public class TicketServiceImpl implements TicketService {
     public void updateTicketStatus(Long id, String status) {
 
         Ticket ticket = ticketRepo.findById(id)
-                .orElseThrow(() -> new RuntimeException("Ticket not found"));
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Ticket not found"));
+        assertCanViewTicket(ticket);
 
         ticket.setStatus(status);
         ticketRepo.save(ticket);
@@ -82,7 +97,8 @@ public class TicketServiceImpl implements TicketService {
     public void addUpdateToTicket(Long id, UpdateRequest request) {
 
         Ticket ticket = ticketRepo.findById(id)
-                .orElseThrow(() -> new RuntimeException("Ticket not found"));
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Ticket not found"));
+        assertCanViewTicket(ticket);
 
         TicketUpdate update = new TicketUpdate();
         update.setMessage(request.getMessage());
@@ -98,7 +114,8 @@ public class TicketServiceImpl implements TicketService {
     public void uploadAttachment(Long id, MultipartFile file) {
 
         Ticket ticket = ticketRepo.findById(id)
-                .orElseThrow(() -> new RuntimeException("Ticket not found"));
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Ticket not found"));
+        assertCanViewTicket(ticket);
 
         try {
             String uploadDir = "uploads/";
@@ -120,6 +137,28 @@ public class TicketServiceImpl implements TicketService {
         }
     }
 
+    private AuthenticatedUser requireAuthenticatedUser() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !(auth.getPrincipal() instanceof AuthenticatedUser user)) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "Authentication required.");
+        }
+        return user;
+    }
+
+    /**
+     * Students may only see tickets they created; staff roles may see all tickets.
+     */
+    private void assertCanViewTicket(Ticket ticket) {
+        AuthenticatedUser user = requireAuthenticatedUser();
+        if (user.getRole() != Role.USER) {
+            return;
+        }
+        String ownerId = ticket.getCreatedByUserId();
+        if (ownerId == null || !ownerId.equals(user.getUserId())) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "Ticket not found");
+        }
+    }
+
     // 🔁 MAPPING METHOD
     private TicketResponse mapToResponse(Ticket ticket) {
         TicketResponse res = new TicketResponse();
@@ -129,6 +168,7 @@ public class TicketServiceImpl implements TicketService {
         res.setDescription(ticket.getDescription());
         res.setStatus(ticket.getStatus());
         res.setCreatedAt(ticket.getCreatedAt());
+        res.setCreatedByUserId(ticket.getCreatedByUserId());
 
         return res;
     }

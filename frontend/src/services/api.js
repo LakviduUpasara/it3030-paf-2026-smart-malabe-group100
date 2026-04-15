@@ -1,8 +1,31 @@
 import axios from "axios";
 
+const USER_STORAGE_KEY = "smart-campus-user";
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api/v1",
+  baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:18080/api/v1",
   timeout: 8000,
+});
+
+function readStoredSessionToken() {
+  try {
+    const raw = localStorage.getItem(USER_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw);
+    return parsed?.token || parsed?.user?.token || null;
+  } catch {
+    return null;
+  }
+}
+
+api.interceptors.request.use((config) => {
+  const token = readStoredSessionToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
 });
 
 export function createServiceError(error, fallbackMessage) {

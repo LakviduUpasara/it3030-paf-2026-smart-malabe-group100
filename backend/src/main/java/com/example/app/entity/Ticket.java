@@ -16,6 +16,10 @@ public class Ticket {
 
     private LocalDateTime createdAt;
 
+    /** MongoDB user id of the account that submitted the ticket (nullable for legacy rows). */
+    @Column(name = "created_by_user_id", length = 64)
+    private String createdByUserId;
+
     // ✅ getters & setters
 
     public Long getId() { return id; }
@@ -37,4 +41,8 @@ public class Ticket {
     public LocalDateTime getCreatedAt() { return createdAt; }
 
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+
+    public String getCreatedByUserId() { return createdByUserId; }
+
+    public void setCreatedByUserId(String createdByUserId) { this.createdByUserId = createdByUserId; }
 }

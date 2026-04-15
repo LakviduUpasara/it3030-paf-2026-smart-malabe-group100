@@ -236,9 +236,10 @@ function LoginPanel({ showHeading = true }) {
       </div>
 
       <p className="login-demo-note">
-        Need access? Contact Campus IT Services. Demo access still supports
-        <strong> admin@smartcampus.edu</strong> and
-        <strong> technician@smartcampus.edu</strong>.
+        Need access? Contact Campus IT Services. Demo accounts:{" "}
+        <strong>user@smartcampus.edu</strong> (student),{" "}
+        <strong>admin@smartcampus.edu</strong>, and{" "}
+        <strong>technician@smartcampus.edu</strong>.
       </p>
 
       <p className="auth-switch-copy">
