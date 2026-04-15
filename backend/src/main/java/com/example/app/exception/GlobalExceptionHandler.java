@@ -49,6 +49,13 @@ public class GlobalExceptionHandler {
                 .body(buildErrorResponse(ex.getMessage(), HttpStatus.NOT_FOUND));
     }
 
+    @ExceptionHandler(SemesterNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleSemesterNotFoundException(
+            SemesterNotFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(buildErrorResponse(ex.getMessage(), HttpStatus.NOT_FOUND));
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, Object>> handleIllegalArgumentException(IllegalArgumentException ex) {
         return ResponseEntity.badRequest()
