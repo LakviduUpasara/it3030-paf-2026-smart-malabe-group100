@@ -1576,10 +1576,14 @@ a {
 
 .modal-panel {
   width: min(620px, 100%);
+  max-height: calc(100vh - 2rem);
+  display: flex;
+  flex-direction: column;
   background: var(--surface-strong);
   border-radius: var(--radius-lg);
   border: 1px solid var(--border);
   box-shadow: var(--shadow);
+  overflow: hidden;
 }
 
 .auth-modal-panel {
@@ -1604,7 +1608,9 @@ a {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 1rem;
   border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
 }
 
 .modal-header h3 {
@@ -1619,6 +1625,10 @@ a {
   font-size: 1.1rem;
 }
 
+.modal-content {
+  overflow: auto;
+}
+
 .modal-actions,
 .inline-actions {
   display: flex;
@@ -1629,6 +1639,191 @@ a {
 .text-link {
   color: var(--brand-strong);
   font-weight: 700;
+}
+
+/* Resource management */
+.resource-management-page {
+  gap: 1.5rem;
+}
+
+.resource-management-card .card-body {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.resource-management-card .card-header {
+  align-items: flex-start;
+}
+
+.resource-primary-action {
+  min-width: 148px;
+  justify-content: center;
+}
+
+.resource-feedback-stack {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.resource-feedback-stack .alert,
+.resource-form-shell .alert {
+  margin: 0;
+}
+
+.resource-filter-section {
+  display: grid;
+  gap: 1rem;
+  padding: 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, rgba(248, 251, 255, 0.94), rgba(241, 247, 255, 0.84));
+}
+
+.resource-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.resource-section-head strong {
+  display: block;
+  margin-bottom: 0.3rem;
+  font-size: 0.96rem;
+}
+
+.resource-section-head p,
+.resource-results-head p,
+.resource-card-meta p {
+  margin: 0;
+}
+
+.resource-filter-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: end;
+}
+
+.resource-filter-actions {
+  align-self: end;
+}
+
+.resource-filter-actions .button {
+  min-width: 130px;
+  justify-content: center;
+}
+
+.resource-results-section {
+  display: grid;
+  gap: 1rem;
+}
+
+.resource-results-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.resource-card-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  align-items: stretch;
+}
+
+.resource-item-card {
+  height: 100%;
+}
+
+.resource-item-card .card-header {
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.resource-item-card .card-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.resource-card-actions .button {
+  min-width: 96px;
+  justify-content: center;
+}
+
+.resource-item-card .card-body {
+  display: grid;
+  gap: 1rem;
+  height: 100%;
+}
+
+.resource-card-content {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+  height: 100%;
+}
+
+.resource-card-meta {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.resource-availability {
+  overflow-wrap: anywhere;
+}
+
+.resource-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  margin-top: auto;
+}
+
+.resource-modal-panel {
+  width: min(760px, calc(100vw - 2rem));
+  max-height: min(90vh, 860px);
+}
+
+.resource-modal-content {
+  padding: 0;
+}
+
+.resource-modal-body {
+  display: grid;
+  gap: 1rem;
+  padding: 1.25rem 1.4rem;
+}
+
+.resource-modal-copy {
+  margin: 0;
+}
+
+.resource-form-shell {
+  gap: 1rem;
+}
+
+.resource-form-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.resource-form-actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding-top: 1rem;
+  margin-top: 0.25rem;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0), var(--surface-strong) 22%);
+}
+
+.resource-form-actions .button {
+  min-width: 140px;
+  justify-content: center;
 }
 
 @keyframes spin {
@@ -1698,6 +1893,11 @@ a {
 
   .auth-hero-description {
     max-width: 100%;
+  }
+
+  .resource-filter-grid,
+  .resource-form-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -1769,6 +1969,45 @@ a {
 
   .auth-hero-kicker {
     letter-spacing: 0.18em;
+  }
+
+  .resource-management-card .card-header,
+  .resource-item-card .card-header,
+  .resource-section-head,
+  .resource-results-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .resource-filter-grid,
+  .resource-form-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .resource-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .resource-primary-action,
+  .resource-filter-actions .button,
+  .resource-card-actions .button,
+  .resource-form-actions .button {
+    width: 100%;
+  }
+
+  .resource-filter-actions,
+  .resource-card-actions,
+  .resource-form-actions {
+    width: 100%;
+  }
+
+  .resource-modal-panel {
+    width: min(100%, calc(100vw - 1rem));
+    max-height: calc(100vh - 1rem);
+  }
+
+  .resource-modal-body {
+    padding: 1.05rem;
   }
 }
 
