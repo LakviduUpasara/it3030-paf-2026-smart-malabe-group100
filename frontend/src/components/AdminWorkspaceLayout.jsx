@@ -55,7 +55,7 @@ function AdminWorkspaceLayout({
   const closeSidebar = () => setSidebarOpen(false);
 
   return (
-    <section className="admin-workspace-shell">
+    <section className="admin-workspace-shell admin-shell" aria-label="Administration workspace">
       {sidebarOpen ? (
         <button
           type="button"

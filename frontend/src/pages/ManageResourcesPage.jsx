@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
-import AdminWorkspaceLayout from "../components/AdminWorkspaceLayout";
+import { Boxes, ShieldAlert, Wrench } from "lucide-react";
 import Button from "../components/Button";
+import AdminKpiGrid from "../components/admin/AdminKpiGrid";
+import AdminPageHeader from "../components/admin/AdminPageHeader";
+import AdminStatTile from "../components/admin/AdminStatTile";
 import Card from "../components/Card";
 import LoadingSpinner from "../components/LoadingSpinner";
 import Modal from "../components/Modal";
@@ -424,63 +427,45 @@ function ManageResourcesPage() {
   );
 
   return (
-    <AdminWorkspaceLayout
-      actions={
-        <>
-          <Button onClick={refreshResources} variant="secondary" type="button">
-            Refresh inventory
-          </Button>
-          <Button className="resource-primary-action" onClick={openCreateModal} variant="primary">
-            New resource
-          </Button>
-        </>
-      }
-      rail={
-        <Card className="admin-panel-card admin-panel-card-compact">
-          <div className="admin-rail-header">
-            <strong>Portfolio mix</strong>
-            <span>Inventory snapshot</span>
-          </div>
-          <div className="admin-breakdown-list">
-            <div>
-              <span>Resource types</span>
-              <strong>{resourceTypesCount}</strong>
-            </div>
-            <div>
-              <span>Bookable capacity</span>
-              <strong>{capacityTotal}</strong>
-            </div>
-            <div>
-              <span>Maintenance blocked</span>
-              <strong>{maintenanceResources}</strong>
-            </div>
-          </div>
-        </Card>
-      }
-      stats={[
-        {
-          label: "Total resources",
-          value: resources.length,
-          detail: `${availableResources} available now`,
-          tone: "cool",
-        },
-        {
-          label: "Active",
-          value: availableResources,
-          detail: "Ready for scheduling",
-          tone: "warm",
-        },
-        {
-          label: "Maintenance",
-          value: maintenanceResources,
-          detail: "Out of service entries",
-          tone: "critical",
-        },
-      ]}
-      subtitle="Review rooms, labs, and movable assets with filters, CRUD actions, and a live portfolio snapshot."
-      title="Resource Portfolio"
-    >
-      <div className="page-stack resource-management-page">
+    <>
+      <AdminPageHeader
+        actions={
+          <>
+            <Button onClick={refreshResources} variant="secondary" type="button">
+              Refresh inventory
+            </Button>
+            <Button className="resource-primary-action" onClick={openCreateModal} variant="primary">
+              New resource
+            </Button>
+          </>
+        }
+        description="Review rooms, labs, and movable assets with filters, CRUD actions, and a live portfolio snapshot."
+        title="Resource portfolio"
+      />
+
+      <AdminKpiGrid>
+        <AdminStatTile
+          detail={`${availableResources} available now`}
+          icon={Boxes}
+          label="Total resources"
+          value={resources.length}
+        />
+        <AdminStatTile
+          detail="Ready for scheduling"
+          icon={Wrench}
+          label="Active"
+          value={availableResources}
+        />
+        <AdminStatTile
+          detail="Out of service"
+          icon={ShieldAlert}
+          label="Maintenance"
+          value={maintenanceResources}
+        />
+      </AdminKpiGrid>
+
+      <div className="grid gap-6 xl:grid-cols-[1.35fr_0.95fr]">
+        <div className="page-stack resource-management-page min-w-0">
         <Card
           className="resource-management-card admin-panel-card"
           title="Manage Resources"
@@ -607,6 +592,26 @@ function ManageResourcesPage() {
             ) : null}
           </section>
         </Card>
+        </div>
+
+        <aside className="h-fit rounded-3xl border border-border bg-tint p-5">
+          <p className="text-base font-semibold text-heading">Portfolio mix</p>
+          <p className="text-sm text-text/72">Inventory snapshot</p>
+          <div className="mt-4 space-y-3 border-t border-border/60 pt-4 text-sm">
+            <div className="flex justify-between gap-2">
+              <span className="text-text/72">Resource types</span>
+              <span className="font-semibold text-heading">{resourceTypesCount}</span>
+            </div>
+            <div className="flex justify-between gap-2">
+              <span className="text-text/72">Bookable capacity</span>
+              <span className="font-semibold text-heading">{capacityTotal}</span>
+            </div>
+            <div className="flex justify-between gap-2">
+              <span className="text-text/72">Maintenance blocked</span>
+              <span className="font-semibold text-heading">{maintenanceResources}</span>
+            </div>
+          </div>
+        </aside>
       </div>
 
       <Modal
@@ -633,7 +638,7 @@ function ManageResourcesPage() {
           />
         </div>
       </Modal>
-    </AdminWorkspaceLayout>
+    </>
   );
 }
 

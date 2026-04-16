@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Button from "../components/Button";
 import Card from "../components/Card";
+import AdminPageHeader from "../components/admin/AdminPageHeader";
 import LoadingSpinner from "../components/LoadingSpinner";
 import {
   approveSignupRequest,
@@ -101,10 +102,15 @@ function ManageSignupRequestsPage() {
 
   return (
     <div className="page-stack">
-      <Card
-        title="User Registration Approvals"
-        subtitle="Review incoming sign up requests, assign roles, and approve campus access."
+      <AdminPageHeader
         actions={<span className="status-pill status-pending">{requestCountLabel}</span>}
+        description="Review incoming sign up requests, assign roles, and approve campus access."
+        title="User registration approvals"
+      />
+
+      <Card
+        title="Pending requests"
+        subtitle="Approve or reject with role assignment and reviewer notes."
       >
         <p className="supporting-text">
           Approved applicants can sign in after role assignment. Rejected requests stay

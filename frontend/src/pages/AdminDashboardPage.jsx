@@ -1,8 +1,16 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import AdminWorkspaceLayout from "../components/AdminWorkspaceLayout";
+import {
+  AlertTriangle,
+  ClipboardCheck,
+  MapPin,
+  Package,
+} from "lucide-react";
 import Button from "../components/Button";
 import Card from "../components/Card";
+import AdminKpiGrid from "../components/admin/AdminKpiGrid";
+import AdminPageHeader from "../components/admin/AdminPageHeader";
+import AdminStatTile from "../components/admin/AdminStatTile";
 import LoadingSpinner from "../components/LoadingSpinner";
 import { getPendingBookings } from "../services/bookingService";
 import { getResources } from "../services/resourceService";
@@ -86,219 +94,255 @@ function AdminDashboardPage() {
   );
   const trackedLocations = new Set(summary.resources.map((resource) => resource.location)).size;
 
-  const stats = [
-    {
-      label: "Tracked assets",
-      value: summary.resources.length,
-      detail: `${availableResources} ready for booking`,
-      tone: "cool",
-    },
-    {
-      label: "Pending approvals",
-      value: summary.bookings.length,
-      detail: `${pendingAttendees} attendees waiting for confirmation`,
-      tone: "warm",
-    },
-    {
-      label: "Open incidents",
-      value: summary.tickets.length - resolvedTickets,
-      detail: `${urgentTickets} require rapid admin attention`,
-      tone: "critical",
-    },
-    {
-      label: "Campus coverage",
-      value: trackedLocations,
-      detail: "Resource visibility across core locations",
-      tone: "neutral",
-    },
-  ];
+  const availPct = summary.resources.length
+    ? Math.round((availableResources / summary.resources.length) * 100)
+    : 0;
+  const resolvedPct = summary.tickets.length
+    ? Math.round((resolvedTickets / summary.tickets.length) * 100)
+    : 0;
 
   return (
-    <AdminWorkspaceLayout
-      actions={
-        <>
-          <Button onClick={() => navigate("/admin/bookings")} variant="secondary">
-            Review approvals
-          </Button>
-          <Button onClick={() => navigate("/admin/resources")} variant="primary">
-            Open resources
-          </Button>
-        </>
-      }
-      rail={
-        <>
-          <Card className="admin-panel-card admin-panel-card-compact">
-            <div className="admin-rail-header">
-              <strong>Quick actions</strong>
-              <span>Priority workflow</span>
-            </div>
-            <div className="admin-quick-actions">
-              <button onClick={() => navigate("/admin/bookings")} type="button">
-                Booking approvals
-              </button>
-              <button onClick={() => navigate("/admin/resources")} type="button">
-                Asset portfolio
-              </button>
-              <button onClick={() => navigate("/admin/tickets")} type="button">
-                Incident desk
-              </button>
-            </div>
-          </Card>
+    <>
+      <AdminPageHeader
+        actions={
+          <>
+            <Button onClick={() => navigate("/admin/bookings")} variant="secondary" type="button">
+              Review approvals
+            </Button>
+            <Button onClick={() => navigate("/admin/resources")} variant="primary" type="button">
+              Open resources
+            </Button>
+          </>
+        }
+        description="Monitor approvals, resource availability, and operational support from one control center."
+        title="Campus operations"
+      />
 
-          <Card className="admin-panel-card admin-panel-card-compact">
-            <div className="admin-rail-header">
-              <strong>Operations posture</strong>
-              <span>Current overview</span>
-            </div>
-            <div className="admin-progress-list">
-              <div>
-                <div className="admin-progress-meta">
-                  <span>Resources available</span>
-                  <strong>
-                    {summary.resources.length
-                      ? Math.round((availableResources / summary.resources.length) * 100)
-                      : 0}
-                    %
-                  </strong>
-                </div>
-                <div className="admin-progress-bar">
-                  <span
-                    style={{
-                      width: `${summary.resources.length ? (availableResources / summary.resources.length) * 100 : 0}%`,
-                    }}
-                  />
-                </div>
-              </div>
-              <div>
-                <div className="admin-progress-meta">
-                  <span>Tickets resolved</span>
-                  <strong>
-                    {summary.tickets.length
-                      ? Math.round((resolvedTickets / summary.tickets.length) * 100)
-                      : 0}
-                    %
-                  </strong>
-                </div>
-                <div className="admin-progress-bar admin-progress-bar-success">
-                  <span
-                    style={{
-                      width: `${summary.tickets.length ? (resolvedTickets / summary.tickets.length) * 100 : 0}%`,
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-          </Card>
-        </>
-      }
-      stats={stats}
-      subtitle="Monitor approvals, resource availability, and operational support from a premium enterprise-style control center."
-      title="Campus Operations Command Center"
-    >
-      {error ? <p className="alert alert-error">{error}</p> : null}
+      {error ? (
+        <section
+          className="rounded-3xl border border-border bg-tint p-5 shadow-shadow"
+          role="alert"
+        >
+          <p className="text-sm font-semibold text-heading">Unable to load summary</p>
+          <p className="mt-1 text-sm text-text/70">{error}</p>
+        </section>
+      ) : null}
+
+      <AdminKpiGrid>
+        <AdminStatTile
+          detail={`${availableResources} ready for booking`}
+          icon={Package}
+          label="Tracked assets"
+          value={summary.resources.length}
+        />
+        <AdminStatTile
+          detail={`${pendingAttendees} attendees waiting`}
+          icon={ClipboardCheck}
+          label="Pending approvals"
+          value={summary.bookings.length}
+        />
+        <AdminStatTile
+          detail={`${urgentTickets} need rapid attention`}
+          icon={AlertTriangle}
+          label="Open incidents"
+          value={summary.tickets.length - resolvedTickets}
+        />
+        <AdminStatTile
+          detail="Resource visibility"
+          icon={MapPin}
+          label="Campus coverage"
+          value={trackedLocations}
+        />
+      </AdminKpiGrid>
 
       {loading ? (
-        <Card className="admin-panel-card">
+        <Card title="Loading">
           <LoadingSpinner label="Loading admin dashboard..." />
         </Card>
       ) : (
-        <div className="admin-dashboard-grid">
-          <Card className="admin-panel-card admin-panel-card-highlight">
-            <div className="admin-panel-header">
-              <div>
-                <p className="admin-panel-kicker">Live queues</p>
-                <h3>Operational priorities</h3>
-              </div>
-              <span className="status-badge pending">{summary.bookings.length} approval items</span>
-            </div>
-            <div className="admin-feature-grid">
-              <article className="admin-feature-card">
-                <span className="admin-feature-label">Booking queue</span>
-                <strong>{summary.bookings[0]?.facility || "No pending requests"}</strong>
-                <p>
-                  {summary.bookings[0]
-                    ? `${summary.bookings[0].requestedBy} requesting ${summary.bookings[0].time}`
-                    : "All booking requests are currently up to date."}
-                </p>
-              </article>
-              <article className="admin-feature-card">
-                <span className="admin-feature-label">Incident escalation</span>
-                <strong>{summary.tickets[0]?.title || "No incidents in queue"}</strong>
-                <p>
-                  {summary.tickets[0]
-                    ? `${summary.tickets[0].location} • ${summary.tickets[0].priority} priority`
-                    : "There are no unresolved incidents at the moment."}
-                </p>
-              </article>
-              <article className="admin-feature-card">
-                <span className="admin-feature-label">Resource coverage</span>
-                <strong>{availableResources} resources ready</strong>
-                <p>
-                  {maintenanceResources
-                    ? `${maintenanceResources} asset(s) currently under maintenance review.`
-                    : "No assets are blocked by maintenance right now."}
-                </p>
-              </article>
-            </div>
-          </Card>
-
-          <div className="admin-split-panels">
-            <Card className="admin-panel-card">
-              <div className="admin-panel-header">
+        <div className="grid gap-6 xl:grid-cols-[1.35fr_0.95fr]">
+          <div className="space-y-6 lg:space-y-8">
+            <section className="relative overflow-hidden rounded-3xl border border-border bg-card p-6 shadow-shadow">
+              <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/30 via-primary/10 to-transparent" />
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <p className="admin-panel-kicker">Pending booking approvals</p>
-                  <h3>Next decisions</h3>
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-text/60">
+                    Live queues
+                  </p>
+                  <h2 className="mt-1 text-base font-semibold text-heading">Operational priorities</h2>
+                  <p className="mt-1 text-sm text-text/72">
+                    Snapshot of the next actions across bookings and incidents.
+                  </p>
                 </div>
-                <Button onClick={() => navigate("/admin/bookings")} variant="secondary">
-                  Open queue
-                </Button>
+                <span className="inline-flex w-fit rounded-full border border-border bg-tint px-2.5 py-1 text-xs font-semibold text-text">
+                  {summary.bookings.length} approval items
+                </span>
               </div>
-              <div className="admin-activity-list">
-                {summary.bookings.slice(0, 3).map((booking) => (
-                  <article className="admin-activity-row" key={booking.id}>
-                    <div>
-                      <strong>{booking.facility}</strong>
-                      <p>
-                        {booking.requestedBy} • {booking.date} • {booking.time}
-                      </p>
-                    </div>
-                    <span className={`status-badge ${toToken(booking.status)}`}>{booking.status}</span>
-                  </article>
-                ))}
-                {!summary.bookings.length ? (
-                  <p className="empty-state">No pending booking approvals right now.</p>
-                ) : null}
+              <div className="mt-6 grid gap-4 sm:grid-cols-3">
+                <article className="rounded-2xl border border-border bg-tint p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-text/60">
+                    Booking queue
+                  </p>
+                  <p className="mt-2 font-semibold text-heading">
+                    {summary.bookings[0]?.facility || "No pending requests"}
+                  </p>
+                  <p className="mt-1 text-sm text-text/72">
+                    {summary.bookings[0]
+                      ? `${summary.bookings[0].requestedBy} • ${summary.bookings[0].time}`
+                      : "All booking requests are up to date."}
+                  </p>
+                </article>
+                <article className="rounded-2xl border border-border bg-tint p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-text/60">
+                    Incident escalation
+                  </p>
+                  <p className="mt-2 font-semibold text-heading">
+                    {summary.tickets[0]?.title || "No incidents in queue"}
+                  </p>
+                  <p className="mt-1 text-sm text-text/72">
+                    {summary.tickets[0]
+                      ? `${summary.tickets[0].location} • ${summary.tickets[0].priority} priority`
+                      : "No unresolved incidents at the moment."}
+                  </p>
+                </article>
+                <article className="rounded-2xl border border-border bg-tint p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-text/60">
+                    Resource coverage
+                  </p>
+                  <p className="mt-2 font-semibold text-heading">{availableResources} resources ready</p>
+                  <p className="mt-1 text-sm text-text/72">
+                    {maintenanceResources
+                      ? `${maintenanceResources} asset(s) under maintenance.`
+                      : "No assets blocked by maintenance."}
+                  </p>
+                </article>
               </div>
-            </Card>
+            </section>
 
-            <Card className="admin-panel-card">
-              <div className="admin-panel-header">
-                <div>
-                  <p className="admin-panel-kicker">Incident management</p>
-                  <h3>Active service desk items</h3>
-                </div>
-                <Button onClick={() => navigate("/admin/tickets")} variant="secondary">
-                  View tickets
-                </Button>
-              </div>
-              <div className="admin-activity-list">
-                {summary.tickets.slice(0, 3).map((ticket) => (
-                  <article className="admin-activity-row" key={ticket.id}>
-                    <div>
-                      <strong>{ticket.title}</strong>
-                      <p>
-                        {ticket.location} • {ticket.assignee}
-                      </p>
+            <div className="grid gap-6 lg:grid-cols-2">
+              <Card title="Pending booking approvals" subtitle="Next decisions">
+                <div className="space-y-3">
+                  {summary.bookings.slice(0, 3).map((booking) => (
+                    <div
+                      key={booking.id}
+                      className="flex items-start justify-between gap-3 rounded-2xl border border-border bg-tint/80 px-4 py-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-medium text-heading">{booking.facility}</p>
+                        <p className="text-sm text-text/72">
+                          {booking.requestedBy} • {booking.date} • {booking.time}
+                        </p>
+                      </div>
+                      <span className={`status-badge shrink-0 ${toToken(booking.status)}`}>
+                        {booking.status}
+                      </span>
                     </div>
-                    <span className={`status-badge ${toToken(ticket.status)}`}>{ticket.status}</span>
-                  </article>
-                ))}
-              </div>
-            </Card>
+                  ))}
+                  {!summary.bookings.length ? (
+                    <p className="text-sm text-text/70">No pending booking approvals.</p>
+                  ) : null}
+                </div>
+                <div className="mt-4">
+                  <Button onClick={() => navigate("/admin/bookings")} variant="secondary" type="button">
+                    Open queue
+                  </Button>
+                </div>
+              </Card>
+
+              <Card title="Incident management" subtitle="Active service desk items">
+                <div className="space-y-3">
+                  {summary.tickets.slice(0, 3).map((ticket) => (
+                    <div
+                      key={ticket.id}
+                      className="flex items-start justify-between gap-3 rounded-2xl border border-border bg-tint/80 px-4 py-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-medium text-heading">{ticket.title}</p>
+                        <p className="text-sm text-text/72">
+                          {ticket.location} • {ticket.assignee}
+                        </p>
+                      </div>
+                      <span className={`status-badge shrink-0 ${toToken(ticket.status)}`}>
+                        {ticket.status}
+                      </span>
+                    </div>
+                  ))}
+                  {!summary.tickets.length ? (
+                    <p className="text-sm text-text/70">No tickets to show.</p>
+                  ) : null}
+                </div>
+                <div className="mt-4">
+                  <Button onClick={() => navigate("/admin/tickets")} variant="secondary" type="button">
+                    View tickets
+                  </Button>
+                </div>
+              </Card>
+            </div>
           </div>
+
+          <aside className="space-y-6">
+            <section className="rounded-3xl border border-border bg-tint p-5">
+              <p className="text-base font-semibold text-heading">Quick actions</p>
+              <p className="text-sm text-text/72">Priority workflow shortcuts</p>
+              <div className="mt-4 flex flex-col gap-2">
+                <button
+                  className="rounded-2xl border border-border bg-card px-4 py-2.5 text-left text-sm font-medium text-heading transition-colors hover:bg-tint"
+                  type="button"
+                  onClick={() => navigate("/admin/bookings")}
+                >
+                  Booking approvals
+                </button>
+                <button
+                  className="rounded-2xl border border-border bg-card px-4 py-2.5 text-left text-sm font-medium text-heading transition-colors hover:bg-tint"
+                  type="button"
+                  onClick={() => navigate("/admin/resources")}
+                >
+                  Asset portfolio
+                </button>
+                <button
+                  className="rounded-2xl border border-border bg-card px-4 py-2.5 text-left text-sm font-medium text-heading transition-colors hover:bg-tint"
+                  type="button"
+                  onClick={() => navigate("/admin/tickets")}
+                >
+                  Incident desk
+                </button>
+              </div>
+            </section>
+
+            <section className="rounded-3xl border border-border bg-card p-5 shadow-shadow">
+              <p className="text-base font-semibold text-heading">Operations posture</p>
+              <p className="text-sm text-text/72">Current overview</p>
+              <div className="mt-4 space-y-4">
+                <div>
+                  <div className="mb-1 flex justify-between text-sm">
+                    <span className="text-text/72">Resources available</span>
+                    <span className="font-medium text-heading">{availPct}%</span>
+                  </div>
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200/70">
+                    <div
+                      className="h-full rounded-full bg-primary transition-all"
+                      style={{ width: `${availPct}%` }}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <div className="mb-1 flex justify-between text-sm">
+                    <span className="text-text/72">Tickets resolved</span>
+                    <span className="font-medium text-heading">{resolvedPct}%</span>
+                  </div>
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200/70">
+                    <div
+                      className="h-full rounded-full bg-primary transition-all"
+                      style={{ width: `${resolvedPct}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </section>
+          </aside>
         </div>
       )}
-    </AdminWorkspaceLayout>
+    </>
   );
 }
 

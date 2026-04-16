@@ -18,6 +18,7 @@ import NotFoundPage from "../pages/NotFoundPage";
 import PublicLandingPage from "../pages/PublicLandingPage";
 import SignupPage from "../pages/SignupPage";
 import TechnicianDashboardPage from "../pages/TechnicianDashboardPage";
+import AdminConsoleLayout from "../components/admin/AdminConsoleLayout";
 import AdminRoute from "./AdminRoute";
 import ProtectedRoute from "./ProtectedRoute";
 import {
@@ -38,23 +39,6 @@ function PublicHomeRoute() {
   }
 
   return <PublicLandingPage />;
-}
-
-function renderAcademicPlaceholderRoute(item) {
-  return (
-    <Route
-      key={item.path}
-      path={item.path}
-      element={
-        <AdminRoute>
-          <AcademicManagementPlaceholderPage
-            title={item.label}
-            description={item.description}
-          />
-        </AdminRoute>
-      }
-    />
-  );
 }
 
 function AppRoutes() {
@@ -119,43 +103,28 @@ function AppRoutes() {
         path="/admin"
         element={
           <AdminRoute>
-            <AdminDashboardPage />
+            <AdminConsoleLayout />
           </AdminRoute>
         }
-      />
-      <Route
-        path="/admin/resources"
-        element={
-          <AdminRoute>
-            <ManageResourcesPage />
-          </AdminRoute>
-        }
-      />
-      {ADMIN_ACADEMIC_NAV_ITEMS.map(renderAcademicPlaceholderRoute)}
-      <Route
-        path="/admin/registrations"
-        element={
-          <AdminRoute>
-            <ManageSignupRequestsPage />
-          </AdminRoute>
-        }
-      />
-      <Route
-        path="/admin/bookings"
-        element={
-          <AdminRoute>
-            <ApproveBookingsPage />
-          </AdminRoute>
-        }
-      />
-      <Route
-        path="/admin/tickets"
-        element={
-          <AdminRoute>
-            <ManageTicketsPage />
-          </AdminRoute>
-        }
-      />
+      >
+        <Route index element={<AdminDashboardPage />} />
+        <Route path="resources" element={<ManageResourcesPage />} />
+        {ADMIN_ACADEMIC_NAV_ITEMS.map((item) => (
+          <Route
+            key={item.path}
+            path={item.path.replace(/^\/admin\//, "")}
+            element={
+              <AcademicManagementPlaceholderPage
+                title={item.label}
+                description={item.description}
+              />
+            }
+          />
+        ))}
+        <Route path="registrations" element={<ManageSignupRequestsPage />} />
+        <Route path="bookings" element={<ApproveBookingsPage />} />
+        <Route path="tickets" element={<ManageTicketsPage />} />
+      </Route>
 
       <Route path="*" element={<NotFoundPage />} />
     </Routes>

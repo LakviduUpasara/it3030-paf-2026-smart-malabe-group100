@@ -24,6 +24,14 @@ function AppLayout() {
     .filter(Boolean)
     .join(" ");
 
+  if (isAdminWorkspace) {
+    return (
+      <div className={shellClass}>
+        <AppRoutes />
+      </div>
+    );
+  }
+
   return (
     <div className={shellClass}>
       <div className="app-background" />
