@@ -139,7 +139,7 @@ function AppRoutes() {
         <Route path="grades" element={<AdminScaffoldPage />} />
 
         {/* Communication & reports (super admin + lecturer) */}
-        <Route path="communication/announcements" element={<AdminScaffoldPage />} />
+        <Route path="communication/announcements" element={<AdminNotificationsPage />} />
         <Route path="communication/targeted-notifications" element={<AdminNotificationsPage />} />
         <Route path="communication/messages" element={<AdminScaffoldPage />} />
 
@@ -153,7 +153,7 @@ function AppRoutes() {
         <Route path="moderation" element={<AdminScaffoldPage />} />
         <Route path="groups/add-students" element={<AdminScaffoldPage />} />
         <Route path="groups" element={<AdminScaffoldPage />} />
-        <Route path="announcements" element={<AdminScaffoldPage />} />
+        <Route path="announcements" element={<Navigate to="/admin/communication/announcements" replace />} />
 
         {/* Path aliases */}
         <Route path="faculty" element={<Navigate to="/admin/academics/faculties" replace />} />

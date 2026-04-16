@@ -113,6 +113,11 @@ public class NotificationAudienceResolutionService {
     private Optional<NotificationRecipientDto> buildStudentRecipient(
             UserAccount ua, List<Enrollment> enrollments, NotificationAudienceDto a) {
         if (enrollments.isEmpty()) {
+            // Campus-wide / "All users" broadcasts have no intake/faculty filters — include students
+            // even when they have no active enrollment row yet.
+            if (!hasStudentTargeting(a)) {
+                return Optional.of(toRecipient(ua));
+            }
             return Optional.empty();
         }
         boolean any = false;
@@ -247,6 +252,16 @@ public class NotificationAudienceResolutionService {
 
     private boolean hasDimensionsRequiringStudentOnly(NotificationAudienceDto a) {
         return has(a.getSemesterCodes())
+                || has(a.getStreamCodes())
+                || has(a.getIntakeIds())
+                || has(a.getSubgroupCodes());
+    }
+
+    /** True when audience is narrowed to cohorts (faculty, degree, term, etc.). */
+    private boolean hasStudentTargeting(NotificationAudienceDto a) {
+        return has(a.getFacultyCodes())
+                || has(a.getDegreeCodes())
+                || has(a.getSemesterCodes())
                 || has(a.getStreamCodes())
                 || has(a.getIntakeIds())
                 || has(a.getSubgroupCodes());

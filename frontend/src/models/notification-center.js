@@ -113,12 +113,17 @@ export function toNotificationFeedItem(announcement, audience, recipientUserIds)
   };
 }
 
+/** In-app / Web feed (not email-only). */
+export function channelIncludesWeb(channel) {
+  const c = norm(channel).toLowerCase();
+  return c === "in-app" || c === "web" || c === "both";
+}
+
 export function rebuildFeedFromAnnouncements(announcements) {
   const items = [];
   for (const a of announcements || []) {
     if (norm(a.status) !== "Sent") continue;
-    const ch = norm(a.channel);
-    if (ch !== "In-app" && ch !== "Both") continue;
+    if (!channelIncludesWeb(a.channel)) continue;
     const aud = buildNotificationAudience(a);
     const rids = (a.tracking?.resolvedRecipientUserIds || a.tracking?.recipientUserIds || []).filter(Boolean);
     items.push(toNotificationFeedItem(a, aud, rids));
