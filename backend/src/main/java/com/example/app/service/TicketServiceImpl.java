@@ -2,6 +2,7 @@ package com.example.app.service;
 
 import com.example.app.dto.TicketRequest;
 import com.example.app.dto.TicketResponse;
+import com.example.app.dto.WithdrawTicketRequest;
 import com.example.app.dto.UpdateRequest;
 import com.example.app.entity.Attachment;
 import com.example.app.entity.Category;
@@ -31,11 +32,16 @@ import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
 public class TicketServiceImpl implements TicketService {
+
+    private static final Set<String> ALLOWED_WITHDRAWAL_REASONS = Set.of(
+            "RESOLVED_MYSELF", "NO_LONGER_NEEDED", "DUPLICATE", "ELSEWHERE", "OTHER");
+    private static final int MAX_OTHER_WITHDRAWAL_REASON_LEN = 2000;
 
     @Autowired
     private TicketRepository ticketRepo;
@@ -136,7 +142,30 @@ public class TicketServiceImpl implements TicketService {
     }
 
     @Override
-    public TicketResponse withdrawMyTicket(String id) {
+    public TicketResponse withdrawMyTicket(String id, WithdrawTicketRequest request) {
+        if (request == null) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Withdrawal reason is required.");
+        }
+        String raw = request.getReason();
+        if (raw == null || raw.isBlank()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Withdrawal reason is required.");
+        }
+        String code = raw.trim().toUpperCase().replace(' ', '_');
+        if (!ALLOWED_WITHDRAWAL_REASONS.contains(code)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid withdrawal reason.");
+        }
+        String note = null;
+        if ("OTHER".equals(code)) {
+            String other = request.getOtherReason() != null ? request.getOtherReason().trim() : "";
+            if (other.isEmpty()) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "Please describe your reason when selecting Other.");
+            }
+            if (other.length() > MAX_OTHER_WITHDRAWAL_REASON_LEN) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "Reason is too long.");
+            }
+            note = other;
+        }
+
         Ticket ticket = ticketRepo.findById(id)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Ticket not found"));
         assertCanViewTicket(ticket);
@@ -144,6 +173,8 @@ public class TicketServiceImpl implements TicketService {
         assertTicketOwnerMutable(ticket);
 
         ticket.setStatus("WITHDRAWN");
+        ticket.setWithdrawalReasonCode(code);
+        ticket.setWithdrawalReasonNote(note);
         Ticket saved = ticketRepo.save(ticket);
         return mapToResponse(saved);
     }
@@ -245,6 +276,8 @@ public class TicketServiceImpl implements TicketService {
         res.setCategoryId(ticket.getCategoryId());
         res.setSubCategoryId(ticket.getSubCategoryId());
         res.setSuggestions(ticket.getSuggestions());
+        res.setWithdrawalReasonCode(ticket.getWithdrawalReasonCode());
+        res.setWithdrawalReasonNote(ticket.getWithdrawalReasonNote());
 
         return res;
     }

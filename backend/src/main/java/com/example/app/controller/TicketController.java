@@ -3,6 +3,7 @@ package com.example.app.controller;
 import com.example.app.dto.TicketRequest;
 import com.example.app.dto.TicketResponse;
 import com.example.app.dto.UpdateRequest;
+import com.example.app.dto.WithdrawTicketRequest;
 import com.example.app.service.TicketService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -46,8 +47,9 @@ public class TicketController {
     }
 
     @PostMapping("/{id}/withdraw")
-    public ResponseEntity<TicketResponse> withdrawMyTicket(@PathVariable String id) {
-        return ResponseEntity.ok(service.withdrawMyTicket(id));
+    public ResponseEntity<TicketResponse> withdrawMyTicket(@PathVariable String id,
+                                                            @Valid @RequestBody WithdrawTicketRequest request) {
+        return ResponseEntity.ok(service.withdrawMyTicket(id, request));
     }
 
     // ✅ UPDATE STATUS (Technician)

@@ -28,6 +28,11 @@ public class Ticket {
     private List<TicketUpdate> updates = new ArrayList<>();
     private List<Attachment> attachments = new ArrayList<>();
 
+    /** Set when status becomes WITHDRAWN (e.g. RESOLVED_MYSELF, OTHER). */
+    private String withdrawalReasonCode;
+    /** Free text when withdrawalReasonCode is OTHER. */
+    private String withdrawalReasonNote;
+
     public String getId() {
         return id;
     }
@@ -114,5 +119,21 @@ public class Ticket {
 
     public void setAttachments(List<Attachment> attachments) {
         this.attachments = attachments != null ? attachments : new ArrayList<>();
+    }
+
+    public String getWithdrawalReasonCode() {
+        return withdrawalReasonCode;
+    }
+
+    public void setWithdrawalReasonCode(String withdrawalReasonCode) {
+        this.withdrawalReasonCode = withdrawalReasonCode;
+    }
+
+    public String getWithdrawalReasonNote() {
+        return withdrawalReasonNote;
+    }
+
+    public void setWithdrawalReasonNote(String withdrawalReasonNote) {
+        this.withdrawalReasonNote = withdrawalReasonNote;
     }
 }

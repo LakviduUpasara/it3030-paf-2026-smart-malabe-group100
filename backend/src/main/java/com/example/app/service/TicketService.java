@@ -2,6 +2,7 @@ package com.example.app.service;
 
 import com.example.app.dto.TicketRequest;
 import com.example.app.dto.TicketResponse;
+import com.example.app.dto.WithdrawTicketRequest;
 import com.example.app.dto.UpdateRequest;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -31,5 +32,5 @@ public interface TicketService {
     TicketResponse updateMyTicket(String id, TicketRequest request);
 
     /** Submitter may withdraw (cancel) their own ticket while it is open or in progress. */
-    TicketResponse withdrawMyTicket(String id);
+    TicketResponse withdrawMyTicket(String id, WithdrawTicketRequest request);
 }

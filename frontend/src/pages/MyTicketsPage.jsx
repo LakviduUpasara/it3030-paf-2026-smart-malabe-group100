@@ -88,6 +88,23 @@ function formatTicketStatusLabel(status) {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+const WITHDRAWAL_REASON_OPTIONS = [
+  { value: "RESOLVED_MYSELF", label: "Issue resolved on my own" },
+  { value: "NO_LONGER_NEEDED", label: "No longer need help" },
+  { value: "DUPLICATE", label: "Duplicate or submitted by mistake" },
+  { value: "ELSEWHERE", label: "Handled through another channel" },
+  { value: "OTHER", label: "Other" },
+];
+
+function formatWithdrawalReasonForDisplay(ticket) {
+  const code = ticket?.withdrawalReasonCode;
+  const note = ticket?.withdrawalReasonNote;
+  if (!code && !note) return "";
+  if (code === "OTHER" && note) return `Other: ${note}`;
+  const label = WITHDRAWAL_REASON_OPTIONS.find((o) => o.value === code)?.label;
+  return label || code || note || "";
+}
+
 function isTicketEditable(status) {
   const normalized = String(status || "")
     .trim()
@@ -130,6 +147,8 @@ function MyTicketsPage() {
   const [filterStatus, setFilterStatus] = useState("");
   const [filterCategoryId, setFilterCategoryId] = useState("");
   const [filterPriority, setFilterPriority] = useState("");
+  const [withdrawReason, setWithdrawReason] = useState("");
+  const [withdrawOtherReason, setWithdrawOtherReason] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -530,11 +549,19 @@ function MyTicketsPage() {
     };
   }, [detailTicket, categoryById, subCategoryById]);
 
+  const withdrawFormValid = useMemo(() => {
+    if (!withdrawReason) return false;
+    if (withdrawReason === "OTHER") return withdrawOtherReason.trim().length > 0;
+    return true;
+  }, [withdrawReason, withdrawOtherReason]);
+
   const closeDetailModal = () => {
     setDetailTicket(null);
     setDetailSubView("details");
     setUpdateError("");
     setUpdateBusy(false);
+    setWithdrawReason("");
+    setWithdrawOtherReason("");
   };
 
   const openEditMode = () => {
@@ -614,15 +641,29 @@ function MyTicketsPage() {
 
   const handleWithdrawConfirm = async () => {
     if (!detailTicket?.id) return;
+    if (!withdrawReason) {
+      setUpdateError("Please select a reason for withdrawal.");
+      return;
+    }
+    if (withdrawReason === "OTHER" && !withdrawOtherReason.trim()) {
+      setUpdateError("Please describe your reason when selecting Other.");
+      return;
+    }
     setUpdateBusy(true);
     setUpdateError("");
     try {
-      const res = await withdrawMyTicket(detailTicket.id);
+      const payload = { reason: withdrawReason };
+      if (withdrawReason === "OTHER") {
+        payload.otherReason = withdrawOtherReason.trim();
+      }
+      const res = await withdrawMyTicket(detailTicket.id, payload);
       const updated = res.data;
       setTickets((previous) => previous.map((t) => (t.id === updated.id ? updated : t)));
       setDetailTicket(updated);
       setDetailSubView("details");
       setSuccessMessage("Your ticket has been withdrawn.");
+      setWithdrawReason("");
+      setWithdrawOtherReason("");
     } catch (err) {
       setUpdateError(err.message || "Unable to withdraw ticket.");
     } finally {
@@ -875,6 +916,13 @@ function MyTicketsPage() {
                         <div className="ticket-detail-value">{formatDateTime(detailTicket.createdAt)}</div>
                       </div>
                     ) : null}
+                    {normalizeTicketStatus(detailTicket.status) === "WITHDRAWN" &&
+                    formatWithdrawalReasonForDisplay(detailTicket) ? (
+                      <div className="ticket-detail-row ticket-detail-row--block">
+                        <div className="ticket-detail-label">Withdrawal reason</div>
+                        <div className="ticket-detail-value">{formatWithdrawalReasonForDisplay(detailTicket)}</div>
+                      </div>
+                    ) : null}
                     <div className="ticket-detail-row ticket-detail-row--block">
                       <div className="ticket-detail-label">Description</div>
                       <div className="ticket-detail-value ticket-detail-description">
@@ -920,6 +968,8 @@ function MyTicketsPage() {
                     <Button
                       onClick={() => {
                         setUpdateError("");
+                        setWithdrawReason("");
+                        setWithdrawOtherReason("");
                         setDetailSubView("withdraw");
                       }}
                       type="button"
@@ -948,11 +998,48 @@ function MyTicketsPage() {
                   <p className="supporting-text">
                     Withdrawing marks this ticket as closed on your side. Staff will treat it as cancelled.
                   </p>
+                  <label className="field field-full">
+                    <span>
+                      Reason for withdrawal <span className="required-mark">*</span>
+                    </span>
+                    <select
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        setWithdrawReason(value);
+                        if (value !== "OTHER") {
+                          setWithdrawOtherReason("");
+                        }
+                      }}
+                      value={withdrawReason}
+                    >
+                      <option value="">Select a reason…</option>
+                      {WITHDRAWAL_REASON_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {withdrawReason === "OTHER" ? (
+                    <label className="field field-full">
+                      <span>
+                        Describe your reason <span className="required-mark">*</span>
+                      </span>
+                      <textarea
+                        onChange={(event) => setWithdrawOtherReason(event.target.value)}
+                        placeholder="Briefly explain why you are withdrawing this request"
+                        rows={3}
+                        value={withdrawOtherReason}
+                      />
+                    </label>
+                  ) : null}
                   <div className="modal-actions ticket-detail-modal-actions">
                     <Button
                       disabled={updateBusy}
                       onClick={() => {
                         setUpdateError("");
+                        setWithdrawReason("");
+                        setWithdrawOtherReason("");
                         setDetailSubView("manage");
                       }}
                       type="button"
@@ -961,7 +1048,7 @@ function MyTicketsPage() {
                       Back
                     </Button>
                     <Button
-                      disabled={updateBusy}
+                      disabled={updateBusy || !withdrawFormValid}
                       onClick={handleWithdrawConfirm}
                       type="button"
                       variant="primary"

@@ -16,6 +16,9 @@ public class TicketResponse {
     private String subCategoryId;
     private List<String> suggestions = new ArrayList<>();
 
+    private String withdrawalReasonCode;
+    private String withdrawalReasonNote;
+
     // getters & setters
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
@@ -45,4 +48,10 @@ public class TicketResponse {
     public void setSuggestions(List<String> suggestions) {
         this.suggestions = suggestions != null ? suggestions : new ArrayList<>();
     }
+
+    public String getWithdrawalReasonCode() { return withdrawalReasonCode; }
+    public void setWithdrawalReasonCode(String withdrawalReasonCode) { this.withdrawalReasonCode = withdrawalReasonCode; }
+
+    public String getWithdrawalReasonNote() { return withdrawalReasonNote; }
+    public void setWithdrawalReasonNote(String withdrawalReasonNote) { this.withdrawalReasonNote = withdrawalReasonNote; }
 }
