@@ -16,6 +16,11 @@ public interface AuthService {
 
     AuthFlowResponse login(LoginRequest request);
 
+    /**
+     * Only active when {@code app.developer-mode=true}. Signs in without a password or second factor.
+     */
+    AuthFlowResponse devLogin(String email);
+
     GoogleSignupSessionResponse prepareGoogleSignup(GoogleCredentialRequest request);
 
     AuthFlowResponse loginWithGoogle(GoogleCredentialRequest request);

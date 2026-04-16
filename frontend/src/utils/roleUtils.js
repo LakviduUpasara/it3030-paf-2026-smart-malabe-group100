@@ -4,6 +4,23 @@ export const ROLES = Object.freeze({
   TECHNICIAN: "TECHNICIAN",
 });
 
+/** Handles string or legacy { name } shapes from APIs. */
+export function normalizeRole(role) {
+  if (role == null || role === "") {
+    return null;
+  }
+
+  if (typeof role === "string") {
+    return role.trim().toUpperCase();
+  }
+
+  if (typeof role === "object" && role !== null && typeof role.name === "string") {
+    return role.name.trim().toUpperCase();
+  }
+
+  return String(role).trim().toUpperCase();
+}
+
 export const ADMIN_RESOURCE_NAV_ITEMS = [
   {
     label: "Manage Resources",
@@ -64,11 +81,13 @@ export const ADMIN_OPERATIONS_NAV_ITEMS = [
 ];
 
 export function getDefaultRouteForRole(role) {
-  if (role === ROLES.ADMIN) {
+  const r = normalizeRole(role);
+
+  if (r === ROLES.ADMIN) {
     return "/admin";
   }
 
-  if (role === ROLES.TECHNICIAN) {
+  if (r === ROLES.TECHNICIAN) {
     return "/technician";
   }
 
@@ -80,7 +99,8 @@ export function isRoleAllowed(role, allowedRoles = []) {
     return true;
   }
 
-  return allowedRoles.includes(role);
+  const r = normalizeRole(role);
+  return allowedRoles.some((allowed) => normalizeRole(allowed) === r);
 }
 
 export function getNavigationItems(role) {

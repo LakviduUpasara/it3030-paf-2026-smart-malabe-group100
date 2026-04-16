@@ -7,11 +7,18 @@ import Button from "./Button";
 import GoogleIdentityButton from "./GoogleIdentityButton";
 import LoadingSpinner from "./LoadingSpinner";
 import { useAuth } from "../hooks/useAuth";
-import { getDefaultRouteForRole } from "../utils/roleUtils";
+import { getDefaultRouteForRole, normalizeRole, ROLES } from "../utils/roleUtils";
+
+const DEMO_LOCAL_ADMIN_EMAIL = "admin@smartcampus.edu";
+const DEMO_LOCAL_ADMIN_PASSWORD = "Admin@12345";
+
+const viteDeveloperFlag = String(import.meta.env.VITE_DEVELOPER_MODE ?? "")
+  .trim()
+  .toLowerCase() === "true";
 
 const initialCredentials = {
-  email: "",
-  password: "",
+  email: viteDeveloperFlag ? DEMO_LOCAL_ADMIN_EMAIL : "",
+  password: viteDeveloperFlag ? DEMO_LOCAL_ADMIN_PASSWORD : "",
 };
 
 function LoginPanel({ showHeading = true }) {
@@ -23,6 +30,8 @@ function LoginPanel({ showHeading = true }) {
   const [showPassword, setShowPassword] = useState(false);
   const {
     login,
+    devLogin,
+    developerMode,
     loginWithGoogle,
     loginWithApple,
     verifyTwoFactor,
@@ -73,9 +82,29 @@ function LoginPanel({ showHeading = true }) {
     };
   }, [twoFactorChallenge]);
 
+  useEffect(() => {
+    if (!developerMode) {
+      return;
+    }
+
+    setCredentials((previous) => {
+      if (previous.email.trim() || previous.password.trim()) {
+        return previous;
+      }
+
+      return {
+        email: DEMO_LOCAL_ADMIN_EMAIL,
+        password: DEMO_LOCAL_ADMIN_PASSWORD,
+      };
+    });
+  }, [developerMode]);
+
   const redirectToWorkspace = (authenticatedUser) => {
-    const redirectTarget =
-      location.state?.from?.pathname || getDefaultRouteForRole(authenticatedUser.role);
+    const role = normalizeRole(authenticatedUser?.role);
+    const fromPath = location.state?.from?.pathname;
+    const defaultPath =
+      developerMode && role === ROLES.ADMIN && !fromPath ? "/admin" : getDefaultRouteForRole(role);
+    const redirectTarget = fromPath || defaultPath;
     navigate(redirectTarget, { replace: true });
   };
 
@@ -120,6 +149,24 @@ function LoginPanel({ showHeading = true }) {
       handleAuthResponse(response);
     } catch (loginError) {
       return loginError;
+    }
+  };
+
+  const handleDevQuickLogin = async (event) => {
+    event.preventDefault();
+    setLocalError("");
+    clearError();
+
+    if (!normalizedEmail) {
+      setLocalError("Enter your campus email to use developer quick sign-in.");
+      return;
+    }
+
+    try {
+      const response = await devLogin(normalizedEmail);
+      handleAuthResponse(response);
+    } catch (quickLoginError) {
+      return quickLoginError;
     }
   };
 
@@ -199,7 +246,9 @@ function LoginPanel({ showHeading = true }) {
             <p className="auth-subtitle signup-subtitle login-subtitle-premium">
               {twoFactorChallenge
                 ? "Verify your account to finish signing in to Smart Campus."
-                : "Sign in with your approved campus account to continue to your workspace."}
+                : developerMode
+                  ? "Developer mode is on: you can use quick sign-in or the standard flow below."
+                  : "Sign in with your approved campus account to continue to your workspace."}
             </p>
           </div>
         </div>
@@ -305,6 +354,29 @@ function LoginPanel({ showHeading = true }) {
         </form>
       ) : (
         <>
+          {developerMode ? (
+            <>
+              <div className="auth-help-panel login-dev-banner">
+                <p className="supporting-text">
+                  <strong>Developer mode:</strong> second-factor and email OTP delivery are bypassed on the server.
+                  Never turn this on for production deployments.
+                </p>
+                <Button
+                  className="signup-submit login-dev-quick"
+                  disabled={isLoading}
+                  onClick={handleDevQuickLogin}
+                  type="button"
+                  variant="primary"
+                >
+                  Quick sign-in (email only)
+                </Button>
+              </div>
+              <div className="auth-divider">
+                <span>or standard sign-in</span>
+              </div>
+            </>
+          ) : null}
+
           <form className="login-form" onSubmit={handleCredentialLogin}>
             <label className="field field-annotated">
               <span>Campus Email</span>
@@ -445,7 +517,17 @@ function LoginPanel({ showHeading = true }) {
           </div>
 
           <p className="login-demo-note auth-assist-note">
-            Test admin access: <strong>admin@smartcampus.edu</strong> / <strong>Admin@12345</strong>.
+            {developerMode ? (
+              <>
+                Demo admin (local): <strong>{DEMO_LOCAL_ADMIN_EMAIL}</strong> + password{" "}
+                <strong>{DEMO_LOCAL_ADMIN_PASSWORD}</strong> (exact capitals/symbols). Quick sign-in still needs{" "}
+                <code>APP_DEVELOPER_MODE</code> or Spring <code>dev</code> profile on the API.
+              </>
+            ) : (
+              <>
+                Test admin access: <strong>{DEMO_LOCAL_ADMIN_EMAIL}</strong> / <strong>{DEMO_LOCAL_ADMIN_PASSWORD}</strong>.
+              </>
+            )}
           </p>
         </>
       )}

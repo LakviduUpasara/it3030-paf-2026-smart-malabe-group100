@@ -193,3 +193,27 @@ export async function logout() {
     }
   }
 }
+
+export async function fetchHealthStatus() {
+  try {
+    const response = await api.get("/health");
+    return response.data;
+  } catch (error) {
+    throw createServiceError(error, "Unable to reach the campus API.");
+  }
+}
+
+export async function devLogin({ email }) {
+  const normalizedEmail = normalizeEmail(email || "");
+  if (!normalizedEmail) {
+    throw new Error("Email is required.");
+  }
+  validateEmail(normalizedEmail, "Enter a valid email address.");
+
+  try {
+    const response = await api.post("/auth/dev-login", { email: normalizedEmail });
+    return response.data;
+  } catch (error) {
+    throw createServiceError(error, "Developer sign-in failed.");
+  }
+}

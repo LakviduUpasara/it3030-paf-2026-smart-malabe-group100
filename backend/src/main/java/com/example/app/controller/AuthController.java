@@ -1,6 +1,7 @@
 package com.example.app.controller;
 
 import com.example.app.dto.auth.AuthFlowResponse;
+import com.example.app.dto.auth.DevLoginRequest;
 import com.example.app.dto.auth.GoogleCredentialRequest;
 import com.example.app.dto.auth.GoogleLoginRequest;
 import com.example.app.dto.auth.GoogleSignupSessionResponse;
@@ -41,6 +42,11 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<AuthFlowResponse> login(@Valid @RequestBody LoginRequest request) {
         return ResponseEntity.ok(authService.login(request));
+    }
+
+    @PostMapping("/dev-login")
+    public ResponseEntity<AuthFlowResponse> devLogin(@Valid @RequestBody DevLoginRequest request) {
+        return ResponseEntity.ok(authService.devLogin(request.getEmail()));
     }
 
     @PostMapping("/google/signup-session")

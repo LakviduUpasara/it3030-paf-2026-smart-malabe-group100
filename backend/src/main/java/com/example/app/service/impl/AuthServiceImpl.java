@@ -20,6 +20,7 @@ import com.example.app.entity.enums.AccountStatus;
 import com.example.app.entity.enums.AuthProvider;
 import com.example.app.entity.enums.SignupRequestStatus;
 import com.example.app.entity.enums.TwoFactorMethod;
+import com.example.app.config.AppProperties;
 import com.example.app.exception.ApiException;
 import com.example.app.repository.GoogleSignupSessionRepository;
 import com.example.app.repository.SessionTokenRepository;
@@ -29,6 +30,7 @@ import com.example.app.repository.UserAccountRepository;
 import com.example.app.security.AuthenticatedUser;
 import com.example.app.security.GoogleIdentityVerifier;
 import com.example.app.security.VerifiedGoogleAccount;
+import com.example.app.service.AuthEmailOtpNotifier;
 import com.example.app.service.AuthService;
 import com.warrenstrange.googleauth.GoogleAuthenticator;
 import com.warrenstrange.googleauth.GoogleAuthenticatorKey;
@@ -58,6 +60,8 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordEncoder passwordEncoder;
     private final GoogleAuthenticator googleAuthenticator;
     private final GoogleIdentityVerifier googleIdentityVerifier;
+    private final AppProperties appProperties;
+    private final AuthEmailOtpNotifier authEmailOtpNotifier;
 
     @Value("${app.auth.session-hours:12}")
     private long sessionHours;
@@ -158,7 +162,29 @@ public class AuthServiceImpl implements AuthService {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "Invalid email or password.");
         }
 
+        if (appProperties.isDeveloperMode()) {
+            return authenticatedResponse(userAccount, "Developer mode: second factor is disabled.");
+        }
+
         return buildTwoFactorChallenge(userAccount);
+    }
+
+    @Override
+    public AuthFlowResponse devLogin(String email) {
+        if (!appProperties.isDeveloperMode()) {
+            throw new ApiException(
+                    HttpStatus.FORBIDDEN,
+                    "Developer sign-in is disabled. Set APP_DEVELOPER_MODE=true, or run the API with "
+                            + "spring.profiles.active=dev (see application-dev.properties).");
+        }
+
+        String normalizedEmail = normalizeEmail(email);
+        UserAccount userAccount = userAccountRepository
+                .findByEmailIgnoreCase(normalizedEmail)
+                .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "No approved account was found for this email."));
+
+        ensureActiveUser(userAccount);
+        return authenticatedResponse(userAccount, "Developer mode: signed in without a password or second factor.");
     }
 
     @Override
@@ -244,6 +270,10 @@ public class AuthServiceImpl implements AuthService {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "This Google account does not match the approved campus account.");
         }
 
+        if (appProperties.isDeveloperMode()) {
+            return authenticatedResponse(userAccount, "Developer mode: second factor is disabled.");
+        }
+
         return buildTwoFactorChallenge(userAccount);
     }
 
@@ -267,6 +297,14 @@ public class AuthServiceImpl implements AuthService {
 
         UserAccount userAccount = userAccountRepository.findById(challenge.getUserId())
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "The account linked to this challenge no longer exists."));
+
+        if (appProperties.isDeveloperMode()) {
+            challenge.setUsed(true);
+            challenge.setVerifiedAt(LocalDateTime.now());
+            twoFactorChallengeRepository.save(challenge);
+            return authenticatedResponse(userAccount, "Developer mode: verification bypassed.");
+        }
+
         String normalizedCode = request.getCode().trim();
 
         if (challenge.getMethod() == TwoFactorMethod.EMAIL_OTP) {
@@ -335,6 +373,11 @@ public class AuthServiceImpl implements AuthService {
                 ));
 
         ensureActiveUser(userAccount);
+
+        if (appProperties.isDeveloperMode()) {
+            return authenticatedResponse(userAccount, "Developer mode: second factor is disabled.");
+        }
+
         return buildTwoFactorChallenge(userAccount);
     }
 
@@ -386,7 +429,7 @@ public class AuthServiceImpl implements AuthService {
         if (userAccount.getPreferredTwoFactorMethod() == TwoFactorMethod.EMAIL_OTP) {
             String otpCode = generateOtpCode();
             challenge.setOtpCode(otpCode);
-            log.info("Smart Campus email OTP for {} is {}", userAccount.getEmail(), otpCode);
+            authEmailOtpNotifier.sendSignInOtp(userAccount.getEmail(), otpCode);
         } else {
             if (userAccount.getAuthenticatorSecret() == null || userAccount.getAuthenticatorSecret().isBlank()) {
                 GoogleAuthenticatorKey key = googleAuthenticator.createCredentials();
@@ -475,7 +518,9 @@ public class AuthServiceImpl implements AuthService {
                         ? "Complete your authenticator app setup to finish sign-in."
                         : "Complete your second verification step to finish sign-in.")
                 .deliveryHint(challenge.getMethod() == TwoFactorMethod.EMAIL_OTP
-                        ? "The one-time code is dispatched through the email verification channel. In this demo build it is also exposed below."
+                        ? (appProperties.getNotifications().getEmail().isEnabled()
+                        ? "The one-time code was sent to your campus email address."
+                        : "Email delivery is turned off; use the development-only code below if your administrator enabled it.")
                         : "Open Google Authenticator (or a compatible app), add the provided manual key, then enter the generated 6-digit code.")
                 .manualEntryKey(challenge.getMethod() == TwoFactorMethod.AUTHENTICATOR_APP
                         ? userAccount.getAuthenticatorSecret()
@@ -565,6 +610,10 @@ public class AuthServiceImpl implements AuthService {
                     HttpStatus.UNAUTHORIZED,
                     providerLabel + " sign-in is not configured for this account."
             );
+        }
+
+        if (appProperties.isDeveloperMode()) {
+            return authenticatedResponse(userAccount, "Developer mode: second factor is disabled.");
         }
 
         return buildTwoFactorChallenge(userAccount);

@@ -1,5 +1,10 @@
-import { createContext, useState } from "react";
+import { createContext, useEffect, useState } from "react";
 import * as authService from "../services/authService";
+
+const envDeveloperMode =
+  String(import.meta.env.VITE_DEVELOPER_MODE ?? "")
+    .trim()
+    .toLowerCase() === "true";
 import { clearStorage, STORAGE_KEYS } from "../utils/storage";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 
@@ -18,6 +23,27 @@ export function AuthProvider({ children }) {
   );
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [developerMode, setDeveloperMode] = useState(envDeveloperMode);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const health = await authService.fetchHealthStatus();
+        if (!cancelled) {
+          // Env flag stays on: backend may not have APP_DEVELOPER_MODE set, but UI still shows dev tools.
+          setDeveloperMode(Boolean(health.developerMode) || envDeveloperMode);
+        }
+      } catch {
+        if (!cancelled) {
+          setDeveloperMode(envDeveloperMode);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const clearError = () => {
     setError("");
@@ -86,6 +112,9 @@ export function AuthProvider({ children }) {
       () => authService.loginWithCredentials(credentials),
       "Unable to sign in.",
     );
+
+  const devLogin = async (email) =>
+    performAuthAction(() => authService.devLogin({ email }), "Unable to use developer sign-in.");
 
   const register = async (payload) =>
     performAuthAction(
@@ -173,6 +202,7 @@ export function AuthProvider({ children }) {
     sessionToken,
     pendingApproval,
     twoFactorChallenge,
+    developerMode,
     isAuthenticated: Boolean(user?.email && sessionToken),
     isLoading,
     error,
@@ -180,6 +210,7 @@ export function AuthProvider({ children }) {
     clearPendingApproval,
     clearTwoFactor,
     login,
+    devLogin,
     register,
     prepareGoogleSignup,
     loginWithGoogle,
