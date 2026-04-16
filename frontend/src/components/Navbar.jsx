@@ -1,4 +1,4 @@
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { getDefaultRouteForRole, getNavigationItems } from "../utils/roleUtils";
 import Button from "./Button";
@@ -7,16 +7,20 @@ import NotificationDropdown from "./NotificationDropdown";
 function Navbar() {
   const { isAuthenticated, user, logout, isLoading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const isAdminWorkspace =
+    isAuthenticated && user?.role === "ADMIN" && location.pathname.startsWith("/admin");
 
   const handleLogout = async () => {
     await logout();
     navigate("/login");
   };
 
-  const navigationItems = isAuthenticated ? getNavigationItems(user?.role) : [];
+  const navigationItems =
+    isAuthenticated && !isAdminWorkspace ? getNavigationItems(user?.role) : [];
 
   return (
-    <header className="navbar">
+    <header className={`navbar ${isAdminWorkspace ? "navbar-enterprise" : ""}`.trim()}>
       <div className="navbar-brand">
         <button
           className="brand-button"
@@ -33,17 +37,24 @@ function Navbar() {
         </button>
       </div>
 
-      <nav className="navbar-links">
-        {navigationItems.map((item) => (
-          <NavLink
-            key={item.path}
-            className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}
-            to={item.path}
-          >
-            {item.label}
-          </NavLink>
-        ))}
-      </nav>
+      {isAdminWorkspace ? (
+        <div className="navbar-workspace-chip">
+          <span className="navbar-workspace-kicker">Enterprise Workspace</span>
+          <strong>Admin Operations Center</strong>
+        </div>
+      ) : (
+        <nav className="navbar-links">
+          {navigationItems.map((item) => (
+            <NavLink
+              key={item.path}
+              className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}
+              to={item.path}
+            >
+              {item.label}
+            </NavLink>
+          ))}
+        </nav>
+      )}
 
       <div className="navbar-actions">
         {isAuthenticated ? (

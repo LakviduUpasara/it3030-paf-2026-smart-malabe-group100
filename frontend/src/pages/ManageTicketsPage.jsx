@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import AdminWorkspaceLayout from "../components/AdminWorkspaceLayout";
 import Button from "../components/Button";
 import Card from "../components/Card";
 import LoadingSpinner from "../components/LoadingSpinner";
@@ -53,37 +54,111 @@ function ManageTicketsPage() {
     }
   };
 
-  if (loading) {
-    return <LoadingSpinner label="Loading managed tickets..." />;
-  }
+  const resolvedTickets = tickets.filter((ticket) => ticket.status === "Resolved").length;
+  const activeTickets = tickets.filter((ticket) => ticket.status !== "Resolved").length;
+  const highPriorityTickets = tickets.filter((ticket) =>
+    ["High", "Critical"].includes(ticket.priority),
+  ).length;
 
   return (
-    <Card title="Manage Tickets" subtitle="Monitor and resolve operational incidents">
-      {error ? <p className="alert alert-error">{error}</p> : null}
-      <div className="list-stack">
-        {tickets.map((ticket) => (
-          <article className="list-row align-start" key={ticket.id}>
+    <AdminWorkspaceLayout
+      rail={
+        <Card className="admin-panel-card admin-panel-card-compact">
+          <div className="admin-rail-header">
+            <strong>Resolution focus</strong>
+            <span>Current balance</span>
+          </div>
+          <div className="admin-breakdown-list">
             <div>
-              <strong>{ticket.title}</strong>
-              <p className="supporting-text">
-                {ticket.location} | {ticket.category}
-              </p>
-              <p className="supporting-text">Assigned to: {ticket.assignee}</p>
+              <span>Resolved</span>
+              <strong>{resolvedTickets}</strong>
             </div>
-            <div className="inline-actions">
-              <span className={`status-badge ${toToken(ticket.status)}`}>
-                {ticket.status}
-              </span>
-              {ticket.status !== "Resolved" ? (
-                <Button onClick={() => handleResolve(ticket.id)}>Mark Resolved</Button>
-              ) : null}
+            <div>
+              <span>Active incidents</span>
+              <strong>{activeTickets}</strong>
             </div>
-          </article>
-        ))}
-      </div>
-    </Card>
+            <div>
+              <span>High priority</span>
+              <strong>{highPriorityTickets}</strong>
+            </div>
+          </div>
+        </Card>
+      }
+      stats={[
+        {
+          label: "Open workload",
+          value: activeTickets,
+          detail: "Incidents still active in the service desk",
+          tone: "critical",
+        },
+        {
+          label: "Resolved",
+          value: resolvedTickets,
+          detail: "Completed operational responses",
+          tone: "cool",
+        },
+        {
+          label: "Priority incidents",
+          value: highPriorityTickets,
+          detail: "High and critical items under watch",
+          tone: "warm",
+        },
+      ]}
+      subtitle="Track and resolve operational incidents with a clearer enterprise queue and stronger action hierarchy."
+      title="Incident & Ticket Desk"
+    >
+      {error ? <p className="alert alert-error">{error}</p> : null}
+
+      {loading ? (
+        <Card className="admin-panel-card">
+          <LoadingSpinner label="Loading managed tickets..." />
+        </Card>
+      ) : (
+        <Card className="admin-panel-card">
+          <div className="admin-panel-header">
+            <div>
+              <p className="admin-panel-kicker">Service operations</p>
+              <h3>Managed incident queue</h3>
+            </div>
+          </div>
+
+          <div className="admin-queue-list">
+            {tickets.map((ticket) => (
+              <article className="admin-queue-card" key={ticket.id}>
+                <div className="admin-queue-card-main">
+                  <div className="admin-queue-card-head">
+                    <div>
+                      <strong>{ticket.title}</strong>
+                      <p>
+                        {ticket.location} • {ticket.category}
+                      </p>
+                    </div>
+                    <span className={`status-badge ${toToken(ticket.status)}`}>{ticket.status}</span>
+                  </div>
+
+                  <div className="admin-queue-meta">
+                    <span>{ticket.priority} priority</span>
+                    <span>Assigned to {ticket.assignee}</span>
+                    <span>{ticket.id}</span>
+                  </div>
+                </div>
+
+                <div className="admin-queue-actions">
+                  {ticket.status !== "Resolved" ? (
+                    <Button onClick={() => handleResolve(ticket.id)} variant="primary">
+                      Mark resolved
+                    </Button>
+                  ) : (
+                    <span className="admin-resolved-pill">Completed</span>
+                  )}
+                </div>
+              </article>
+            ))}
+          </div>
+        </Card>
+      )}
+    </AdminWorkspaceLayout>
   );
 }
 
 export default ManageTicketsPage;
-
