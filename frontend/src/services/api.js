@@ -3,10 +3,19 @@ import { readStorageValue, STORAGE_KEYS } from "../utils/storage";
 
 const DEFAULT_API_BASE = "http://127.0.0.1:18081/api/v1";
 
+/** Ensures the path ends with /api/v1 (fixes VITE_API_BASE_URL=http://host:port with no suffix). */
+function ensureApiV1Suffix(url) {
+  const u = url.replace(/\/+$/, "");
+  if (/\/api\/v1$/i.test(u)) {
+    return u;
+  }
+  return `${u}/api/v1`;
+}
+
 /**
- * Resolves the backend REST base URL. Relative values (e.g. "/api/v1") are joined to the
- * current origin so they work with Vite's dev proxy; absolute http(s) URLs are used as-is.
- * A missing or wrong base URL often causes "No static resource api/v1/..." from the wrong server.
+ * Resolves the backend REST base URL.
+ * - Relative "/api/v1" + Vite proxy = same origin, no CORS preflight (recommended in dev).
+ * - Absolute URLs must end with /api/v1 or it is appended (common misconfiguration).
  */
 function resolveApiBaseUrl() {
   const raw = import.meta.env.VITE_API_BASE_URL;
@@ -15,13 +24,13 @@ function resolveApiBaseUrl() {
     return DEFAULT_API_BASE;
   }
   if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-    return trimmed.replace(/\/+$/, "");
+    return ensureApiV1Suffix(trimmed);
   }
   if (trimmed.startsWith("/")) {
     if (typeof window !== "undefined" && window.location?.origin) {
-      return `${window.location.origin}${trimmed}`.replace(/\/+$/, "");
+      return ensureApiV1Suffix(`${window.location.origin}${trimmed}`);
     }
-    return `${DEFAULT_API_BASE.replace(/\/api\/v1$/, "")}${trimmed}`.replace(/\/+$/, "");
+    return ensureApiV1Suffix(`${DEFAULT_API_BASE.replace(/\/api\/v1$/i, "")}${trimmed}`);
   }
   return DEFAULT_API_BASE;
 }
