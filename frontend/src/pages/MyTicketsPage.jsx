@@ -2,9 +2,16 @@ import { useEffect, useMemo, useState } from "react";
 import Button from "../components/Button";
 import Card from "../components/Card";
 import LoadingSpinner from "../components/LoadingSpinner";
-import { createTicket, getMyTickets, getTicketSuggestion, uploadFile } from "../services/ticketService";
+import {
+  createTicket,
+  getMyTickets,
+  getTicketSuggestion,
+  updateMyTicket,
+  uploadFile,
+  withdrawMyTicket,
+} from "../services/ticketService";
 import { getCategories, getSubCategories } from "../services/categoryService";
-import { toToken } from "../utils/formatters";
+import { formatDateTime, toToken } from "../utils/formatters";
 import { getTicketThumbnailForCategory } from "../utils/ticketCategoryImage";
 import maintenanceIllustration from "../assets/maintenance1.png";
 
@@ -75,9 +82,25 @@ function formatTicketStatusLabel(status) {
   if (raw === "IN_PROGRESS") return "In Progress";
   if (raw === "OPEN") return "Open";
   if (raw === "RESOLVED") return "Resolved";
+  if (raw === "WITHDRAWN") return "Withdrawn";
   return String(status || "Open")
     .replace(/_/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function isTicketEditable(status) {
+  const normalized = String(status || "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "_");
+  return normalized === "OPEN" || normalized === "IN_PROGRESS";
+}
+
+function normalizeTicketStatus(status) {
+  return String(status || "OPEN")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "_");
 }
 
 function MyTicketsPage() {
@@ -97,6 +120,16 @@ function MyTicketsPage() {
   const [suggestion, setSuggestion] = useState(null);
   const [categoryError, setCategoryError] = useState("");
   const [subCategoryById, setSubCategoryById] = useState({});
+  const [detailTicket, setDetailTicket] = useState(null);
+  const [detailSubView, setDetailSubView] = useState("details");
+  const [editFormData, setEditFormData] = useState(() => ({ ...initialForm }));
+  const [editSubCategories, setEditSubCategories] = useState([]);
+  const [updateError, setUpdateError] = useState("");
+  const [updateBusy, setUpdateBusy] = useState(false);
+  const [ticketListQuery, setTicketListQuery] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
+  const [filterCategoryId, setFilterCategoryId] = useState("");
+  const [filterPriority, setFilterPriority] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -197,6 +230,30 @@ function MyTicketsPage() {
       active = false;
     };
   }, [formData.categoryId]);
+
+  useEffect(() => {
+    if (detailSubView !== "edit" || !editFormData.categoryId) {
+      setEditSubCategories([]);
+      return undefined;
+    }
+    let active = true;
+    async function loadEditSubs() {
+      try {
+        const res = await getSubCategories(editFormData.categoryId);
+        if (active) {
+          setEditSubCategories(Array.isArray(res.data) ? res.data : []);
+        }
+      } catch {
+        if (active) {
+          setEditSubCategories([]);
+        }
+      }
+    }
+    loadEditSubs();
+    return () => {
+      active = false;
+    };
+  }, [detailSubView, editFormData.categoryId]);
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -353,6 +410,63 @@ function MyTicketsPage() {
     [categories],
   );
 
+  const filteredTickets = useMemo(() => {
+    const q = ticketListQuery.trim().toLowerCase();
+    const statusKey = filterStatus.trim();
+
+    return tickets.filter((ticket) => {
+      if (filterCategoryId && ticket.categoryId !== filterCategoryId) {
+        return false;
+      }
+
+      const parsed = parseTicketDescription(ticket.description);
+      if (filterPriority && (parsed.priority || "Normal") !== filterPriority) {
+        return false;
+      }
+
+      if (statusKey && normalizeTicketStatus(ticket.status) !== statusKey) {
+        return false;
+      }
+
+      if (q) {
+        const category = categoryById[ticket.categoryId];
+        const categoryName = (category?.name || "").toLowerCase();
+        const subName = (subCategoryById[ticket.subCategoryId] || "").toLowerCase();
+        const title = (ticket.title || "").toLowerCase();
+        const content = (parsed.content || "").toLowerCase();
+        const location = (parsed.location || "").toLowerCase();
+        const idStr = String(ticket.id || "").toLowerCase();
+        const haystack = `${title} ${content} ${location} ${categoryName} ${subName} ${idStr}`;
+        if (!haystack.includes(q)) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [
+    tickets,
+    ticketListQuery,
+    filterStatus,
+    filterCategoryId,
+    filterPriority,
+    categoryById,
+    subCategoryById,
+  ]);
+
+  const hasActiveTicketFilters =
+    Boolean(ticketListQuery.trim()) ||
+    Boolean(filterStatus) ||
+    Boolean(filterCategoryId) ||
+    Boolean(filterPriority);
+
+  const clearTicketFilters = () => {
+    setTicketListQuery("");
+    setFilterStatus("");
+    setFilterCategoryId("");
+    setFilterPriority("");
+  };
+
   const filteredCategories = useMemo(() => {
     const query = categorySearch.trim().toLowerCase();
     if (!query) return categories;
@@ -401,15 +515,129 @@ function MyTicketsPage() {
     }
   };
 
-  const popularIssues = useMemo(() => {
-    const counts = new Map();
-    for (const ticket of tickets) {
-      if (ticket.subCategoryId) {
-        counts.set(ticket.subCategoryId, (counts.get(ticket.subCategoryId) || 0) + 1);
+  const ticketDetailView = useMemo(() => {
+    if (!detailTicket) return null;
+    const parsed = parseTicketDescription(detailTicket.description);
+    const category = categoryById[detailTicket.categoryId];
+    const categoryName = category?.name || "";
+    return {
+      parsed,
+      categoryLabel: formatCategoryLabel(categoryName),
+      subCategoryLabel: subCategoryById[detailTicket.subCategoryId] || "—",
+      thumbSrc: getTicketThumbnailForCategory(categoryName),
+      statusToken: toToken(detailTicket.status || "open"),
+      suggestions: Array.isArray(detailTicket.suggestions) ? detailTicket.suggestions : [],
+    };
+  }, [detailTicket, categoryById, subCategoryById]);
+
+  const closeDetailModal = () => {
+    setDetailTicket(null);
+    setDetailSubView("details");
+    setUpdateError("");
+    setUpdateBusy(false);
+  };
+
+  const openEditMode = () => {
+    if (!detailTicket) return;
+    const parsed = parseTicketDescription(detailTicket.description);
+    setEditFormData({
+      title: detailTicket.title || "",
+      description: parsed.content || "",
+      location: parsed.location || "",
+      categoryId: detailTicket.categoryId || "",
+      subCategoryId: detailTicket.subCategoryId || "",
+      priority: parsed.priority || "Normal",
+      preferredContactMethod: parsed.contactMethod || "Phone",
+      preferredContactDetails: parsed.contactDetails || "",
+    });
+    setUpdateError("");
+    setDetailSubView("edit");
+  };
+
+  const handleEditChange = (event) => {
+    const { name, value } = event.target;
+    setEditFormData((previous) => ({
+      ...previous,
+      [name]: value,
+      ...(name === "categoryId" ? { subCategoryId: "" } : {}),
+    }));
+  };
+
+  const handleEditSubmit = async (event) => {
+    event.preventDefault();
+    if (!detailTicket?.id) return;
+    setUpdateBusy(true);
+    setUpdateError("");
+    try {
+      if (!editFormData.title.trim()) {
+        throw new Error("Title is required.");
       }
+      if (!editFormData.description.trim()) {
+        throw new Error("Description is required.");
+      }
+      if (!editFormData.categoryId) {
+        throw new Error("Please select a category.");
+      }
+      if (!editFormData.subCategoryId) {
+        throw new Error("Subcategory is required.");
+      }
+      if (!editFormData.location.trim()) {
+        throw new Error("Resource / Location is required.");
+      }
+      if (!editFormData.priority) {
+        throw new Error("Priority is required.");
+      }
+      if (!editFormData.preferredContactMethod) {
+        throw new Error("Preferred contact method is required.");
+      }
+      if (!editFormData.preferredContactDetails.trim()) {
+        throw new Error("Preferred contact details are required.");
+      }
+      const res = await updateMyTicket(detailTicket.id, {
+        title: editFormData.title.trim(),
+        description: composeTicketDescription(editFormData),
+        categoryId: editFormData.categoryId,
+        subCategoryId: editFormData.subCategoryId,
+        suggestions: Array.isArray(detailTicket.suggestions) ? detailTicket.suggestions : [],
+      });
+      const updated = res.data;
+      setTickets((previous) => previous.map((t) => (t.id === updated.id ? updated : t)));
+      setDetailTicket(updated);
+      setDetailSubView("details");
+      setSuccessMessage("Ticket updated successfully.");
+    } catch (err) {
+      setUpdateError(err.message || "Unable to update ticket.");
+    } finally {
+      setUpdateBusy(false);
     }
-    return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
-  }, [tickets]);
+  };
+
+  const handleWithdrawConfirm = async () => {
+    if (!detailTicket?.id) return;
+    setUpdateBusy(true);
+    setUpdateError("");
+    try {
+      const res = await withdrawMyTicket(detailTicket.id);
+      const updated = res.data;
+      setTickets((previous) => previous.map((t) => (t.id === updated.id ? updated : t)));
+      setDetailTicket(updated);
+      setDetailSubView("details");
+      setSuccessMessage("Your ticket has been withdrawn.");
+    } catch (err) {
+      setUpdateError(err.message || "Unable to withdraw ticket.");
+    } finally {
+      setUpdateBusy(false);
+    }
+  };
+
+  const detailModalTitle =
+    detailSubView === "manage"
+      ? "Update ticket"
+      : detailSubView === "edit"
+        ? "Edit ticket details"
+        : detailSubView === "withdraw"
+          ? "Withdraw complaint"
+          : "Ticket details";
 
   if (isLoading) {
     return <LoadingSpinner label="Loading your tickets..." />;
@@ -448,8 +676,73 @@ function MyTicketsPage() {
         {tickets.length === 0 ? (
           <p className="supporting-text">No tickets yet. Use &quot;Create Ticket&quot; to submit a request.</p>
         ) : (
+          <>
+            <div className="my-tickets-filters" aria-label="Search and filter tickets">
+              <div className="my-tickets-filters-search-row">
+                <label className="my-tickets-filters-search">
+                  <span>Search</span>
+                  <input
+                    autoComplete="off"
+                    onChange={(event) => setTicketListQuery(event.target.value)}
+                    placeholder="Title, description, location, category, or ticket ID"
+                    type="search"
+                    value={ticketListQuery}
+                  />
+                </label>
+              </div>
+              <div className="my-tickets-filters-controls">
+                <label className="my-tickets-filter-field">
+                  <span>Status</span>
+                  <select onChange={(event) => setFilterStatus(event.target.value)} value={filterStatus}>
+                    <option value="">All statuses</option>
+                    <option value="OPEN">Open</option>
+                    <option value="IN_PROGRESS">In progress</option>
+                    <option value="RESOLVED">Resolved</option>
+                  </select>
+                </label>
+                <label className="my-tickets-filter-field">
+                  <span>Category</span>
+                  <select
+                    onChange={(event) => setFilterCategoryId(event.target.value)}
+                    value={filterCategoryId}
+                  >
+                    <option value="">All categories</option>
+                    {categories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="my-tickets-filter-field">
+                  <span>Priority</span>
+                  <select onChange={(event) => setFilterPriority(event.target.value)} value={filterPriority}>
+                    <option value="">All priorities</option>
+                    <option value="Low">Low</option>
+                    <option value="Normal">Normal</option>
+                    <option value="High">High</option>
+                    <option value="Critical">Critical</option>
+                  </select>
+                </label>
+                {hasActiveTicketFilters ? (
+                  <Button onClick={clearTicketFilters} type="button" variant="ghost">
+                    Clear filters
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+
+            {filteredTickets.length === 0 ? (
+              <p className="supporting-text my-tickets-filter-empty">
+                No tickets match your search or filters. Try adjusting or{" "}
+                <button className="link-button" onClick={clearTicketFilters} type="button">
+                  clear filters
+                </button>
+                .
+              </p>
+            ) : (
           <div className="list-stack my-tickets-list-stack">
-            {tickets.map((ticket, index) => {
+            {filteredTickets.map((ticket, index) => {
               const category = categoryById[ticket.categoryId];
               const parsed = parseTicketDescription(ticket.description);
               const categoryName = category?.name || "";
@@ -457,7 +750,7 @@ function MyTicketsPage() {
               const locationLine = [parsed.location || "—", formatCategoryLabel(categoryName)]
                 .filter(Boolean)
                 .join(" | ");
-              const statusToken = toToken(ticket.status || "open");
+              const listStatusToken = toToken(ticket.status || "open");
               return (
                 <article
                   className="my-ticket-card"
@@ -473,28 +766,347 @@ function MyTicketsPage() {
                       Priority: {parsed.priority || "Normal"} | Assignee: Unassigned
                     </p>
                   </div>
-                  <span className={`my-ticket-card-badge status-badge ${statusToken}`}>
-                    {formatTicketStatusLabel(ticket.status)}
-                  </span>
+                  <div className="my-ticket-card-status">
+                    <span
+                      className={`my-ticket-card-badge status-badge ${listStatusToken}`}
+                    >
+                      {formatTicketStatusLabel(ticket.status)}
+                    </span>
+                  </div>
+                  <div className="my-ticket-card-actions">
+                    <Button
+                      className="my-ticket-view-details"
+                      onClick={() => {
+                        setUpdateError("");
+                        setDetailSubView("details");
+                        setDetailTicket(ticket);
+                      }}
+                      type="button"
+                      variant="secondary"
+                    >
+                      View Details
+                    </Button>
+                  </div>
                 </article>
               );
             })}
           </div>
+            )}
+          </>
         )}
       </Card>
-      {popularIssues.length > 0 ? (
-        <Card title="Popular Issues">
-          <p className="supporting-text">
-            Most frequent issue types from your recent tickets.
-          </p>
-          <div className="list-stack">
-            {popularIssues.map(([subCategoryId, count]) => (
-              <p className="supporting-text" key={subCategoryId}>
-                {subCategoryById[subCategoryId] || subCategoryId}: {count}
-              </p>
-            ))}
+
+      {detailTicket && ticketDetailView ? (
+        <div
+          className="modal-backdrop"
+          onClick={() => !updateBusy && closeDetailModal()}
+          role="presentation"
+        >
+          <div
+            className="modal-panel"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ticket-detail-title"
+          >
+            <div className="modal-header">
+              <h3 id="ticket-detail-title">{detailModalTitle}</h3>
+              <button
+                className="modal-close"
+                disabled={updateBusy}
+                onClick={closeDetailModal}
+                type="button"
+              >
+                ×
+              </button>
+            </div>
+            <div className="modal-content ticket-detail-modal">
+              {updateError && detailSubView !== "details" ? (
+                <p className="alert alert-error">{updateError}</p>
+              ) : null}
+
+              {detailSubView === "details" ? (
+                <>
+                  <div className="ticket-detail-modal-hero">
+                    <div className="ticket-detail-modal-thumb" aria-hidden="true">
+                      <img alt="" src={ticketDetailView.thumbSrc} />
+                    </div>
+                    <div className="ticket-detail-modal-hero-text">
+                      <p className="ticket-detail-ticket-id">
+                        {detailTicket.id != null ? `Ticket #${detailTicket.id}` : "Ticket"}
+                      </p>
+                      <h4 className="ticket-detail-heading">{detailTicket.title || "Untitled Ticket"}</h4>
+                      <span
+                        className={`my-ticket-card-badge status-badge ${ticketDetailView.statusToken}`}
+                      >
+                        {formatTicketStatusLabel(detailTicket.status)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="ticket-detail-modal-fields">
+                    <div className="ticket-detail-row">
+                      <div className="ticket-detail-label">Category</div>
+                      <div className="ticket-detail-value">{ticketDetailView.categoryLabel}</div>
+                    </div>
+                    <div className="ticket-detail-row">
+                      <div className="ticket-detail-label">Subcategory</div>
+                      <div className="ticket-detail-value">{ticketDetailView.subCategoryLabel}</div>
+                    </div>
+                    <div className="ticket-detail-row">
+                      <div className="ticket-detail-label">Location</div>
+                      <div className="ticket-detail-value">{ticketDetailView.parsed.location || "—"}</div>
+                    </div>
+                    <div className="ticket-detail-row">
+                      <div className="ticket-detail-label">Priority</div>
+                      <div className="ticket-detail-value">{ticketDetailView.parsed.priority || "Normal"}</div>
+                    </div>
+                    <div className="ticket-detail-row">
+                      <div className="ticket-detail-label">Preferred contact</div>
+                      <div className="ticket-detail-value">
+                        {ticketDetailView.parsed.contactMethod || "—"}
+                        {ticketDetailView.parsed.contactDetails
+                          ? ` · ${ticketDetailView.parsed.contactDetails}`
+                          : ""}
+                      </div>
+                    </div>
+                    {detailTicket.createdAt ? (
+                      <div className="ticket-detail-row">
+                        <div className="ticket-detail-label">Submitted</div>
+                        <div className="ticket-detail-value">{formatDateTime(detailTicket.createdAt)}</div>
+                      </div>
+                    ) : null}
+                    <div className="ticket-detail-row ticket-detail-row--block">
+                      <div className="ticket-detail-label">Description</div>
+                      <div className="ticket-detail-value ticket-detail-description">
+                        {ticketDetailView.parsed.content || "No description provided."}
+                      </div>
+                    </div>
+                    {ticketDetailView.suggestions.length > 0 ? (
+                      <div className="ticket-detail-row ticket-detail-row--block">
+                        <div className="ticket-detail-label">Suggestions</div>
+                        <div className="ticket-detail-value">{ticketDetailView.suggestions.join(", ")}</div>
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="modal-actions ticket-detail-modal-actions">
+                    <Button onClick={closeDetailModal} type="button" variant="secondary">
+                      Close
+                    </Button>
+                    {isTicketEditable(detailTicket.status) ? (
+                      <Button
+                        onClick={() => {
+                          setUpdateError("");
+                          setDetailSubView("manage");
+                        }}
+                        type="button"
+                        variant="primary"
+                      >
+                        Update
+                      </Button>
+                    ) : null}
+                  </div>
+                </>
+              ) : null}
+
+              {detailSubView === "manage" ? (
+                <div className="ticket-manage-flow">
+                  <p className="supporting-text">
+                    Update the information on this ticket, or withdraw it if you no longer need help.
+                  </p>
+                  <div className="ticket-manage-flow-actions">
+                    <Button onClick={openEditMode} type="button" variant="primary">
+                      Update details
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        setUpdateError("");
+                        setDetailSubView("withdraw");
+                      }}
+                      type="button"
+                      variant="secondary"
+                    >
+                      Withdraw complaint
+                    </Button>
+                  </div>
+                  <div className="modal-actions">
+                    <Button
+                      onClick={() => {
+                        setUpdateError("");
+                        setDetailSubView("details");
+                      }}
+                      type="button"
+                      variant="ghost"
+                    >
+                      Back to details
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+
+              {detailSubView === "withdraw" ? (
+                <div className="ticket-manage-flow">
+                  <p className="supporting-text">
+                    Withdrawing marks this ticket as closed on your side. Staff will treat it as cancelled.
+                  </p>
+                  <div className="modal-actions ticket-detail-modal-actions">
+                    <Button
+                      disabled={updateBusy}
+                      onClick={() => {
+                        setUpdateError("");
+                        setDetailSubView("manage");
+                      }}
+                      type="button"
+                      variant="secondary"
+                    >
+                      Back
+                    </Button>
+                    <Button
+                      disabled={updateBusy}
+                      onClick={handleWithdrawConfirm}
+                      type="button"
+                      variant="primary"
+                    >
+                      {updateBusy ? "Working..." : "Confirm withdraw"}
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+
+              {detailSubView === "edit" ? (
+                <form
+                  className="form-grid my-tickets-create-form my-tickets-create-form-modal"
+                  onSubmit={handleEditSubmit}
+                >
+                  <label className="field field-full">
+                    <span>
+                      Title <span className="required-mark">*</span>
+                    </span>
+                    <input
+                      name="title"
+                      onChange={handleEditChange}
+                      required
+                      type="text"
+                      value={editFormData.title}
+                    />
+                  </label>
+                  <label className="field field-full">
+                    <span>
+                      Description <span className="required-mark">*</span>
+                    </span>
+                    <textarea
+                      name="description"
+                      onChange={handleEditChange}
+                      required
+                      rows="5"
+                      value={editFormData.description}
+                    />
+                  </label>
+                  <label className="field field-full">
+                    <span>
+                      Category <span className="required-mark">*</span>
+                    </span>
+                    <select name="categoryId" onChange={handleEditChange} required value={editFormData.categoryId}>
+                      <option value="">Select category</option>
+                      {categories.map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {category.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>
+                      Subcategory <span className="required-mark">*</span>
+                    </span>
+                    <select
+                      name="subCategoryId"
+                      onChange={handleEditChange}
+                      required
+                      value={editFormData.subCategoryId}
+                      disabled={!editFormData.categoryId}
+                    >
+                      <option value="">
+                        {editFormData.categoryId ? "Select subcategory" : "Select category first"}
+                      </option>
+                      {editSubCategories.map((subCategory) => (
+                        <option key={subCategory.id} value={subCategory.id}>
+                          {subCategory.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="field field-full">
+                    <span>
+                      Resource / Location <span className="required-mark">*</span>
+                    </span>
+                    <input
+                      name="location"
+                      onChange={handleEditChange}
+                      required
+                      type="text"
+                      value={editFormData.location}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>
+                      Priority <span className="required-mark">*</span>
+                    </span>
+                    <select name="priority" onChange={handleEditChange} value={editFormData.priority}>
+                      <option value="Low">Low</option>
+                      <option value="Normal">Normal</option>
+                      <option value="High">High</option>
+                      <option value="Critical">Critical</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>
+                      Preferred contact <span className="required-mark">*</span>
+                    </span>
+                    <select
+                      name="preferredContactMethod"
+                      onChange={handleEditChange}
+                      value={editFormData.preferredContactMethod}
+                    >
+                      <option value="Phone">Phone</option>
+                      <option value="Email">Email</option>
+                      <option value="WhatsApp">WhatsApp</option>
+                    </select>
+                  </label>
+                  <label className="field field-full">
+                    <span>
+                      Contact details <span className="required-mark">*</span>
+                    </span>
+                    <input
+                      name="preferredContactDetails"
+                      onChange={handleEditChange}
+                      required
+                      type="text"
+                      value={editFormData.preferredContactDetails}
+                    />
+                  </label>
+                  <div className="field-full">
+                    <div className="modal-actions ticket-detail-modal-actions">
+                      <Button
+                        disabled={updateBusy}
+                        onClick={() => {
+                          setUpdateError("");
+                          setDetailSubView("manage");
+                        }}
+                        type="button"
+                        variant="secondary"
+                      >
+                        Back
+                      </Button>
+                      <Button disabled={updateBusy} type="submit" variant="primary">
+                        {updateBusy ? "Saving..." : "Save changes"}
+                      </Button>
+                    </div>
+                  </div>
+                </form>
+              ) : null}
+            </div>
           </div>
-        </Card>
+        </div>
       ) : null}
 
       {isFormOpen ? (

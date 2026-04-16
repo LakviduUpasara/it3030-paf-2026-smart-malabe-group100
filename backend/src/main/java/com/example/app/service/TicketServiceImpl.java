@@ -116,6 +116,39 @@ public class TicketServiceImpl implements TicketService {
     }
 
     @Override
+    public TicketResponse updateMyTicket(String id, TicketRequest request) {
+        Ticket ticket = ticketRepo.findById(id)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Ticket not found"));
+        assertCanViewTicket(ticket);
+        assertTicketSubmitter(ticket);
+        assertTicketOwnerMutable(ticket);
+
+        validateCategoryCombination(request.getCategoryId(), request.getSubCategoryId());
+
+        ticket.setTitle(request.getTitle());
+        ticket.setDescription(request.getDescription());
+        ticket.setCategoryId(request.getCategoryId());
+        ticket.setSubCategoryId(request.getSubCategoryId());
+        ticket.setSuggestions(request.getSuggestions() != null ? request.getSuggestions() : new ArrayList<>());
+
+        Ticket saved = ticketRepo.save(ticket);
+        return mapToResponse(saved);
+    }
+
+    @Override
+    public TicketResponse withdrawMyTicket(String id) {
+        Ticket ticket = ticketRepo.findById(id)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Ticket not found"));
+        assertCanViewTicket(ticket);
+        assertTicketSubmitter(ticket);
+        assertTicketOwnerMutable(ticket);
+
+        ticket.setStatus("WITHDRAWN");
+        Ticket saved = ticketRepo.save(ticket);
+        return mapToResponse(saved);
+    }
+
+    @Override
     public void uploadAttachment(String id, MultipartFile file) {
 
         Ticket ticket = ticketRepo.findById(id)
@@ -182,6 +215,21 @@ public class TicketServiceImpl implements TicketService {
         String ownerId = ticket.getCreatedByUserId();
         if (ownerId == null || !ownerId.equals(user.getUserId())) {
             throw new ApiException(HttpStatus.NOT_FOUND, "Ticket not found");
+        }
+    }
+
+    private void assertTicketSubmitter(Ticket ticket) {
+        AuthenticatedUser user = requireAuthenticatedUser();
+        String ownerId = ticket.getCreatedByUserId();
+        if (ownerId == null || !ownerId.equals(user.getUserId())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only the person who submitted this ticket can update or withdraw it.");
+        }
+    }
+
+    private void assertTicketOwnerMutable(Ticket ticket) {
+        String status = ticket.getStatus() != null ? ticket.getStatus().trim().toUpperCase() : "OPEN";
+        if ("RESOLVED".equals(status) || "WITHDRAWN".equals(status)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "This ticket can no longer be changed.");
         }
     }
 

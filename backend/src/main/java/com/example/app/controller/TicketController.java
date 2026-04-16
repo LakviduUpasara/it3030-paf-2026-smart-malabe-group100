@@ -39,6 +39,17 @@ public class TicketController {
         return ResponseEntity.ok(service.getTicketById(id));
     }
 
+    @PatchMapping("/{id}")
+    public ResponseEntity<TicketResponse> updateMyTicket(@PathVariable String id,
+                                                          @Valid @RequestBody TicketRequest request) {
+        return ResponseEntity.ok(service.updateMyTicket(id, request));
+    }
+
+    @PostMapping("/{id}/withdraw")
+    public ResponseEntity<TicketResponse> withdrawMyTicket(@PathVariable String id) {
+        return ResponseEntity.ok(service.withdrawMyTicket(id));
+    }
+
     // ✅ UPDATE STATUS (Technician)
     @PutMapping("/{id}/status")
     public ResponseEntity<String> updateStatus(@PathVariable String id,

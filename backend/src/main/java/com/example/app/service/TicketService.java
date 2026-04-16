@@ -26,4 +26,10 @@ public interface TicketService {
 
     // Upload attachment
     void uploadAttachment(String id, MultipartFile file);
+
+    /** Submitter may update title, description, category, and subcategory while ticket is open or in progress. */
+    TicketResponse updateMyTicket(String id, TicketRequest request);
+
+    /** Submitter may withdraw (cancel) their own ticket while it is open or in progress. */
+    TicketResponse withdrawMyTicket(String id);
 }

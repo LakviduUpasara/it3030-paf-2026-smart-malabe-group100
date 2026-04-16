@@ -20,6 +20,12 @@ export const getManagedTickets = () =>
 export const createTicket = (data) =>
   getOrThrow(() => api.post("/tickets", data), "Unable to create ticket.");
 
+export const updateMyTicket = (id, data) =>
+  getOrThrow(() => api.patch(`/tickets/${id}`, data), "Unable to update ticket.");
+
+export const withdrawMyTicket = (id) =>
+  getOrThrow(() => api.post(`/tickets/${id}/withdraw`), "Unable to withdraw ticket.");
+
 export const getTicketSuggestion = (description) =>
   getOrThrow(
     () => api.post("/tickets/suggestions", { description }),
