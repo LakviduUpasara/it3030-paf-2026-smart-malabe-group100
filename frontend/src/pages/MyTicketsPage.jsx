@@ -230,6 +230,9 @@ function MyTicketsPage() {
     if (!suggestion?.matched || !suggestion?.categoryId) {
       return;
     }
+    setCategorySearch(suggestion.categoryName || "");
+    setIsCategoryDropdownOpen(false);
+    setActiveCategoryIndex(-1);
     setFormData((previous) => ({
       ...previous,
       categoryId: suggestion.categoryId,

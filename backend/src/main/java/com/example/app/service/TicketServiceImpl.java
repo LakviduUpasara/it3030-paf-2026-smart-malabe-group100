@@ -23,9 +23,13 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -118,24 +122,44 @@ public class TicketServiceImpl implements TicketService {
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Ticket not found"));
         assertCanViewTicket(ticket);
 
-        try {
-            String uploadDir = "uploads/";
-            File dir = new File(uploadDir);
-            if (!dir.exists()) dir.mkdirs();
+        if (file == null || file.isEmpty()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Attachment file is required.");
+        }
 
-            String filePath = uploadDir + file.getOriginalFilename();
-            file.transferTo(new File(filePath));
+        try {
+            String originalName = file.getOriginalFilename();
+            String safeFileName = originalName == null ? "attachment" : Paths.get(originalName).getFileName().toString();
+            String extension = "";
+            int extensionIndex = safeFileName.lastIndexOf('.');
+            if (extensionIndex >= 0) {
+                extension = safeFileName.substring(extensionIndex);
+                safeFileName = safeFileName.substring(0, extensionIndex);
+            }
+            safeFileName = safeFileName.replaceAll("[^a-zA-Z0-9._-]", "_");
+            if (safeFileName.isBlank()) {
+                safeFileName = "attachment";
+            }
+
+            Path uploadDir = Paths.get("uploads").toAbsolutePath().normalize();
+            Files.createDirectories(uploadDir);
+
+            String storedFileName = UUID.randomUUID() + "-" + safeFileName + extension;
+            Path destination = uploadDir.resolve(storedFileName);
+            Files.copy(file.getInputStream(), destination, StandardCopyOption.REPLACE_EXISTING);
 
             Attachment attachment = new Attachment();
             attachment.setId(UUID.randomUUID().toString());
-            attachment.setFileName(file.getOriginalFilename());
-            attachment.setFilePath(filePath);
+            attachment.setFileName(originalName != null && !originalName.isBlank() ? originalName : storedFileName);
+            attachment.setFilePath(destination.toString());
 
+            if (ticket.getAttachments() == null) {
+                ticket.setAttachments(new ArrayList<>());
+            }
             ticket.getAttachments().add(attachment);
             ticketRepo.save(ticket);
 
         } catch (IOException e) {
-            throw new RuntimeException("File upload failed");
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "File upload failed.");
         }
     }
 
