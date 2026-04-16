@@ -15,6 +15,20 @@ const initialSummary = {
   tickets: [],
 };
 
+function resourceIsAvailable(resource) {
+  const s = String(resource?.status ?? "").toUpperCase();
+  return s === "ACTIVE" || s === "AVAILABLE" || resource.status === "Available";
+}
+
+function resourceIsMaintenance(resource) {
+  const s = String(resource?.status ?? "").toUpperCase();
+  return (
+    s === "OUT_OF_SERVICE" ||
+    s === "MAINTENANCE" ||
+    resource.status === "Maintenance"
+  );
+}
+
 function AdminDashboardPage() {
   const navigate = useNavigate();
   const [summary, setSummary] = useState(initialSummary);
@@ -60,15 +74,11 @@ function AdminDashboardPage() {
     };
   }, []);
 
-  const availableResources = summary.resources.filter(
-    (resource) => resource.status === "Available",
-  ).length;
-  const maintenanceResources = summary.resources.filter(
-    (resource) => resource.status === "Maintenance",
-  ).length;
+  const availableResources = summary.resources.filter(resourceIsAvailable).length;
+  const maintenanceResources = summary.resources.filter(resourceIsMaintenance).length;
   const resolvedTickets = summary.tickets.filter((ticket) => ticket.status === "Resolved").length;
-  const urgentTickets = summary.tickets.filter((ticket) =>
-    ["High", "Critical"].includes(ticket.priority) && ticket.status !== "Resolved",
+  const urgentTickets = summary.tickets.filter(
+    (ticket) => ["High", "Critical"].includes(ticket.priority) && ticket.status !== "Resolved",
   ).length;
   const pendingAttendees = summary.bookings.reduce(
     (total, booking) => total + Number(booking.attendees || 0),
@@ -145,24 +155,36 @@ function AdminDashboardPage() {
                 <div className="admin-progress-meta">
                   <span>Resources available</span>
                   <strong>
-                    {summary.resources.length ? Math.round((availableResources / summary.resources.length) * 100) : 0}
+                    {summary.resources.length
+                      ? Math.round((availableResources / summary.resources.length) * 100)
+                      : 0}
                     %
                   </strong>
                 </div>
                 <div className="admin-progress-bar">
-                  <span style={{ width: `${summary.resources.length ? (availableResources / summary.resources.length) * 100 : 0}%` }} />
+                  <span
+                    style={{
+                      width: `${summary.resources.length ? (availableResources / summary.resources.length) * 100 : 0}%`,
+                    }}
+                  />
                 </div>
               </div>
               <div>
                 <div className="admin-progress-meta">
                   <span>Tickets resolved</span>
                   <strong>
-                    {summary.tickets.length ? Math.round((resolvedTickets / summary.tickets.length) * 100) : 0}
+                    {summary.tickets.length
+                      ? Math.round((resolvedTickets / summary.tickets.length) * 100)
+                      : 0}
                     %
                   </strong>
                 </div>
                 <div className="admin-progress-bar admin-progress-bar-success">
-                  <span style={{ width: `${summary.tickets.length ? (resolvedTickets / summary.tickets.length) * 100 : 0}%` }} />
+                  <span
+                    style={{
+                      width: `${summary.tickets.length ? (resolvedTickets / summary.tickets.length) * 100 : 0}%`,
+                    }}
+                  />
                 </div>
               </div>
             </div>

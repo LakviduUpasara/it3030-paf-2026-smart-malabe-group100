@@ -1,0 +1,23 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="smart-campus-bg" x1="18" y1="16" x2="111" y2="113" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1394A8"/>
+      <stop offset="0.55" stop-color="#155FA8"/>
+      <stop offset="1" stop-color="#112E63"/>
+    </linearGradient>
+    <linearGradient id="smart-campus-accent" x1="36" y1="38" x2="96" y2="92" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8CE9FF"/>
+      <stop offset="1" stop-color="#B5F6D4"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="8" y="8" width="112" height="112" rx="30" fill="url(#smart-campus-bg)"/>
+  <rect x="8" y="8" width="112" height="112" rx="30" fill="white" fill-opacity="0.04"/>
+  <path d="M64 24L26 45.5V53H102V45.5L64 24Z" fill="white"/>
+  <rect x="34" y="56" width="12" height="28" rx="6" fill="white"/>
+  <rect x="58" y="56" width="12" height="28" rx="6" fill="white"/>
+  <rect x="82" y="56" width="12" height="28" rx="6" fill="white"/>
+  <rect x="24" y="88" width="80" height="10" rx="5" fill="white"/>
+  <path d="M87 34C95.2843 34 102 40.7157 102 49C102 57.2843 95.2843 64 87 64H79V56H87C90.866 56 94 52.866 94 49C94 45.134 90.866 42 87 42H53V34H87Z" fill="url(#smart-campus-accent)"/>
+  <circle cx="43" cy="41" r="5" fill="url(#smart-campus-accent)"/>
+</svg>

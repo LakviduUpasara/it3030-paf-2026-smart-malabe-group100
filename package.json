@@ -1,0 +1,12 @@
+{
+  "name": "it3030-paf-2026-smart-campus-groupxx",
+  "private": true,
+  "scripts": {
+    "postinstall": "npm --prefix frontend install",
+    "dev": "npm --prefix frontend run dev",
+    "start": "npm --prefix frontend run dev",
+    "build": "npm --prefix frontend run build",
+    "preview": "npm --prefix frontend run preview",
+    "frontend:install": "npm --prefix frontend install"
+  }
+}

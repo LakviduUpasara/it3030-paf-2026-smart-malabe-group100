@@ -1,22 +1,37 @@
+import { useState } from "react";
 import { NavLink } from "react-router-dom";
 import {
+  HiAcademicCap,
   HiArrowTrendingUp,
+  HiBars3,
   HiBellAlert,
+  HiBookOpen,
   HiBuildingOffice2,
+  HiCalendarDays,
   HiClipboardDocumentCheck,
+  HiClock,
+  HiOutlineChevronDown,
+  HiOutlineChevronRight,
+  HiRectangleStack,
   HiShieldCheck,
   HiSquares2X2,
+  HiUserGroup,
+  HiUsers,
   HiWrenchScrewdriver,
+  HiXMark,
 } from "react-icons/hi2";
 import { useAuth } from "../hooks/useAuth";
+import { ADMIN_ACADEMIC_NAV_ITEMS } from "../utils/roleUtils";
 
-const ADMIN_NAV_ITEMS = [
-  { label: "Overview", path: "/admin", icon: HiSquares2X2 },
-  { label: "Resources", path: "/admin/resources", icon: HiBuildingOffice2 },
-  { label: "Booking Queue", path: "/admin/bookings", icon: HiClipboardDocumentCheck },
-  { label: "Ticket Desk", path: "/admin/tickets", icon: HiWrenchScrewdriver },
-  { label: "Notifications", path: "/notifications", icon: HiBellAlert },
+const PRIMARY_LINKS = [
+  { label: "Overview", path: "/admin", icon: HiSquares2X2, end: true },
+  { label: "Resources", path: "/admin/resources", icon: HiBuildingOffice2, end: false },
+  { label: "User Approvals", path: "/admin/registrations", icon: HiUsers, end: false },
+  { label: "Booking Queue", path: "/admin/bookings", icon: HiClipboardDocumentCheck, end: false },
+  { label: "Ticket Desk", path: "/admin/tickets", icon: HiWrenchScrewdriver, end: false },
 ];
+
+const ACADEMIC_ICONS = [HiBookOpen, HiRectangleStack, HiCalendarDays, HiUserGroup, HiClipboardDocumentCheck, HiClock];
 
 function AdminWorkspaceLayout({
   eyebrow = "Admin Workspace",
@@ -28,15 +43,29 @@ function AdminWorkspaceLayout({
   children,
 }) {
   const { user } = useAuth();
+  const [academicOpen, setAcademicOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   const todayLabel = new Intl.DateTimeFormat("en-US", {
     weekday: "long",
     month: "long",
     day: "numeric",
   }).format(new Date());
 
+  const closeSidebar = () => setSidebarOpen(false);
+
   return (
     <section className="admin-workspace-shell">
-      <aside className="admin-sidebar">
+      {sidebarOpen ? (
+        <button
+          type="button"
+          className="admin-sidebar-backdrop"
+          aria-label="Close navigation"
+          onClick={closeSidebar}
+        />
+      ) : null}
+
+      <aside className={`admin-sidebar ${sidebarOpen ? "is-open" : ""}`.trim()}>
         <div className="admin-sidebar-top">
           <div className="admin-sidebar-brand">
             <span className="admin-sidebar-brandmark">SC</span>
@@ -44,6 +73,14 @@ function AdminWorkspaceLayout({
               <strong>Smart Campus</strong>
               <span>Operations Hub</span>
             </div>
+            <button
+              type="button"
+              className="admin-sidebar-close"
+              aria-label="Close menu"
+              onClick={closeSidebar}
+            >
+              <HiXMark />
+            </button>
           </div>
 
           <div className="admin-sidebar-status">
@@ -58,7 +95,7 @@ function AdminWorkspaceLayout({
         </div>
 
         <nav className="admin-sidebar-nav" aria-label="Admin workspace">
-          {ADMIN_NAV_ITEMS.map((item) => {
+          {PRIMARY_LINKS.map((item) => {
             const ItemIcon = item.icon;
 
             return (
@@ -67,8 +104,9 @@ function AdminWorkspaceLayout({
                 className={({ isActive }) =>
                   `admin-sidebar-link ${isActive ? "is-active" : ""}`.trim()
                 }
-                end={item.path === "/admin"}
+                end={item.end}
                 to={item.path}
+                onClick={closeSidebar}
               >
                 <span className="admin-sidebar-link-icon" aria-hidden="true">
                   <ItemIcon />
@@ -77,6 +115,61 @@ function AdminWorkspaceLayout({
               </NavLink>
             );
           })}
+
+          <div className="admin-sidebar-group">
+            <button
+              type="button"
+              className="admin-sidebar-group-toggle"
+              aria-expanded={academicOpen}
+              onClick={() => setAcademicOpen((o) => !o)}
+            >
+              <span className="admin-sidebar-group-toggle-icon">
+                <HiAcademicCap />
+              </span>
+              <span className="admin-sidebar-group-label">Academic</span>
+              {academicOpen ? (
+                <HiOutlineChevronDown className="admin-sidebar-caret" />
+              ) : (
+                <HiOutlineChevronRight className="admin-sidebar-caret" />
+              )}
+            </button>
+            {academicOpen ? (
+              <div className="admin-sidebar-subnav">
+                {ADMIN_ACADEMIC_NAV_ITEMS.map((item, index) => {
+                  const SubIcon = ACADEMIC_ICONS[index % ACADEMIC_ICONS.length];
+
+                  return (
+                    <NavLink
+                      key={item.path}
+                      className={({ isActive }) =>
+                        `admin-sidebar-link admin-sidebar-sub ${isActive ? "is-active" : ""}`.trim()
+                      }
+                      to={item.path}
+                      onClick={closeSidebar}
+                    >
+                      <span className="admin-sidebar-link-icon" aria-hidden="true">
+                        <SubIcon />
+                      </span>
+                      <span>{item.label}</span>
+                    </NavLink>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
+
+          <NavLink
+            className={({ isActive }) =>
+              `admin-sidebar-link ${isActive ? "is-active" : ""}`.trim()
+            }
+            to="/notifications"
+            onClick={closeSidebar}
+          >
+            <span className="admin-sidebar-link-icon" aria-hidden="true">
+              <HiBellAlert />
+            </span>
+            <span>Notifications</span>
+          </NavLink>
         </nav>
 
         <div className="admin-sidebar-footer">
@@ -99,10 +192,21 @@ function AdminWorkspaceLayout({
 
       <div className="admin-workspace-main">
         <header className="admin-workspace-hero">
-          <div className="admin-workspace-copy">
-            <span className="admin-workspace-kicker">{eyebrow}</span>
-            <h1>{title}</h1>
-            <p>{subtitle}</p>
+          <div className="admin-workspace-hero-row">
+            <button
+              type="button"
+              className="admin-nav-mobile-toggle"
+              aria-label="Open navigation menu"
+              onClick={() => setSidebarOpen(true)}
+            >
+              <HiBars3 />
+            </button>
+
+            <div className="admin-workspace-copy">
+              <span className="admin-workspace-kicker">{eyebrow}</span>
+              <h1>{title}</h1>
+              <p>{subtitle}</p>
+            </div>
           </div>
 
           <div className="admin-workspace-actions">

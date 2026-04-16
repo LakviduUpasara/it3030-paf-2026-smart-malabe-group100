@@ -195,12 +195,16 @@ function getDisplayNameForRole(role, email) {
   return toDisplayName(identity) || "Campus User";
 }
 
-export function buildMockAuthenticatedUser({ email, provider = "credentials" }) {
+export function buildMockAuthenticatedUser({
+  name,
+  email,
+  provider = "credentials",
+}) {
   const normalizedEmail = (email || getDefaultEmailForRole()).trim().toLowerCase();
   const role = inferRoleFromEmail(normalizedEmail);
 
   return {
-    name: getDisplayNameForRole(role, normalizedEmail),
+    name: name?.trim() || getDisplayNameForRole(role, normalizedEmail),
     email: normalizedEmail,
     role,
     provider,
