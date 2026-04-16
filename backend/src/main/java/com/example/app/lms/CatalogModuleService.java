@@ -153,6 +153,32 @@ public class CatalogModuleService {
                 .build();
     }
 
+    public List<CatalogModuleResponse> listApplicable(String facultyCodeRaw, String degreeIdRaw, String termRaw) {
+        mongoHealthService.requireConnection();
+        if (facultyCodeRaw == null
+                || facultyCodeRaw.isBlank()
+                || degreeIdRaw == null
+                || degreeIdRaw.isBlank()
+                || termRaw == null
+                || termRaw.isBlank()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "facultyCode / degreeId / term is required");
+        }
+        String facultyCode = LmsCodeUtils.normalizeFacultyOrDegreeCode(facultyCodeRaw);
+        String degreeId = LmsCodeUtils.normalizeFacultyOrDegreeCode(degreeIdRaw);
+        String term = termRaw.trim().toUpperCase(Locale.ROOT);
+        if (!ApplicableTermCode.isValid(term)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Select a valid semester / term");
+        }
+        List<CatalogModule> list =
+                catalogModuleRepository.findByFacultyCodeAndIsDeletedFalseOrderByUpdatedAtDesc(facultyCode);
+        return list.stream()
+                .filter(m -> m.getApplicableDegrees().stream().anyMatch(d -> degreeId.equalsIgnoreCase(d.trim())))
+                .filter(m -> m.getApplicableTerms().stream().anyMatch(t -> term.equalsIgnoreCase(t.trim())))
+                .sorted(Comparator.comparing(CatalogModule::getCode, String.CASE_INSENSITIVE_ORDER))
+                .map(this::map)
+                .collect(Collectors.toList());
+    }
+
     public CatalogModuleResponse update(String codeParam, CatalogModuleUpdateRequest request) {
         mongoHealthService.requireConnection();
         String code = LmsCodeUtils.normalizeModuleCode(codeParam);
