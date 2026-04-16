@@ -18,6 +18,11 @@ frontend/dist/
 .env
 .env.*
 
+# Local build tooling
+.m2repo/
+.tools/
+backend-java.args
+
 # Logs
 *.log
 npm-debug.log*
