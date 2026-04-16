@@ -4,11 +4,15 @@ import com.example.app.dto.TicketRequest;
 import com.example.app.dto.TicketResponse;
 import com.example.app.dto.UpdateRequest;
 import com.example.app.entity.Attachment;
+import com.example.app.entity.Category;
+import com.example.app.entity.SubCategory;
 import com.example.app.entity.Ticket;
 import com.example.app.entity.TicketUpdate;
 import com.example.app.entity.enums.Role;
 import com.example.app.exception.ApiException;
 import com.example.app.repository.TicketRepository;
+import com.example.app.repository.CategoryRepository;
+import com.example.app.repository.SubCategoryRepository;
 import com.example.app.security.AuthenticatedUser;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,16 +36,27 @@ public class TicketServiceImpl implements TicketService {
     @Autowired
     private TicketRepository ticketRepo;
 
+    @Autowired
+    private CategoryRepository categoryRepository;
+
+    @Autowired
+    private SubCategoryRepository subCategoryRepository;
+
     @Override
     public TicketResponse createTicket(TicketRequest request) {
 
         Ticket ticket = new Ticket();
         ticket.setTitle(request.getTitle());
         ticket.setDescription(request.getDescription());
+        ticket.setCategoryId(request.getCategoryId());
+        ticket.setSubCategoryId(request.getSubCategoryId());
+        ticket.setSuggestions(request.getSuggestions());
         ticket.setStatus("OPEN");
         ticket.setCreatedAt(LocalDateTime.now());
         AuthenticatedUser user = requireAuthenticatedUser();
         ticket.setCreatedByUserId(user.getUserId());
+
+        validateCategoryCombination(request.getCategoryId(), request.getSubCategoryId());
 
         Ticket saved = ticketRepo.save(ticket);
 
@@ -155,7 +170,20 @@ public class TicketServiceImpl implements TicketService {
         res.setStatus(ticket.getStatus());
         res.setCreatedAt(ticket.getCreatedAt());
         res.setCreatedByUserId(ticket.getCreatedByUserId());
+        res.setCategoryId(ticket.getCategoryId());
+        res.setSubCategoryId(ticket.getSubCategoryId());
+        res.setSuggestions(ticket.getSuggestions());
 
         return res;
+    }
+
+    private void validateCategoryCombination(String categoryId, String subCategoryId) {
+        Category category = categoryRepository.findById(categoryId)
+                .orElseThrow(() -> new ApiException(HttpStatus.BAD_REQUEST, "Selected category does not exist."));
+        SubCategory subCategory = subCategoryRepository.findById(subCategoryId)
+                .orElseThrow(() -> new ApiException(HttpStatus.BAD_REQUEST, "Selected subcategory does not exist."));
+        if (!category.getId().equals(subCategory.getCategoryId())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Subcategory does not belong to selected category.");
+        }
     }
 }

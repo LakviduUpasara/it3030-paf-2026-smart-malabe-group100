@@ -1,6 +1,8 @@
 package com.example.app.dto;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 public class TicketResponse {
 
@@ -10,6 +12,9 @@ public class TicketResponse {
     private String status;
     private LocalDateTime createdAt;
     private String createdByUserId;
+    private String categoryId;
+    private String subCategoryId;
+    private List<String> suggestions = new ArrayList<>();
 
     // getters & setters
     public String getId() { return id; }
@@ -29,4 +34,15 @@ public class TicketResponse {
 
     public String getCreatedByUserId() { return createdByUserId; }
     public void setCreatedByUserId(String createdByUserId) { this.createdByUserId = createdByUserId; }
+
+    public String getCategoryId() { return categoryId; }
+    public void setCategoryId(String categoryId) { this.categoryId = categoryId; }
+
+    public String getSubCategoryId() { return subCategoryId; }
+    public void setSubCategoryId(String subCategoryId) { this.subCategoryId = subCategoryId; }
+
+    public List<String> getSuggestions() { return suggestions; }
+    public void setSuggestions(List<String> suggestions) {
+        this.suggestions = suggestions != null ? suggestions : new ArrayList<>();
+    }
 }

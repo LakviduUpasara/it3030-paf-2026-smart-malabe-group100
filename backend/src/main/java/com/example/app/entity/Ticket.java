@@ -16,6 +16,9 @@ public class Ticket {
     private String title;
     private String description;
     private String status;
+    private String categoryId;
+    private String subCategoryId;
+    private List<String> suggestions = new ArrayList<>();
 
     private LocalDateTime createdAt;
 
@@ -55,6 +58,30 @@ public class Ticket {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public String getCategoryId() {
+        return categoryId;
+    }
+
+    public void setCategoryId(String categoryId) {
+        this.categoryId = categoryId;
+    }
+
+    public String getSubCategoryId() {
+        return subCategoryId;
+    }
+
+    public void setSubCategoryId(String subCategoryId) {
+        this.subCategoryId = subCategoryId;
+    }
+
+    public List<String> getSuggestions() {
+        return suggestions;
+    }
+
+    public void setSuggestions(List<String> suggestions) {
+        this.suggestions = suggestions != null ? suggestions : new ArrayList<>();
     }
 
     public LocalDateTime getCreatedAt() {

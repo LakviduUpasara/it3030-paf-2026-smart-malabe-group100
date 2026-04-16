@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import AccessDeniedPage from "../pages/AccessDeniedPage";
 import AdminDashboardPage from "../pages/AdminDashboardPage";
+import AdminCategoriesPage from "../pages/AdminCategoriesPage";
 import ApproveBookingsPage from "../pages/ApproveBookingsPage";
 import CreateBookingPage from "../pages/CreateBookingPage";
 import DashboardPage from "../pages/DashboardPage";
@@ -115,6 +116,14 @@ function AppRoutes() {
         element={
           <AdminRoute>
             <ManageTicketsPage />
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/admin/categories"
+        element={
+          <AdminRoute>
+            <AdminCategoriesPage />
           </AdminRoute>
         }
       />

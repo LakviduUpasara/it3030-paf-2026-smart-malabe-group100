@@ -20,6 +20,12 @@ export const getManagedTickets = () =>
 export const createTicket = (data) =>
   getOrThrow(() => api.post("/tickets", data), "Unable to create ticket.");
 
+export const getTicketSuggestion = (description) =>
+  getOrThrow(
+    () => api.post("/tickets/suggestions", { description }),
+    "Unable to generate ticket suggestion.",
+  );
+
 export const updateStatus = (id, status) =>
   getOrThrow(
     () => api.put(`/tickets/${id}/status`, null, { params: { status } }),

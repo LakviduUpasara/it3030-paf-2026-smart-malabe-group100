@@ -1662,6 +1662,12 @@ a {
   font-weight: 600;
 }
 
+.required-mark {
+  color: var(--danger);
+  font-weight: 700;
+  margin-left: 0.15rem;
+}
+
 .field input:not(.login-input),
 .field select,
 .field textarea {
@@ -1928,4 +1934,74 @@ a {
   .landing-title-slide {
     transition: none;
   }
+}
+
+.ticket-suggestion-box {
+  border: 1px solid rgba(37, 99, 235, 0.25);
+  border-radius: 14px;
+  background: rgba(37, 99, 235, 0.07);
+  padding: 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.button-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.ticket-category-field {
+  gap: 0.32rem;
+}
+
+.ticket-category-stack {
+  display: grid;
+  gap: 0.35rem;
+  position: relative;
+}
+
+.ticket-category-stack .ticket-category-search {
+  margin: 0;
+  border-radius: var(--radius-sm);
+}
+
+.ticket-category-results {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-strong);
+  max-height: 180px;
+  overflow: auto;
+  box-shadow: var(--shadow);
+}
+
+.ticket-category-option {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  padding: 0.7rem 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+}
+
+.ticket-category-option:hover {
+  background: var(--surface-muted);
+}
+
+.ticket-category-option.active {
+  background: rgba(37, 99, 235, 0.14);
+}
+
+.ticket-category-empty {
+  margin: 0;
+  padding: 0.8rem 0.85rem;
+  color: var(--muted);
+  font-size: 0.92rem;
 }
