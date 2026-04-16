@@ -40,9 +40,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Service;
 
-@Service
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
 
@@ -120,6 +118,15 @@ public class AuthServiceImpl implements AuthService {
         }
 
         return beginLoginFlow(user);
+    }
+
+    @Override
+    public AuthFlowResponse devLogin(String email) {
+        String normalizedEmail = normalizeEmail(email);
+        UserAccount user = userAccountRepository.findByEmailIgnoreCase(normalizedEmail)
+                .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "No approved account was found for this email."));
+
+        return issueSessionAndAuthenticate(user);
     }
 
     @Override
@@ -242,6 +249,28 @@ public class AuthServiceImpl implements AuthService {
         SignupRequest request = signupRequestRepository.findByIdAndEmailIgnoreCase(requestId, normalizeEmail(email))
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Signup request was not found."));
         return toPendingApproval(request);
+    }
+
+    @Override
+    public AuthFlowResponse activateApprovedSignup(String requestId, String email) {
+        SignupRequest request = signupRequestRepository.findByIdAndEmailIgnoreCase(requestId, normalizeEmail(email))
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Signup request was not found."));
+
+        if (request.getStatus() == SignupRequestStatus.PENDING) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "This signup request is still waiting for administrator approval.");
+        }
+
+        if (request.getStatus() == SignupRequestStatus.REJECTED) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "This signup request was rejected and cannot be activated.");
+        }
+
+        UserAccount user = userAccountRepository.findByEmailIgnoreCase(request.getEmail())
+                .orElseThrow(() -> new ApiException(
+                        HttpStatus.CONFLICT,
+                        "The approved account is not ready yet. Ask the administrator to review the approval again."
+                ));
+
+        return beginLoginFlow(user);
     }
 
     @Override

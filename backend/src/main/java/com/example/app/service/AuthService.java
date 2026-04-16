@@ -16,6 +16,8 @@ public interface AuthService {
 
     AuthFlowResponse login(LoginRequest request);
 
+    AuthFlowResponse devLogin(String email);
+
     GoogleSignupSessionResponse prepareGoogleSignup(GoogleCredentialRequest request);
 
     AuthFlowResponse loginWithGoogle(GoogleCredentialRequest request);
@@ -27,6 +29,8 @@ public interface AuthService {
     void logout(String bearerToken);
 
     PendingApprovalResponse getSignupRequestStatus(String requestId, String email);
+
+    AuthFlowResponse activateApprovedSignup(String requestId, String email);
 
     AuthFlowResponse getCurrentSession(AuthenticatedUser authenticatedUser);
 }

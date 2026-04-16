@@ -28,8 +28,10 @@ function Navbar() {
   const navigate = useNavigate();
   const isLoginPage = location.pathname === "/login";
   const isSignupPage = location.pathname === "/signup";
+  const isApprovalPendingPage = location.pathname === "/approval-pending";
   const isAdminTicketsPage = location.pathname === "/admin/tickets";
-  const isPublicPage = !isAuthenticated && ["/", "/login", "/signup"].includes(location.pathname);
+  const isPublicPage = !isAuthenticated
+    && ["/", "/login", "/signup", "/approval-pending"].includes(location.pathname);
   const [activePublicSection, setActivePublicSection] = useState(
     isLoginPage || isSignupPage || isApprovalPendingPage ? null : "home"
   );
