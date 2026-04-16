@@ -1,14 +1,16 @@
 import { LogOut, Menu } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
-import { normalizeRole } from "../../utils/roleUtils";
+import { useAdminShell } from "../../context/AdminShellContext";
+import { normalizeRole, resolveAdminConsoleRole } from "../../utils/roleUtils";
 import { getAdminBreadcrumb } from "../../utils/adminBreadcrumbs";
 
 function AdminTopBar({ onMenuClick }) {
   const location = useLocation();
   const { user, logout } = useAuth();
-  const crumb = getAdminBreadcrumb(location.pathname);
-  const roleLabel = normalizeRole(user?.role) || "—";
+  const { activeWindow } = useAdminShell();
+  const crumb = getAdminBreadcrumb(location.pathname, { activeWindow });
+  const roleLabel = resolveAdminConsoleRole(user?.role) || normalizeRole(user?.role) || "—";
 
   function renderCrumbLink(item, { isCurrent }) {
     if (!item) {

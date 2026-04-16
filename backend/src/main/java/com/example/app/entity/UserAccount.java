@@ -32,8 +32,24 @@ public class UserAccount {
     @Indexed(unique = true)
     private String email;
 
+    /** Login handle for staff/students when distinct from email (e.g. student id). */
+    @Indexed(unique = true, sparse = true)
+    private String username;
+
     @Indexed(unique = true, sparse = true)
     private String providerSubject;
+
+    @Builder.Default
+    private boolean mustChangePassword = false;
+
+    @Indexed(sparse = true)
+    private String lecturerRef;
+
+    @Indexed(sparse = true)
+    private String labAssistantRef;
+
+    @Indexed(sparse = true)
+    private String studentRef;
 
     private String passwordHash;
 

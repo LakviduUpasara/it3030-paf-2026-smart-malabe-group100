@@ -1,8 +1,30 @@
+import { LMS_ROLES } from "../config/adminNavConfig";
+
+export { LMS_ROLES };
+
 export const ROLES = Object.freeze({
   USER: "USER",
   ADMIN: "ADMIN",
   TECHNICIAN: "TECHNICIAN",
+  LECTURER: "LECTURER",
+  LAB_ASSISTANT: "LAB_ASSISTANT",
+  STUDENT: "STUDENT",
+  LOST_ITEM_ADMIN: "LOST_ITEM_ADMIN",
 });
+
+/**
+ * Maps API roles to LMS admin console roles. Legacy ADMIN → SUPER_ADMIN for full IA.
+ */
+export function resolveAdminConsoleRole(apiRole) {
+  const r = normalizeRole(apiRole);
+  if (r === ROLES.ADMIN) {
+    return LMS_ROLES.SUPER_ADMIN;
+  }
+  if (r === ROLES.LECTURER || r === "TEACHER") {
+    return LMS_ROLES.LECTURER;
+  }
+  return r;
+}
 
 /** Handles string or legacy { name } shapes from APIs. */
 export function normalizeRole(role) {
@@ -24,7 +46,7 @@ export function normalizeRole(role) {
 export const ADMIN_RESOURCE_NAV_ITEMS = [
   {
     label: "Manage Resources",
-    path: "/admin/resources",
+    path: "/admin/campus/resources",
     description: "Maintain lecture halls, labs, meeting rooms, and shared equipment.",
   },
 ];
@@ -32,32 +54,32 @@ export const ADMIN_RESOURCE_NAV_ITEMS = [
 export const ADMIN_ACADEMIC_NAV_ITEMS = [
   {
     label: "Degree Programs",
-    path: "/admin/academic/programs",
+    path: "/admin/academics/degree-programs",
     description: "Manage programme codes, faculties, departments, and active status.",
   },
   {
     label: "Academic Modules",
-    path: "/admin/academic/modules",
+    path: "/admin/academics/modules",
     description: "Maintain module master data, credit values, and department ownership.",
   },
   {
-    label: "Semesters",
-    path: "/admin/academic/semesters",
-    description: "Define semester schedules and academic periods for each programme.",
+    label: "Academic Terms",
+    path: "/admin/academics/academic-terms",
+    description: "Define term schedules and academic periods for each programme.",
   },
   {
-    label: "Student Groups",
-    path: "/admin/academic/student-groups",
-    description: "Track batches, group sizes, and semester-linked cohort structures.",
+    label: "Subgroups",
+    path: "/admin/academics/subgroups",
+    description: "Track batches, group sizes, and cohort structures.",
   },
   {
     label: "Module Offerings",
-    path: "/admin/academic/module-offerings",
-    description: "Attach modules to semesters, coordinators, and academic year labels.",
+    path: "/admin/academics/module-offerings",
+    description: "Attach modules to terms, coordinators, and academic year labels.",
   },
   {
-    label: "Academic Sessions",
-    path: "/admin/academic/sessions",
+    label: "Timetable",
+    path: "/admin/teaching/timetable",
     description: "Schedule teaching sessions across offerings, groups, and campus resources.",
   },
 ];
@@ -83,7 +105,11 @@ export const ADMIN_OPERATIONS_NAV_ITEMS = [
 export function getDefaultRouteForRole(role) {
   const r = normalizeRole(role);
 
-  if (r === ROLES.ADMIN) {
+  if (r === ROLES.ADMIN || r === ROLES.LOST_ITEM_ADMIN) {
+    return "/admin";
+  }
+
+  if (r === ROLES.LECTURER) {
     return "/admin";
   }
 
@@ -111,7 +137,7 @@ export function getNavigationItems(role) {
       ...commonItems,
       { label: "Admin Dashboard", path: "/admin" },
       { label: "User Approvals", path: "/admin/registrations" },
-      { label: "Manage Resources", path: "/admin/resources" },
+      { label: "Manage Resources", path: "/admin/campus/resources" },
       { label: "Booking Approvals", path: "/admin/bookings" },
       { label: "Manage Tickets", path: "/admin/tickets" },
       { label: "Notifications", path: "/notifications" },

@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { Outlet } from "react-router-dom";
+import { AdminShellProvider } from "../../context/AdminShellContext";
+import AdminRouteReset from "./AdminRouteReset";
 import AdminSidebar from "./AdminSidebar";
 import AdminTopBar from "./AdminTopBar";
 
@@ -7,7 +9,9 @@ function AdminConsoleLayout() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   return (
+    <AdminShellProvider>
     <div id="admin-root" className="min-h-screen">
+      <AdminRouteReset />
       <div className="flex h-screen w-full min-h-0 flex-row overflow-hidden bg-bg font-sans text-text antialiased">
         <AdminSidebar mobileOpen={mobileNavOpen} onMobileClose={() => setMobileNavOpen(false)} />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -22,6 +26,7 @@ function AdminConsoleLayout() {
         </div>
       </div>
     </div>
+    </AdminShellProvider>
   );
 }
 

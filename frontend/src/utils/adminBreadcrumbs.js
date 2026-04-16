@@ -1,55 +1,68 @@
-/**
- * Breadcrumb metadata for the admin shell top bar.
- * primary: main section link; secondary: optional subsection; window: current view label (not a link).
- */
-const ROUTES = {
+import { ADMIN_NAV_SECTIONS, findActiveNavItem } from "../config/adminNavConfig";
+
+const LEGACY_FALLBACK = {
   "/admin": {
     primary: { label: "Dashboard", path: "/admin" },
     secondary: null,
     window: "Overview",
   },
-  "/admin/resources": {
-    primary: { label: "Resources", path: "/admin/resources" },
+};
+
+/** Paths that resolve to known windows but may not be in main nav config (optional routes). */
+const OPTIONAL_WINDOWS = {
+  "/admin/notifications": { primary: { label: "Dashboard", path: "/admin" }, secondary: null, window: "Notifications" },
+  "/admin/analytics": { primary: { label: "Dashboard", path: "/admin" }, secondary: null, window: "Analytics" },
+  "/admin/moderation": { primary: { label: "Dashboard", path: "/admin" }, secondary: null, window: "Moderation" },
+  "/admin/groups": { primary: { label: "Dashboard", path: "/admin" }, secondary: null, window: "Groups" },
+  "/admin/groups/add-students": { primary: { label: "Dashboard", path: "/admin" }, secondary: null, window: "Add students" },
+  "/admin/announcements": { primary: { label: "Communication", path: "/admin/communication/announcements" }, secondary: null, window: "Announcements" },
+  "/admin/communication/messages": {
+    primary: { label: "Communication", path: "/admin/communication/announcements" },
     secondary: null,
-    window: "Manage resources",
-  },
-  "/admin/registrations": {
-    primary: { label: "Access", path: "/admin/registrations" },
-    secondary: null,
-    window: "User approvals",
-  },
-  "/admin/bookings": {
-    primary: { label: "Bookings", path: "/admin/bookings" },
-    secondary: null,
-    window: "Approval queue",
-  },
-  "/admin/tickets": {
-    primary: { label: "Operations", path: "/admin/tickets" },
-    secondary: null,
-    window: "Ticket desk",
+    window: "Messages",
   },
 };
 
-function academicWindowLabel(pathname) {
-  const labels = {
-    "/admin/academic/programs": "Degree programs",
-    "/admin/academic/modules": "Academic modules",
-    "/admin/academic/semesters": "Semesters",
-    "/admin/academic/student-groups": "Student groups",
-    "/admin/academic/module-offerings": "Module offerings",
-    "/admin/academic/sessions": "Academic sessions",
-  };
-  return labels[pathname] || "Academic";
-}
+/**
+ * @param {string} pathname
+ * @param {{ activeWindow?: string }} [options]
+ */
+export function getAdminBreadcrumb(pathname, options = {}) {
+  const { activeWindow = "" } = options;
 
-export function getAdminBreadcrumb(pathname) {
-  if (pathname.startsWith("/admin/academic/")) {
+  if (OPTIONAL_WINDOWS[pathname]) {
+    const base = OPTIONAL_WINDOWS[pathname];
     return {
-      primary: { label: "Dashboard", path: "/admin" },
-      secondary: { label: "Academic", path: "/admin/academic/programs" },
-      window: academicWindowLabel(pathname),
+      ...base,
+      window: activeWindow || base.window,
     };
   }
 
-  return ROUTES[pathname] || ROUTES["/admin"];
+  const hit = findActiveNavItem(pathname, ADMIN_NAV_SECTIONS);
+  if (hit) {
+    const { section, item } = hit;
+    const primary = {
+      label: section.label,
+      path: section.items[0]?.href || "/admin",
+    };
+    const secondary = {
+      label: item.label,
+      path: item.href,
+    };
+    const isDetail = pathname !== item.href && pathname.startsWith(`${item.href}/`);
+    const defaultWindow = isDetail ? "Detail" : item.label;
+    return {
+      primary,
+      secondary,
+      window: activeWindow || defaultWindow,
+    };
+  }
+
+  return (
+    LEGACY_FALLBACK[pathname] || {
+      primary: { label: "Dashboard", path: "/admin" },
+      secondary: null,
+      window: activeWindow || "Admin",
+    }
+  );
 }

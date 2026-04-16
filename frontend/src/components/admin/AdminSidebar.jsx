@@ -1,51 +1,31 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
+import { Bell, PanelLeft, PanelLeftClose } from "lucide-react";
 import {
-  Bell,
-  BookOpen,
-  Building2,
-  ClipboardCheck,
-  ClipboardList,
-  Clock,
-  GraduationCap,
-  LayoutDashboard,
-  Layers,
-  PanelLeftClose,
-  PanelLeft,
-  Calendar,
-  Users,
-  UsersRound,
-  Wrench,
-} from "lucide-react";
-import { ADMIN_ACADEMIC_NAV_ITEMS } from "../../utils/roleUtils";
-
-const PRIMARY_LINKS = [
-  { label: "Overview", path: "/admin", icon: LayoutDashboard, end: true },
-  { label: "Resources", path: "/admin/resources", icon: Building2, end: false },
-  { label: "User Approvals", path: "/admin/registrations", icon: Users, end: false },
-  { label: "Booking Queue", path: "/admin/bookings", icon: ClipboardCheck, end: false },
-  { label: "Ticket Desk", path: "/admin/tickets", icon: Wrench, end: false },
-];
-
-const ACADEMIC_ICONS = [BookOpen, Layers, Calendar, UsersRound, ClipboardList, Clock];
+  ADMIN_NAV_SECTIONS,
+  filterNavSectionsForRole,
+  isNavItemActive,
+} from "../../config/adminNavConfig";
+import { useAuth } from "../../hooks/useAuth";
+import { resolveAdminConsoleRole } from "../../utils/roleUtils";
 
 function AdminSidebar({ mobileOpen, onMobileClose }) {
   const location = useLocation();
+  const { user } = useAuth();
+  const consoleRole = resolveAdminConsoleRole(user?.role);
+
+  const sections = useMemo(
+    () => filterNavSectionsForRole(consoleRole, ADMIN_NAV_SECTIONS),
+    [consoleRole],
+  );
+
   const [collapsed, setCollapsed] = useState(false);
-  const [academicOpen, setAcademicOpen] = useState(true);
+  const [openSections, setOpenSections] = useState(() =>
+    Object.fromEntries(ADMIN_NAV_SECTIONS.map((s) => [s.id, s.defaultOpen])),
+  );
   const [flyout, setFlyout] = useState(null);
   const flyoutTimer = useRef(null);
-  const academicTriggerRef = useRef(null);
-  const [flyoutTop, setFlyoutTop] = useState(120);
-
-  const isAcademicPath = location.pathname.startsWith("/admin/academic/");
-  const academicSectionActive = isAcademicPath;
-
-  useEffect(() => {
-    if (isAcademicPath) {
-      setAcademicOpen(true);
-    }
-  }, [isAcademicPath]);
+  const flyoutAnchorRefs = useRef({});
 
   useEffect(() => {
     return () => {
@@ -69,23 +49,35 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
     flyoutTimer.current = setTimeout(() => setFlyout(null), 140);
   };
 
+  const [flyoutTop, setFlyoutTop] = useState(120);
+
   useLayoutEffect(() => {
-    if (flyout !== "academic" || !collapsed || !academicTriggerRef.current) {
+    if (!collapsed || !flyout) {
       return;
     }
-    const rect = academicTriggerRef.current.getBoundingClientRect();
+    const el = flyoutAnchorRefs.current[flyout];
+    if (!el) {
+      return;
+    }
+    const rect = el.getBoundingClientRect();
     setFlyoutTop(rect.top);
-  }, [flyout, collapsed, location.pathname]);
+  }, [collapsed, flyout, location.pathname]);
+
+  const toggleSection = (id) => {
+    setOpenSections((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const shellClass = [
+    "fixed inset-y-0 left-0 z-40 flex shrink-0 md:static md:z-0",
+    mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
+  ].join(" ");
 
   const asideClass =
     "flex h-full flex-col border-r border-border bg-card transition-[width] duration-200 ease-out";
 
   const widthClass = collapsed ? "w-[272px] md:w-[72px]" : "w-[272px]";
 
-  const shellClass = [
-    "fixed inset-y-0 left-0 z-40 flex shrink-0 md:static md:z-0",
-    mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
-  ].join(" ");
+  const activeFlyoutSection = sections.find((s) => s.id === flyout);
 
   return (
     <>
@@ -125,145 +117,132 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
             {!collapsed ? (
               <div className="min-w-0">
                 <p className="truncate font-heading text-sm font-semibold text-heading">Smart Campus</p>
-                <p className="text-xs text-text/60">Operations Hub</p>
+                <p className="text-xs text-text/60">LMS Admin</p>
               </div>
             ) : null}
           </div>
 
           <nav className="flex min-h-0 flex-1 flex-col px-2 py-3" aria-label="Admin sections">
             <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overflow-x-hidden pb-2">
-            {PRIMARY_LINKS.map((item) => {
-              const Icon = item.icon;
-              return (
-                <NavLink
-                  key={item.path}
-                  className={({ isActive }) =>
-                    [
-                      "flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium transition-colors",
-                      collapsed ? "justify-center px-2" : "",
-                      isActive
-                        ? "bg-primary/10 font-semibold text-primary"
-                        : "text-text/75 hover:bg-tint hover:text-heading",
-                    ].join(" ")
-                  }
-                  end={item.end}
-                  title={collapsed ? item.label : undefined}
-                  to={item.path}
-                  onClick={onMobileClose}
-                >
-                  <Icon className="h-[18px] w-[18px] shrink-0" strokeWidth={1.75} aria-hidden />
-                  {!collapsed ? <span className="truncate">{item.label}</span> : null}
-                </NavLink>
-              );
-            })}
+              {sections.map((section) => {
+                const SectionIcon = section.icon;
+                const isOpen = openSections[section.id] !== false;
+                const sectionActive = section.items.some((item) => isNavItemActive(location.pathname, item));
 
-            <div
-              className="relative"
-              onMouseEnter={() => collapsed && openFlyout("academic")}
-              onMouseLeave={collapsed ? scheduleCloseFlyout : undefined}
-            >
-              {collapsed ? (
-                <button
-                  ref={academicTriggerRef}
-                  type="button"
-                  className={[
-                    "flex w-full items-center justify-center rounded-2xl px-2 py-2.5 text-sm font-medium transition-colors",
-                    academicSectionActive
-                      ? "bg-primary/10 font-semibold text-primary"
-                      : "text-text/75 hover:bg-tint hover:text-heading",
-                  ].join(" ")}
-                  aria-expanded={flyout === "academic"}
-                  aria-label="Academic section"
-                  onClick={() => openFlyout("academic")}
-                >
-                  <GraduationCap className="h-[18px] w-[18px]" strokeWidth={1.75} aria-hidden />
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className={[
-                    "flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm font-semibold transition-colors",
-                    academicSectionActive
-                      ? "bg-primary/10 text-primary"
-                      : "text-text/75 hover:bg-tint hover:text-heading",
-                  ].join(" ")}
-                  aria-expanded={academicOpen}
-                  onClick={() => setAcademicOpen((o) => !o)}
-                >
-                  <GraduationCap className="h-[18px] w-[18px] shrink-0" strokeWidth={1.75} aria-hidden />
-                  <span className="flex-1 truncate">Academic</span>
-                </button>
-              )}
+                if (collapsed) {
+                  return (
+                    <div
+                      key={section.id}
+                      className="relative"
+                      onMouseEnter={() => openFlyout(section.id)}
+                      onMouseLeave={scheduleCloseFlyout}
+                    >
+                      <button
+                        ref={(el) => {
+                          flyoutAnchorRefs.current[section.id] = el;
+                        }}
+                        type="button"
+                        className={[
+                          "flex w-full items-center justify-center rounded-2xl px-2 py-2.5 text-sm font-medium transition-colors",
+                          sectionActive
+                            ? "bg-primary/10 font-semibold text-primary"
+                            : "text-text/75 hover:bg-tint hover:text-heading",
+                        ].join(" ")}
+                        aria-expanded={flyout === section.id}
+                        aria-label={section.label}
+                        onClick={() => openFlyout(section.id)}
+                      >
+                        <SectionIcon className="h-[18px] w-[18px]" strokeWidth={1.75} aria-hidden />
+                      </button>
+                    </div>
+                  );
+                }
 
-              {collapsed && flyout === "academic" ? (
-                <div
-                  className="fixed z-50 max-h-[min(70vh,420px)] w-[256px] overflow-y-auto rounded-3xl border border-border bg-card py-3 shadow-shadow ring-1 ring-black/5 md:left-[72px]"
-                  style={{ left: typeof window !== "undefined" && window.innerWidth < 768 ? 16 : 72 + 8, top: flyoutTop }}
-                  onMouseEnter={() => openFlyout("academic")}
-                  onMouseLeave={scheduleCloseFlyout}
-                  role="menu"
-                  aria-label="Academic navigation"
-                >
-                  <p className="px-4 pb-2 text-xs font-semibold uppercase tracking-[0.12em] text-text/60">
-                    Academic
-                  </p>
-                  <div className="flex flex-col gap-0.5 px-2">
-                    {ADMIN_ACADEMIC_NAV_ITEMS.map((item, index) => {
-                      const SubIcon = ACADEMIC_ICONS[index % ACADEMIC_ICONS.length];
-                      return (
-                        <NavLink
-                          key={item.path}
-                          className={({ isActive }) =>
-                            [
-                              "flex items-center gap-2 rounded-2xl px-3 py-2 text-sm transition-colors",
-                              isActive
-                                ? "bg-primary/10 font-semibold text-primary"
-                                : "text-text/75 hover:bg-tint hover:text-heading",
-                            ].join(" ")
-                          }
-                          role="menuitem"
-                          to={item.path}
-                          onClick={() => {
-                            onMobileClose?.();
-                            scheduleCloseFlyout();
-                          }}
-                        >
-                          <SubIcon className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
-                          <span className="truncate">{item.label}</span>
-                        </NavLink>
-                      );
-                    })}
+                return (
+                  <div key={section.id} className="rounded-2xl">
+                    <button
+                      type="button"
+                      className={[
+                        "flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm font-semibold transition-colors",
+                        sectionActive ? "bg-primary/10 text-primary" : "text-text/75 hover:bg-tint hover:text-heading",
+                      ].join(" ")}
+                      aria-expanded={isOpen}
+                      onClick={() => toggleSection(section.id)}
+                    >
+                      <SectionIcon className="h-[18px] w-[18px] shrink-0" strokeWidth={1.75} aria-hidden />
+                      <span className="flex-1 truncate">{section.label}</span>
+                    </button>
+                    {isOpen ? (
+                      <div className="mt-1 flex flex-col gap-0.5 pl-2">
+                        {section.items.map((item) => {
+                          const active = isNavItemActive(location.pathname, item);
+                          return (
+                            <NavLink
+                              key={item.id}
+                              className={[
+                                "flex items-center rounded-2xl py-2 pl-4 pr-2 text-sm transition-colors",
+                                active
+                                  ? "bg-primary/10 font-semibold text-primary"
+                                  : "text-text/75 hover:bg-tint hover:text-heading",
+                              ].join(" ")}
+                              end={Boolean(item.end)}
+                              to={item.href}
+                              aria-current={active ? "page" : undefined}
+                              onClick={onMobileClose}
+                            >
+                              <span className="truncate">{item.label}</span>
+                            </NavLink>
+                          );
+                        })}
+                      </div>
+                    ) : null}
                   </div>
-                </div>
-              ) : null}
+                );
+              })}
+            </div>
 
-              {!collapsed && academicOpen ? (
-                <div className="mt-1 flex flex-col gap-0.5 pl-2">
-                  {ADMIN_ACADEMIC_NAV_ITEMS.map((item, index) => {
-                    const SubIcon = ACADEMIC_ICONS[index % ACADEMIC_ICONS.length];
+            {collapsed && flyout && activeFlyoutSection ? (
+              <div
+                className="fixed z-50 max-h-[min(70vh,480px)] w-[256px] overflow-y-auto rounded-3xl border border-border bg-card py-3 shadow-shadow ring-1 ring-black/5"
+                style={{
+                  left: typeof window !== "undefined" && window.innerWidth < 768 ? 16 : 72 + 8,
+                  top: flyoutTop,
+                }}
+                onMouseEnter={() => openFlyout(flyout)}
+                onMouseLeave={scheduleCloseFlyout}
+                role="menu"
+                aria-label={activeFlyoutSection.label}
+              >
+                <p className="px-4 pb-2 text-xs font-semibold uppercase tracking-[0.12em] text-text/60">
+                  {activeFlyoutSection.label}
+                </p>
+                <div className="flex flex-col gap-0.5 px-2">
+                  {activeFlyoutSection.items.map((item) => {
+                    const active = isNavItemActive(location.pathname, item);
                     return (
                       <NavLink
-                        key={item.path}
-                        className={({ isActive }) =>
-                          [
-                            "flex items-center gap-2 rounded-2xl py-2 pl-4 pr-2 text-sm transition-colors",
-                            isActive
-                              ? "bg-primary/10 font-semibold text-primary"
-                              : "text-text/75 hover:bg-tint hover:text-heading",
-                          ].join(" ")
-                        }
-                        to={item.path}
-                        onClick={onMobileClose}
+                        key={item.id}
+                        className={[
+                          "rounded-2xl px-3 py-2 text-sm transition-colors",
+                          active
+                            ? "bg-primary/10 font-semibold text-primary"
+                            : "text-text/75 hover:bg-tint hover:text-heading",
+                        ].join(" ")}
+                        end={Boolean(item.end)}
+                        role="menuitem"
+                        to={item.href}
+                        onClick={() => {
+                          onMobileClose?.();
+                          scheduleCloseFlyout();
+                        }}
                       >
-                        <SubIcon className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
                         <span className="truncate">{item.label}</span>
                       </NavLink>
                     );
                   })}
                 </div>
-              ) : null}
-            </div>
-            </div>
+              </div>
+            ) : null}
 
             <div className="shrink-0 border-t border-border/60 pt-2">
               <NavLink
