@@ -3,10 +3,14 @@ import { useAuth } from "../hooks/useAuth";
 import { isRoleAllowed } from "../utils/roleUtils";
 
 function ProtectedRoute({ children, allowedRoles = [] }) {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, pendingApproval, user } = useAuth();
   const location = useLocation();
 
   if (!isAuthenticated) {
+    if (pendingApproval?.status === "PENDING") {
+      return <Navigate replace state={{ from: location }} to="/approval-pending" />;
+    }
+
     return <Navigate replace state={{ from: location }} to="/login" />;
   }
 

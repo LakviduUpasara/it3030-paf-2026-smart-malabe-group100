@@ -1,34 +1,138 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
+import { FaApple } from "react-icons/fa6";
+import { FcGoogle } from "react-icons/fc";
+import {
+  HiOutlineCheckBadge,
+  HiOutlineEnvelope,
+  HiOutlineShieldCheck,
+} from "react-icons/hi2";
 import Button from "../components/Button";
 import Card from "../components/Card";
+import GoogleIdentityButton from "../components/GoogleIdentityButton";
 import LoadingSpinner from "../components/LoadingSpinner";
+import SocialAccountChooserModal from "../components/SocialAccountChooserModal";
 import { useAuth } from "../hooks/useAuth";
+import { getPasswordStrength } from "../utils/passwordStrength";
 import { getDefaultRouteForRole } from "../utils/roleUtils";
 
-const initialFormState = {
-  name: "",
+const AUTH_PROVIDERS = { LOCAL: "LOCAL", GOOGLE: "GOOGLE", APPLE: "APPLE" };
+const SOCIAL_COPY = {
+  GOOGLE: { label: "Google", icon: FcGoogle },
+  APPLE: { label: "Apple", icon: FaApple },
+};
+const TWO_FACTOR_OPTIONS = [
+  {
+    value: "EMAIL_OTP",
+    title: "Email verification code",
+    description: "Get a one-time code in your approved inbox.",
+    badge: "Inbox",
+    icon: HiOutlineEnvelope,
+  },
+  {
+    value: "AUTHENTICATOR_APP",
+    title: "Authenticator app",
+    description: "Use a TOTP app for the rotating 6-digit code.",
+    badge: "App",
+    icon: HiOutlineShieldCheck,
+  },
+];
+const PROVIDER_ACCOUNT_CHOICES = {
+  GOOGLE: [
+    {
+      id: "google-student-applicant",
+      fullName: "Campus Student Applicant",
+      email: "student.applicant@smartcampus.edu",
+      avatarLabel: "S",
+      description: "Student onboarding request",
+    },
+    {
+      id: "google-staff-applicant",
+      fullName: "Facilities Staff Applicant",
+      email: "staff.applicant@smartcampus.edu",
+      avatarLabel: "F",
+      description: "Operations and resource access request",
+    },
+    {
+      id: "google-technician-applicant",
+      fullName: "Maintenance Technician Applicant",
+      email: "technician.applicant@smartcampus.edu",
+      avatarLabel: "T",
+      description: "Maintenance and incident support onboarding",
+    },
+  ],
+  APPLE: [
+    {
+      id: "apple-student-applicant",
+      fullName: "Campus iCloud Student",
+      email: "icloud.student@smartcampus.edu",
+      avatarLabel: "S",
+      description: "Apple ID based student onboarding",
+    },
+    {
+      id: "apple-staff-applicant",
+      fullName: "Campus iCloud Staff",
+      email: "icloud.staff@smartcampus.edu",
+      avatarLabel: "A",
+      description: "Apple ID based staff onboarding",
+    },
+  ],
+};
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const initialForm = {
+  fullName: "",
   email: "",
   password: "",
   confirmPassword: "",
+  campusId: "",
+  phoneNumber: "",
+  department: "",
+  reasonForAccess: "",
+  preferredTwoFactorMethod: "EMAIL_OTP",
 };
 
 function SignupPage() {
-  const [formState, setFormState] = useState(initialFormState);
+  const [formState, setFormState] = useState(initialForm);
+  const [step, setStep] = useState(1);
+  const [provider, setProvider] = useState(AUTH_PROVIDERS.LOCAL);
+  const [chooserProvider, setChooserProvider] = useState(null);
+  const [socialSignupToken, setSocialSignupToken] = useState("");
   const [localError, setLocalError] = useState("");
+  const formRef = useRef(null);
   const {
     isAuthenticated,
+    pendingApproval,
     user,
     register,
-    loginWithGoogle,
-    loginWithApple,
+    prepareGoogleSignup,
     clearError,
     isLoading,
     error,
-  } = useAuth();
+  } =
+    useAuth();
   const navigate = useNavigate();
-  const normalizedEmail = formState.email.trim().toLowerCase();
+  const isSocial = provider !== AUTH_PROVIDERS.LOCAL;
   const activeError = localError || error;
+  const shouldShowLoginHint = /already has an approved smart campus account|already have an account|please log in instead/i.test(
+    activeError,
+  );
+  const providerMeta = SOCIAL_COPY[provider];
+  const ProviderIcon = providerMeta?.icon;
+  const stepLabel = step === 1 ? "Account setup" : "Campus profile";
+  const passwordStrength = getPasswordStrength(formState.password);
+  const passwordHasValue = formState.password.trim().length > 0;
+  const confirmPasswordHasValue = formState.confirmPassword.trim().length > 0;
+  const passwordsMatch =
+    confirmPasswordHasValue && formState.password === formState.confirmPassword;
+  const isFormDirty =
+    step > 1 ||
+    provider !== AUTH_PROVIDERS.LOCAL ||
+    socialSignupToken ||
+    Object.entries(formState).some(([key, value]) =>
+      key === "preferredTwoFactorMethod"
+        ? value !== initialForm.preferredTwoFactorMethod
+        : String(value).trim() !== "",
+    );
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -38,296 +142,502 @@ function SignupPage() {
     return <Navigate replace to={getDefaultRouteForRole(user?.role)} />;
   }
 
-  const handleFieldChange = (event) => {
+  if (pendingApproval?.status === "PENDING") {
+    return <Navigate replace to="/approval-pending" />;
+  }
+
+  const syncForm = () => {
+    if (!formRef.current) {
+      return formState;
+    }
+
+    const data = new FormData(formRef.current);
+    const next = {
+      fullName: String(data.get("fullName") || formState.fullName || ""),
+      email: String(data.get("email") || formState.email || ""),
+      password: String(data.get("password") || formState.password || ""),
+      confirmPassword: String(data.get("confirmPassword") || formState.confirmPassword || ""),
+      campusId: String(data.get("campusId") || formState.campusId || ""),
+      phoneNumber: String(data.get("phoneNumber") || formState.phoneNumber || ""),
+      department: String(data.get("department") || formState.department || ""),
+      reasonForAccess: String(data.get("reasonForAccess") || formState.reasonForAccess || ""),
+      preferredTwoFactorMethod: String(
+        data.get("preferredTwoFactorMethod") || formState.preferredTwoFactorMethod || "EMAIL_OTP",
+      ),
+    };
+    setFormState(next);
+    return next;
+  };
+
+  const clearTransientErrors = () => {
+    setLocalError("");
+    clearError();
+  };
+
+  const handleChange = (event) => {
     const { name, value } = event.target;
-    setFormState((currentState) => ({
-      ...currentState,
-      [name]: value,
-    }));
-    setLocalError("");
-    clearError();
+    setFormState((current) => ({ ...current, [name]: value }));
+    clearTransientErrors();
   };
 
-  const redirectToWorkspace = (authenticatedUser) => {
-    navigate(getDefaultRouteForRole(authenticatedUser.role), { replace: true });
-  };
+  const normalizeIdentity = (fullName, email) => ({
+    fullName: fullName.trim(),
+    email: email.trim().toLowerCase(),
+  });
 
-  const handleSubmit = async (event) => {
-    event.preventDefault();
+  const validateAccount = (state, nextProvider = provider) => {
+    const identity = normalizeIdentity(state.fullName, state.email);
 
-    if (!formState.name.trim() || !normalizedEmail || !formState.password.trim()) {
-      setLocalError("Complete all sign up fields to continue.");
-      return;
+    if (!identity.fullName || !identity.email) {
+      setLocalError("Complete your account details to continue.");
+      return false;
     }
 
-    if (formState.password !== formState.confirmPassword) {
+    if (!emailPattern.test(identity.email)) {
+      setLocalError("Enter a valid email address to continue.");
+      return false;
+    }
+
+    if (nextProvider === AUTH_PROVIDERS.LOCAL && !state.password.trim()) {
+      setLocalError("Enter a password to continue with local sign up.");
+      return false;
+    }
+
+    if (
+      nextProvider === AUTH_PROVIDERS.LOCAL &&
+      state.password !== state.confirmPassword
+    ) {
       setLocalError("Password confirmation does not match.");
-      return;
+      return false;
     }
 
-    try {
-      const authenticatedUser = await register({
-        name: formState.name,
-        email: normalizedEmail,
-        password: formState.password,
-      });
-      redirectToWorkspace(authenticatedUser);
-    } catch (signupError) {
-      return signupError;
-    }
+    return true;
   };
 
-  const handleProviderSignup = async (provider) => {
+  const validateProfile = (state) => {
+    if (!state.campusId.trim() || !state.phoneNumber.trim() || !state.department.trim() || !state.reasonForAccess.trim()) {
+      setLocalError("Complete the campus profile details before submitting the request.");
+      return false;
+    }
+    return true;
+  };
+
+  const goToProfileStep = () => {
+    const current = syncForm();
+    if (!validateAccount(current, AUTH_PROVIDERS.LOCAL)) {
+      return;
+    }
+    setStep(2);
+  };
+
+  const openSocialChooser = (nextProvider) => {
+    syncForm();
+    setChooserProvider(nextProvider);
+    clearTransientErrors();
+  };
+
+  const resetSignupFlow = () => {
+    setFormState(initialForm);
+    setProvider(AUTH_PROVIDERS.LOCAL);
+    setStep(1);
+    setSocialSignupToken("");
+    clearTransientErrors();
+    setChooserProvider(null);
+  };
+
+  const backToLocalSignup = () => {
+    resetSignupFlow();
+  };
+
+  const handleGoogleSignup = async (credential) => {
     setLocalError("");
     clearError();
 
     try {
-      const authenticatedUser =
-        provider === "apple"
-          ? await loginWithApple(normalizedEmail)
-          : await loginWithGoogle(normalizedEmail);
-      redirectToWorkspace(authenticatedUser);
+      const googleSession = await prepareGoogleSignup(credential);
+      setProvider(AUTH_PROVIDERS.GOOGLE);
+      setSocialSignupToken(googleSession.signupToken);
+      setFormState((current) => ({
+        ...current,
+        fullName: googleSession.fullName,
+        email: googleSession.email,
+        password: "",
+        confirmPassword: "",
+        preferredTwoFactorMethod: "AUTHENTICATOR_APP",
+      }));
+      setStep(2);
     } catch (signupError) {
+      if (signupError?.status === 409) {
+        setProvider(AUTH_PROVIDERS.LOCAL);
+        setStep(1);
+        setSocialSignupToken("");
+        setLocalError(signupError.message || "This Google account already has access. Please log in instead.");
+      }
       return signupError;
     }
   };
+
+  const handleSocialAccountSelect = (selectedAccount) => {
+    const selectedProvider = chooserProvider || provider || AUTH_PROVIDERS.GOOGLE;
+    setProvider(selectedProvider);
+    setSocialSignupToken("");
+    setFormState((current) => ({
+      ...current,
+      fullName: selectedAccount.fullName,
+      email: selectedAccount.email,
+      password: "",
+      confirmPassword: "",
+      preferredTwoFactorMethod: "AUTHENTICATOR_APP",
+    }));
+    setChooserProvider(null);
+    setStep(2);
+    clearTransientErrors();
+  };
+
+  const submitSignup = async (event) => {
+    event.preventDefault();
+    const current = syncForm();
+    const identity = normalizeIdentity(current.fullName, current.email);
+
+    if (provider === AUTH_PROVIDERS.GOOGLE && !socialSignupToken) {
+      setLocalError("Reconnect your Google account before submitting the sign up request.");
+      setStep(1);
+      return;
+    }
+
+    if (!validateAccount(current, provider)) {
+      setStep(1);
+      return;
+    }
+
+    if (!validateProfile(current)) {
+      return;
+    }
+
+    try {
+      const response = await register({
+        ...current,
+        fullName: identity.fullName,
+        email: identity.email,
+        authProvider: provider,
+        socialSignupToken,
+      });
+
+      if (response?.authStatus === "PENDING_APPROVAL") {
+        navigate("/approval-pending", { replace: true });
+      }
+    } catch (submitError) {
+      return submitError;
+    }
+  };
+
+  const openConnectedAccountSwitcher = () => {
+    if (provider === AUTH_PROVIDERS.GOOGLE) {
+      backToLocalSignup();
+      return;
+    }
+
+    openSocialChooser(provider);
+  };
+
+  const renderConnectedAccountCard = ({ compact = false } = {}) => (
+    <div className={`connected-account-card ${compact ? "connected-account-card-compact" : ""}`.trim()}>
+      <div className="connected-account-main">
+        <div className={`connected-account-brand connected-account-brand-${provider.toLowerCase()}`} aria-hidden="true">
+          {ProviderIcon ? <ProviderIcon /> : null}
+        </div>
+        <div className="connected-account-copy">
+          <span className="connected-account-kicker">{providerMeta.label} account connected</span>
+          <strong className="connected-account-name">{formState.fullName}</strong>
+          <div className="connected-account-email">
+            <HiOutlineEnvelope />
+            <span>{formState.email}</span>
+          </div>
+        </div>
+        <span className="connected-account-status">
+          <HiOutlineCheckBadge />
+          <span>Verified</span>
+        </span>
+      </div>
+
+      <div className={`auth-actions-row connected-account-actions ${compact ? "connected-account-actions-compact" : ""}`.trim()}>
+        {!compact ? (
+          <Button className="connected-account-primary" onClick={() => setStep(2)} type="button" variant="primary">
+            Continue to Campus Profile
+          </Button>
+        ) : null}
+        <Button className="connected-account-switch" onClick={openConnectedAccountSwitcher} type="button" variant="secondary">
+          {provider === AUTH_PROVIDERS.GOOGLE
+            ? "Use Another Google Account"
+            : `Change ${providerMeta.label} Account`}
+        </Button>
+        {!compact ? (
+          <Button className="connected-account-link" onClick={backToLocalSignup} type="button" variant="ghost">
+            Use Email and Password
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  );
 
   return (
     <section className="auth-screen auth-screen-centered">
-      <div className="auth-card-wrap auth-card-wrap-centered">
-        <Card className="auth-card glass-card">
-          <div className="auth-heading">
-            <h1 className="auth-title">Sign Up</h1>
-            <p className="auth-subtitle">
-              Create your Smart Campus account and continue to your workspace.
-            </p>
+      <div className="auth-card-wrap auth-card-wrap-centered signup-card-wrap">
+        <Card className="auth-card glass-card signup-premium-card">
+          <div className="signup-shell-head">
+            <div className="signup-shell-head-top">
+              <span className="signup-eyebrow">Campus Access</span>
+              {isFormDirty ? (
+                <button
+                  className="signup-reset-button"
+                  onClick={resetSignupFlow}
+                  type="button"
+                >
+                  Start over
+                </button>
+              ) : null}
+            </div>
+            <div className="auth-heading signup-heading">
+              <h1 className="auth-title signup-title">Create your Smart Campus account</h1>
+              <p className="auth-subtitle signup-subtitle">
+                {isSocial
+                  ? `${SOCIAL_COPY[provider].label} account verified. Complete the remaining details and send your request.`
+                  : "Use email or a connected account, then submit your campus access request for approval."}
+              </p>
+            </div>
           </div>
 
-          <form className="login-form" onSubmit={handleSubmit}>
-            <label className="field field-annotated">
-              <span>Full name</span>
-              <div className="input-shell">
-                <span className="input-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path
-                      d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-6.75 8.25a6.75 6.75 0 0 1 13.5 0"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="1.5"
-                    />
-                  </svg>
-                </span>
-                <input
-                  autoComplete="name"
-                  className="login-input"
-                  name="name"
-                  onChange={handleFieldChange}
-                  placeholder="Your full name"
-                  type="text"
-                  value={formState.name}
-                />
+          <div className="signup-stagebar" aria-label={`Step ${step} of 2`}>
+            <div className="signup-stagebar-meta">
+              <strong>Step {step} of 2</strong>
+              <span>{stepLabel}</span>
+            </div>
+            <div className="signup-stagebar-track" aria-hidden="true">
+              <span className={`signup-stagebar-fill signup-stagebar-fill-step-${step}`.trim()} />
+            </div>
+            <div className="signup-stagebar-labels">
+              <span className={step === 1 ? "is-active" : ""}>Account</span>
+              <span className={step === 2 ? "is-active" : ""}>Profile</span>
+            </div>
+          </div>
+
+          <form className="login-form" onSubmit={submitSignup} ref={formRef}>
+            {step === 1 && !isSocial ? (
+              <div className="auth-form-grid signup-form-grid">
+                <label className="field field-annotated field-full">
+                  <span>Full name</span>
+                  <div className="input-shell">
+                    <input className="login-input" name="fullName" onChange={handleChange} onInput={handleChange} placeholder="Your full name" type="text" value={formState.fullName} />
+                  </div>
+                </label>
+
+                <label className="field field-annotated field-full">
+                  <span>Email address</span>
+                  <div className="input-shell">
+                    <input className="login-input" name="email" onChange={handleChange} onInput={handleChange} placeholder="name@smartcampus.edu" type="email" value={formState.email} />
+                  </div>
+                </label>
+
+                <label className="field field-annotated">
+                  <span>Password</span>
+                  <div className="input-shell">
+                    <input className="login-input" name="password" onChange={handleChange} onInput={handleChange} placeholder="Create a password" type="password" value={formState.password} />
+                  </div>
+                  {passwordHasValue ? (
+                    <div className="password-strength-panel" aria-live="polite">
+                      <div className="password-strength-head">
+                        <strong>Password strength</strong>
+                        <span className={`password-strength-badge password-strength-${passwordStrength.tone}`.trim()}>
+                          {passwordStrength.label}
+                        </span>
+                      </div>
+                      <div className="password-strength-meter" aria-hidden="true">
+                        <span
+                          className={`password-strength-meter-fill password-strength-${passwordStrength.tone}`.trim()}
+                          style={{ width: `${passwordStrength.progress}%` }}
+                        />
+                      </div>
+                      <div className="password-strength-checks">
+                        {passwordStrength.checks.map((check) => (
+                          <span
+                            key={check.id}
+                            className={`password-check ${check.passed ? "is-passed" : ""}`.trim()}
+                          >
+                            {check.label}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </label>
+
+                <label className="field field-annotated">
+                  <span>Confirm password</span>
+                  <div className="input-shell">
+                    <input className="login-input" name="confirmPassword" onChange={handleChange} onInput={handleChange} placeholder="Confirm your password" type="password" value={formState.confirmPassword} />
+                  </div>
+                  {confirmPasswordHasValue ? (
+                    <p className={`password-match-note ${passwordsMatch ? "is-match" : "is-mismatch"}`.trim()}>
+                      {passwordsMatch ? "Passwords match." : "Passwords do not match yet."}
+                    </p>
+                  ) : null}
+                </label>
               </div>
-            </label>
+            ) : null}
 
-            <label className="field field-annotated">
-              <span>Email address</span>
-              <div className="input-shell">
-                <span className="input-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path
-                      d="M4 6.75h16a1.25 1.25 0 0 1 1.25 1.25v8a1.25 1.25 0 0 1-1.25 1.25H4A1.25 1.25 0 0 1 2.75 16V8A1.25 1.25 0 0 1 4 6.75Z"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="1.5"
-                    />
-                    <path
-                      d="m4 8 8 5 8-5"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="1.5"
-                    />
-                  </svg>
-                </span>
-                <input
-                  autoComplete="email"
-                  className="login-input"
-                  name="email"
-                  onChange={handleFieldChange}
-                  placeholder="name@smartcampus.edu"
-                  type="email"
-                  value={formState.email}
-                />
+            {step === 1 && isSocial ? (
+              renderConnectedAccountCard()
+            ) : null}
+
+            {step === 2 ? (
+              <div className="auth-form-grid signup-form-grid">
+                {isSocial ? (
+                  <div className="field-full">
+                    {renderConnectedAccountCard({ compact: true })}
+                  </div>
+                ) : null}
+
+                <label className="field field-annotated">
+                  <span>Campus ID</span>
+                  <div className="input-shell">
+                    <input className="login-input" name="campusId" onChange={handleChange} onInput={handleChange} placeholder="IT23123456 / EMP-109" type="text" value={formState.campusId} />
+                  </div>
+                </label>
+
+                <label className="field field-annotated">
+                  <span>Phone number</span>
+                  <div className="input-shell">
+                    <input className="login-input" name="phoneNumber" onChange={handleChange} onInput={handleChange} placeholder="+94 77 123 4567" type="text" value={formState.phoneNumber} />
+                  </div>
+                </label>
+
+                <label className="field field-annotated">
+                  <span>Department / Faculty</span>
+                  <div className="input-shell">
+                    <input className="login-input" name="department" onChange={handleChange} onInput={handleChange} placeholder="Computing / Facilities / Administration" type="text" value={formState.department} />
+                  </div>
+                </label>
+
+                <label className="field field-annotated field-full">
+                  <span>Reason for access</span>
+                  <textarea className="auth-textarea" name="reasonForAccess" onChange={handleChange} onInput={handleChange} placeholder="Explain why you need Smart Campus Operations Hub access." rows="4" value={formState.reasonForAccess} />
+                </label>
+
+                <div className="field field-annotated field-full">
+                  <div className="field-section-heading">
+                    <span>2-step verification</span>
+                    <p>Choose how Smart Campus verifies secure sign-in.</p>
+                  </div>
+                  <div className="auth-method-grid">
+                    {TWO_FACTOR_OPTIONS.map((option) => {
+                      const OptionIcon = option.icon;
+                      const isSelected = formState.preferredTwoFactorMethod === option.value;
+
+                      return (
+                        <label
+                          key={option.value}
+                          className={`auth-method-option ${isSelected ? "is-selected" : ""}`.trim()}
+                        >
+                          <input
+                            checked={isSelected}
+                            name="preferredTwoFactorMethod"
+                            onChange={handleChange}
+                            type="radio"
+                            value={option.value}
+                          />
+                          <div className="auth-method-option-top">
+                            <span className="auth-method-icon" aria-hidden="true">
+                              <OptionIcon />
+                            </span>
+                            <span className="auth-method-badge">{option.badge}</span>
+                          </div>
+                          <div className="auth-method-option-copy">
+                            <span>{option.title}</span>
+                            <small>{option.description}</small>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
-            </label>
+            ) : null}
 
-            <label className="field field-annotated">
-              <span>Password</span>
-              <div className="input-shell">
-                <span className="input-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path
-                      d="M7.25 10.75v-2a4.75 4.75 0 1 1 9.5 0v2"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="1.5"
-                    />
-                    <rect
-                      x="4.75"
-                      y="10.75"
-                      width="14.5"
-                      height="9.5"
-                      rx="2"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                    />
-                    <circle cx="12" cy="15.5" r="1.1" fill="currentColor" />
-                  </svg>
-                </span>
-                <input
-                  autoComplete="new-password"
-                  className="login-input"
-                  name="password"
-                  onChange={handleFieldChange}
-                  placeholder="Create a password"
-                  type="password"
-                  value={formState.password}
-                />
+            {activeError ? (
+              <div className="auth-inline-alert">
+                <p className="alert alert-error">{activeError}</p>
+                {shouldShowLoginHint ? (
+                  <div className="auth-inline-alert-actions">
+                    <Link className="text-link" to="/login">
+                      Already have an account? Go to Login
+                    </Link>
+                  </div>
+                ) : null}
               </div>
-            </label>
+            ) : null}
 
-            <label className="field field-annotated">
-              <span>Confirm password</span>
-              <div className="input-shell">
-                <span className="input-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path
-                      d="M7.25 10.75v-2a4.75 4.75 0 1 1 9.5 0v2"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="1.5"
-                    />
-                    <rect
-                      x="4.75"
-                      y="10.75"
-                      width="14.5"
-                      height="9.5"
-                      rx="2"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                    />
-                    <path
-                      d="m9.8 15.5 1.4 1.4 3-3"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="1.5"
-                    />
-                  </svg>
-                </span>
-                <input
-                  autoComplete="new-password"
-                  className="login-input"
-                  name="confirmPassword"
-                  onChange={handleFieldChange}
-                  placeholder="Confirm your password"
-                  type="password"
-                  value={formState.confirmPassword}
-                />
+            {step === 1 && !isSocial ? (
+              <Button className="login-submit signup-submit" onClick={goToProfileStep} type="button" variant="primary">
+                Continue
+              </Button>
+            ) : null}
+
+            {step === 2 ? (
+              <div className="auth-actions-row signup-form-actions">
+                <Button onClick={() => setStep(1)} type="button" variant="secondary">Back</Button>
+                <Button className="login-submit signup-submit" disabled={isLoading} type="submit" variant="primary">
+                  Submit Approval Request
+                </Button>
               </div>
-            </label>
-
-            {activeError ? <p className="alert alert-error">{activeError}</p> : null}
-
-            <Button
-              className="login-submit"
-              disabled={isLoading}
-              type="submit"
-              variant="primary"
-            >
-              Sign Up
-            </Button>
+            ) : null}
           </form>
 
-          <div className="auth-divider">
-            <span>or continue with</span>
-          </div>
-
-          <div className="social-auth-grid">
-            <button
-              className="social-button"
-              disabled={isLoading}
-              onClick={() => handleProviderSignup("google")}
-              type="button"
-            >
-              <span className="social-icon" aria-hidden="true">
-                <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                  <path
-                    fill="#FFC107"
-                    d="M43.611 20.083H42V20H24v8h11.303C33.655 32.657 29.221 36 24 36c-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.27 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"
-                  />
-                  <path
-                    fill="#FF3D00"
-                    d="M6.306 14.691l6.571 4.819C14.655 16.108 18.961 13 24 13c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.27 4 24 4c-7.682 0-14.348 4.337-17.694 10.691z"
-                  />
-                  <path
-                    fill="#4CAF50"
-                    d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238C29.143 35.091 26.715 36 24 36c-5.2 0-9.624-3.326-11.284-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z"
-                  />
-                  <path
-                    fill="#1976D2"
-                    d="M43.611 20.083H42V20H24v8h11.303c-.792 2.237-2.231 4.166-4.084 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"
-                  />
-                </svg>
-              </span>
-              <span className="social-button-label">Continue with Google</span>
-            </button>
-
-            <button
-              className="social-button"
-              disabled={isLoading}
-              onClick={() => handleProviderSignup("apple")}
-              type="button"
-            >
-              <span className="social-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path
-                    d="M16.72 12.74c.03 2.94 2.58 3.92 2.61 3.93-.02.07-.41 1.42-1.34 2.82-.8 1.21-1.64 2.41-2.95 2.43-1.29.02-1.7-.76-3.17-.76-1.47 0-1.93.74-3.15.79-1.27.05-2.23-1.27-3.04-2.47-1.66-2.44-2.93-6.88-1.22-9.85.85-1.47 2.38-2.4 4.03-2.43 1.25-.02 2.43.85 3.17.85.74 0 2.13-1.05 3.59-.9.61.03 2.32.25 3.42 1.86-.09.06-2.04 1.19-1.95 3.73Zm-2.22-6.16c.67-.81 1.12-1.94 1-3.06-.97.04-2.14.65-2.84 1.46-.62.72-1.17 1.87-1.02 2.97 1.08.08 2.19-.55 2.86-1.37Z"
-                    fill="currentColor"
-                  />
-                </svg>
-              </span>
-              <span className="social-button-label">Continue with Apple</span>
-            </button>
-          </div>
-
-          <p className="login-demo-note">
-            Use your official campus email to activate the correct role and continue
-            into your Smart Campus workspace.
-          </p>
+          {!isSocial && step === 1 ? (
+            <div className="signup-social-panel">
+              <div className="auth-divider">
+                <span>or continue with</span>
+              </div>
+              <div className="social-auth-grid signup-social-grid">
+                <GoogleIdentityButton
+                  buttonText="signup_with"
+                  disabled={isLoading}
+                  minWidth={220}
+                  maxWidth={340}
+                  onCredential={handleGoogleSignup}
+                  onError={(message) => setLocalError(message)}
+                  size="medium"
+                />
+                <button className="social-button social-button-apple" disabled={isLoading} onClick={() => openSocialChooser(AUTH_PROVIDERS.APPLE)} type="button">
+                  <span className="social-button-icon-shell" aria-hidden="true">
+                    <FaApple />
+                  </span>
+                  <span className="social-button-copy">
+                    <span className="social-button-label">Sign up with Apple</span>
+                    <small className="social-button-caption">Use your Apple ID</small>
+                  </span>
+                </button>
+              </div>
+              <p className="login-demo-note">
+                Use a verified Google or Apple account for faster account setup.
+              </p>
+            </div>
+          ) : null}
 
           <p className="auth-switch-copy">
-            Already have an account?{" "}
-            <Link className="text-link" to="/login">
-              Login
-            </Link>
+            Already have an account? <Link className="text-link" to="/login">Login</Link>
           </p>
 
-          {isLoading ? <LoadingSpinner label="Creating your account..." /> : null}
+          {isLoading ? <LoadingSpinner label="Submitting your request..." /> : null}
         </Card>
       </div>
+
+      <SocialAccountChooserModal
+        accounts={PROVIDER_ACCOUNT_CHOICES[chooserProvider] || []}
+        isOpen={Boolean(chooserProvider)}
+        onClose={() => setChooserProvider(null)}
+        onSelect={handleSocialAccountSelect}
+        provider={chooserProvider}
+      />
     </section>
   );
 }

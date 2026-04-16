@@ -1,3 +1,10 @@
+export const STORAGE_KEYS = Object.freeze({
+  USER: "smart-campus-user",
+  SESSION: "smart-campus-session",
+  PENDING_APPROVAL: "smart-campus-pending-approval",
+  TWO_FACTOR_CHALLENGE: "smart-campus-two-factor",
+});
+
 export function readStorageValue(key) {
   const rawValue = window.localStorage.getItem(key);
   if (!rawValue) {

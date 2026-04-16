@@ -5,7 +5,6 @@ import com.example.app.dto.CampusMessageResponse;
 import com.example.app.service.CampusMessageService;
 import jakarta.validation.Valid;
 import java.util.List;
-import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -16,10 +15,13 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/messages")
-@RequiredArgsConstructor
 public class CampusMessageController {
 
     private final CampusMessageService campusMessageService;
+
+    public CampusMessageController(CampusMessageService campusMessageService) {
+        this.campusMessageService = campusMessageService;
+    }
 
     @GetMapping
     public List<CampusMessageResponse> getAllMessages() {
