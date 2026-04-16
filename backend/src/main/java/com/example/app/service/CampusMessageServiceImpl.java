@@ -1,4 +1,4 @@
-package com.example.app.service;
+/*package com.example.app.service;
 
 import com.example.app.dto.CampusMessageRequest;
 import com.example.app.dto.CampusMessageResponse;
@@ -42,3 +42,5 @@ public class CampusMessageServiceImpl implements CampusMessageService {
                 message.getCreatedAt());
     }
 }
+
+    */

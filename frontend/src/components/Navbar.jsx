@@ -29,8 +29,9 @@ function Navbar() {
   const isLoginPage = location.pathname === "/login";
   const isSignupPage = location.pathname === "/signup";
   const isApprovalPendingPage = location.pathname === "/approval-pending";
-  const isPublicPage =
-    !isAuthenticated && ["/", "/login", "/signup", "/approval-pending"].includes(location.pathname);
+  const isAdminTicketsPage = location.pathname === "/admin/tickets";
+  const isPublicPage = !isAuthenticated
+    && ["/", "/login", "/signup", "/approval-pending"].includes(location.pathname);
   const [activePublicSection, setActivePublicSection] = useState(
     isLoginPage || isSignupPage || isApprovalPendingPage ? null : "home"
   );
@@ -129,7 +130,11 @@ function Navbar() {
     group.items.some((item) => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`));
 
   return (
-    <header className={`navbar ${isPublicPage ? "navbar-auth-shell" : ""}`.trim()}>
+    <header
+      className={`navbar ${isPublicPage ? "navbar-auth-shell" : ""} ${
+        isAuthenticated && isAdminTicketsPage ? "navbar--admin-tickets" : ""
+      }`.trim()}
+    >
       <div className="navbar-brand">
         <button
           className="brand-button"

@@ -499,47 +499,36 @@ function LoginPanel({ showHeading = true }) {
               onError={(message) => setLocalError(message)}
               size="medium"
             />
-
             <button
-              className="social-button social-button-apple"
+              className="social-button"
               disabled={isLoading}
               onClick={handleAppleLogin}
               type="button"
             >
-              <span className="social-button-icon-shell" aria-hidden="true">
+              <span className="social-icon" aria-hidden="true">
                 <FaApple />
               </span>
-              <span className="social-button-copy">
-                <span className="social-button-label">Continue with Apple</span>
-                <small className="social-button-caption">Use your approved Apple ID</small>
-              </span>
+              <span className="social-button-label">Continue with Apple</span>
             </button>
           </div>
 
-          <p className="login-demo-note auth-assist-note">
-            {developerMode ? (
-              <>
-                Demo admin (local): <strong>{DEMO_LOCAL_ADMIN_EMAIL}</strong> + password{" "}
-                <strong>{DEMO_LOCAL_ADMIN_PASSWORD}</strong> (exact capitals/symbols). Quick sign-in still needs{" "}
-                <code>APP_DEVELOPER_MODE</code> or Spring <code>dev</code> profile on the API.
-              </>
-            ) : (
-              <>
-                Test admin access: <strong>{DEMO_LOCAL_ADMIN_EMAIL}</strong> / <strong>{DEMO_LOCAL_ADMIN_PASSWORD}</strong>.
-              </>
-            )}
+          <p className="login-demo-note">
+            Need access? Contact Campus IT Services. Demo accounts:{" "}
+            <strong>user@smartcampus.edu</strong> (student),{" "}
+            <strong>admin@smartcampus.edu</strong>, and{" "}
+            <strong>technician@smartcampus.edu</strong>.
           </p>
+
+          <p className="auth-switch-copy">
+            Need access?{" "}
+            <Link className="text-link" to="/signup">
+              Create an account
+            </Link>
+          </p>
+
+          {isLoading ? <LoadingSpinner label="Authenticating your access..." /> : null}
         </>
       )}
-
-      <p className="auth-switch-copy">
-        Need access?{" "}
-        <Link className="text-link" to="/signup">
-          Create an account
-        </Link>
-      </p>
-
-      {isLoading ? <LoadingSpinner label="Authenticating your access..." /> : null}
     </div>
   );
 }
