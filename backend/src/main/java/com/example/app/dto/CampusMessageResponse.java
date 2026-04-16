@@ -1,21 +1,22 @@
 package com.example.app.dto;
 
 import java.time.LocalDateTime;
+
 public class CampusMessageResponse {
 
-    private Long id;
+    private String id;
     private String title;
     private String content;
     private LocalDateTime createdAt;
 
-    public CampusMessageResponse(Long id, String title, String content, LocalDateTime createdAt) {
+    public CampusMessageResponse(String id, String title, String content, LocalDateTime createdAt) {
         this.id = id;
         this.title = title;
         this.content = content;
         this.createdAt = createdAt;
     }
 
-    public Long getId() {
+    public String getId() {
         return id;
     }
 

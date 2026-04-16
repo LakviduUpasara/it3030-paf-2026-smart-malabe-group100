@@ -87,7 +87,15 @@ export function getNavigationItems(role) {
   const commonItems = [{ label: "Dashboard", path: "/dashboard" }];
 
   if (role === ROLES.ADMIN) {
-    return [{ label: "Overview", path: "/admin" }];
+    return [
+      ...commonItems,
+      { label: "Admin Dashboard", path: "/admin" },
+      { label: "User Approvals", path: "/admin/registrations" },
+      { label: "Manage Resources", path: "/admin/resources" },
+      { label: "Booking Approvals", path: "/admin/bookings" },
+      { label: "Manage Tickets", path: "/admin/tickets" },
+      { label: "Notifications", path: "/notifications" },
+    ];
   }
 
   if (role === ROLES.TECHNICIAN) {

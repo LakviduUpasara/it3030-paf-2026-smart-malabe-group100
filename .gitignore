@@ -17,6 +17,7 @@ frontend/dist/
 # Environment files
 .env
 .env.*
+!.env.example
 
 # Local build tooling
 .m2repo/
@@ -29,7 +30,10 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# Local run helpers
+.m2repo/
+backend-java.args
+
 # OS files
 .DS_Store
 Thumbs.db
-

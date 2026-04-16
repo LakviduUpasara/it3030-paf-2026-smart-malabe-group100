@@ -7,7 +7,9 @@ import AppRoutes from "./routes/AppRoutes";
 function AppLayout() {
   const { isAuthenticated } = useAuth();
   const location = useLocation();
-  const isPublicMarketingRoute = !isAuthenticated && ["/", "/login", "/signup"].includes(location.pathname);
+  const isPublicMarketingRoute =
+    !isAuthenticated &&
+    ["/", "/login", "/signup", "/approval-pending"].includes(location.pathname);
 
   return (
     <div className={isPublicMarketingRoute ? "app-shell app-shell-auth" : "app-shell"}>

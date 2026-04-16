@@ -4,9 +4,11 @@ import AccessDeniedPage from "../pages/AccessDeniedPage";
 import AcademicManagementPlaceholderPage from "../pages/AcademicManagementPlaceholderPage";
 import AdminDashboardPage from "../pages/AdminDashboardPage";
 import ApproveBookingsPage from "../pages/ApproveBookingsPage";
+import ApprovalPendingPage from "../pages/ApprovalPendingPage";
 import CreateBookingPage from "../pages/CreateBookingPage";
 import DashboardPage from "../pages/DashboardPage";
 import LoginPage from "../pages/LoginPage";
+import ManageSignupRequestsPage from "../pages/ManageSignupRequestsPage";
 import ManageResourcesPage from "../pages/ManageResourcesPage";
 import ManageTicketsPage from "../pages/ManageTicketsPage";
 import MyBookingsPage from "../pages/MyBookingsPage";
@@ -25,10 +27,14 @@ import {
 } from "../utils/roleUtils";
 
 function PublicHomeRoute() {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, pendingApproval, user } = useAuth();
 
   if (isAuthenticated) {
     return <Navigate replace to={getDefaultRouteForRole(user?.role)} />;
+  }
+
+  if (pendingApproval?.status === "PENDING") {
+    return <Navigate replace to="/approval-pending" />;
   }
 
   return <PublicLandingPage />;
@@ -57,6 +63,7 @@ function AppRoutes() {
       <Route index element={<PublicHomeRoute />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
+      <Route path="/approval-pending" element={<ApprovalPendingPage />} />
       <Route path="/access-denied" element={<AccessDeniedPage />} />
 
       <Route
@@ -125,6 +132,14 @@ function AppRoutes() {
         }
       />
       {ADMIN_ACADEMIC_NAV_ITEMS.map(renderAcademicPlaceholderRoute)}
+      <Route
+        path="/admin/registrations"
+        element={
+          <AdminRoute>
+            <ManageSignupRequestsPage />
+          </AdminRoute>
+        }
+      />
       <Route
         path="/admin/bookings"
         element={
