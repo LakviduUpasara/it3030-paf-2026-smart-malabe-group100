@@ -1,34 +1,32 @@
-import axios from "axios";
+import axios from 'axios';
+
+const API_BASE_URL = 'http://localhost:8082/api';
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api/v1",
-  timeout: 8000,
+  baseURL: API_BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
 });
 
-export function createServiceError(error, fallbackMessage) {
-  const responseMessage = error?.response?.data?.message;
-  const message = responseMessage || error?.message || fallbackMessage;
-  const normalizedError = new Error(message);
+export const bookingAPI = {
+  createBooking: (data) => api.post('/bookings', data),
+  getAllBookings: (params) => api.get('/bookings', { params }),
+  getBookingsByUser: (userId) => api.get(`/bookings/user/${userId}`),
+  approveBooking: (bookingId) => api.put(`/bookings/${bookingId}/approve`),
+  rejectBooking: (bookingId) => api.put(`/bookings/${bookingId}/reject`),
+  cancelBooking: (bookingId) => api.put(`/bookings/${bookingId}/cancel`),
+  checkAvailability: (resourceId, start, end) => 
+    api.get('/bookings/check', { params: { resourceId, start, end } }),
+};
 
-  normalizedError.status = error?.response?.status || 500;
-  normalizedError.isNetworkError = !error?.response;
+export const messageAPI = {
+  getAllMessages: () => api.get('/v1/messages'),
+  createMessage: (data) => api.post('/v1/messages', data),
+};
 
-  return normalizedError;
-}
-
-export async function requestWithFallback(requestFn, fallbackFactory, fallbackMessage) {
-  try {
-    const response = await requestFn();
-    return response.data;
-  } catch (error) {
-    if (!error?.response || error.response.status === 404) {
-      return typeof fallbackFactory === "function"
-        ? fallbackFactory()
-        : fallbackFactory;
-    }
-
-    throw createServiceError(error, fallbackMessage);
-  }
-}
+export const healthAPI = {
+  check: () => api.get('/health'),
+};
 
 export default api;
