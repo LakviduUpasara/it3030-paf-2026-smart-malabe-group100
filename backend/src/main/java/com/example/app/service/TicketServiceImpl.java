@@ -9,9 +9,11 @@ import com.example.app.entity.Category;
 import com.example.app.entity.SubCategory;
 import com.example.app.entity.Ticket;
 import com.example.app.entity.TicketUpdate;
+import com.example.app.entity.WithdrawnTicketRecord;
 import com.example.app.entity.enums.Role;
 import com.example.app.exception.ApiException;
 import com.example.app.repository.TicketRepository;
+import com.example.app.repository.WithdrawnTicketRepository;
 import com.example.app.repository.CategoryRepository;
 import com.example.app.repository.SubCategoryRepository;
 import com.example.app.security.AuthenticatedUser;
@@ -45,6 +47,9 @@ public class TicketServiceImpl implements TicketService {
 
     @Autowired
     private TicketRepository ticketRepo;
+
+    @Autowired
+    private WithdrawnTicketRepository withdrawnTicketRepo;
 
     @Autowired
     private CategoryRepository categoryRepository;
@@ -176,6 +181,18 @@ public class TicketServiceImpl implements TicketService {
         ticket.setWithdrawalReasonCode(code);
         ticket.setWithdrawalReasonNote(note);
         Ticket saved = ticketRepo.save(ticket);
+
+        LocalDateTime withdrawnAt = LocalDateTime.now();
+        WithdrawnTicketRecord withdrawalRow = new WithdrawnTicketRecord();
+        withdrawalRow.setId(UUID.randomUUID().toString());
+        withdrawalRow.setTicketId(saved.getId());
+        withdrawalRow.setTitle(saved.getTitle());
+        withdrawalRow.setWithdrawnByUserId(saved.getCreatedByUserId());
+        withdrawalRow.setWithdrawnAt(withdrawnAt);
+        withdrawalRow.setWithdrawalReasonCode(code);
+        withdrawalRow.setWithdrawalReasonNote(note);
+        withdrawnTicketRepo.save(withdrawalRow);
+
         return mapToResponse(saved);
     }
 
