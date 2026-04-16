@@ -156,6 +156,14 @@ function AppRoutes() {
           </AdminRoute>
         }
       />
+      <Route
+        path="/admin/categories"
+        element={
+          <AdminRoute>
+            <Navigate replace to="/admin/tickets?section=categories" />
+          </AdminRoute>
+        }
+      />
 
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
