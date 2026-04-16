@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import AccessDeniedPage from "../pages/AccessDeniedPage";
+import AcademicManagementPlaceholderPage from "../pages/AcademicManagementPlaceholderPage";
 import AdminDashboardPage from "../pages/AdminDashboardPage";
 import ApproveBookingsPage from "../pages/ApproveBookingsPage";
 import CreateBookingPage from "../pages/CreateBookingPage";
@@ -17,7 +18,11 @@ import SignupPage from "../pages/SignupPage";
 import TechnicianDashboardPage from "../pages/TechnicianDashboardPage";
 import AdminRoute from "./AdminRoute";
 import ProtectedRoute from "./ProtectedRoute";
-import { getDefaultRouteForRole, ROLES } from "../utils/roleUtils";
+import {
+  ADMIN_ACADEMIC_NAV_ITEMS,
+  getDefaultRouteForRole,
+  ROLES,
+} from "../utils/roleUtils";
 
 function PublicHomeRoute() {
   const { isAuthenticated, user } = useAuth();
@@ -27,6 +32,23 @@ function PublicHomeRoute() {
   }
 
   return <PublicLandingPage />;
+}
+
+function renderAcademicPlaceholderRoute(item) {
+  return (
+    <Route
+      key={item.path}
+      path={item.path}
+      element={
+        <AdminRoute>
+          <AcademicManagementPlaceholderPage
+            title={item.label}
+            description={item.description}
+          />
+        </AdminRoute>
+      }
+    />
+  );
 }
 
 function AppRoutes() {
@@ -102,6 +124,7 @@ function AppRoutes() {
           </AdminRoute>
         }
       />
+      {ADMIN_ACADEMIC_NAV_ITEMS.map(renderAcademicPlaceholderRoute)}
       <Route
         path="/admin/bookings"
         element={

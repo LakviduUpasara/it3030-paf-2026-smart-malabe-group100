@@ -1,13 +1,18 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
+  HiOutlineChevronDown,
   HiOutlineHome,
   HiOutlineInformationCircle,
   HiOutlinePhone,
 } from "react-icons/hi2";
 import brandLogo from "../assets/smart-campus-logo.svg";
 import { useAuth } from "../hooks/useAuth";
-import { getDefaultRouteForRole, getNavigationItems } from "../utils/roleUtils";
+import {
+  getDefaultRouteForRole,
+  getNavigationGroups,
+  getNavigationItems,
+} from "../utils/roleUtils";
 import Button from "./Button";
 import NotificationDropdown from "./NotificationDropdown";
 
@@ -27,6 +32,8 @@ function Navbar() {
   const [activePublicSection, setActivePublicSection] = useState(
     isLoginPage || isSignupPage ? null : "home"
   );
+  const [openGroup, setOpenGroup] = useState(null);
+  const navigationMenuRef = useRef(null);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -73,6 +80,26 @@ function Navbar() {
     return () => observer.disconnect();
   }, [isAuthenticated, isLoginPage, isSignupPage, location.pathname]);
 
+  useEffect(() => {
+    setOpenGroup(null);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!openGroup) {
+      return undefined;
+    }
+
+    const handlePointerDown = (event) => {
+      if (!navigationMenuRef.current?.contains(event.target)) {
+        setOpenGroup(null);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [openGroup]);
+
   const handleLogout = async () => {
     await logout();
     navigate("/login");
@@ -94,6 +121,10 @@ function Navbar() {
   };
 
   const navigationItems = isAuthenticated ? getNavigationItems(user?.role) : [];
+  const navigationGroups = isAuthenticated ? getNavigationGroups(user?.role) : [];
+
+  const isGroupActive = (group) =>
+    group.items.some((item) => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`));
 
   return (
     <header className={`navbar ${isPublicPage ? "navbar-auth-shell" : ""}`.trim()}>
@@ -116,7 +147,7 @@ function Navbar() {
       </div>
 
       {isAuthenticated ? (
-        <nav className="navbar-links">
+        <nav className="navbar-links navbar-links-app" ref={navigationMenuRef}>
           {navigationItems.map((item) => (
             <NavLink
               key={item.path}
@@ -126,6 +157,49 @@ function Navbar() {
               {item.label}
             </NavLink>
           ))}
+          {navigationGroups.map((group) => {
+            const isOpen = openGroup === group.label;
+            const active = isGroupActive(group);
+
+            return (
+              <div
+                key={group.label}
+                className={`nav-menu ${isOpen ? "open" : ""}`.trim()}
+              >
+                <button
+                  type="button"
+                  className={`nav-menu-button ${active ? "active" : ""}`.trim()}
+                  aria-expanded={isOpen}
+                  onClick={() =>
+                    setOpenGroup((currentGroup) =>
+                      currentGroup === group.label ? null : group.label
+                    )
+                  }
+                >
+                  <span>{group.label}</span>
+                  <HiOutlineChevronDown className="nav-menu-caret" aria-hidden="true" />
+                </button>
+
+                {isOpen ? (
+                  <div className="nav-menu-panel">
+                    {group.items.map((item) => (
+                      <NavLink
+                        key={item.path}
+                        to={item.path}
+                        className={({ isActive }) =>
+                          `nav-menu-item ${isActive ? "active" : ""}`.trim()
+                        }
+                        onClick={() => setOpenGroup(null)}
+                      >
+                        <strong>{item.label}</strong>
+                        <small>{item.description}</small>
+                      </NavLink>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
         </nav>
       ) : (
         <nav className="navbar-links navbar-links-public">
