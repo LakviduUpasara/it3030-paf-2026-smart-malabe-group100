@@ -8,4 +8,6 @@ import java.util.List;
 public interface TicketRepository extends MongoRepository<Ticket, String> {
 
     List<Ticket> findByCreatedByUserIdOrderByCreatedAtDesc(String createdByUserId);
+
+    List<Ticket> findByAssignedTechnicianUserIdOrderByCreatedAtDesc(String assignedTechnicianUserId);
 }

@@ -1,10 +1,14 @@
 package com.example.app.entity;
 
+import org.springframework.data.annotation.Id;
+
 /**
  * Embedded subdocument within {@link Ticket#attachments}.
+ * {@code @Id} maps the Java {@code id} property to MongoDB's {@code _id} in each embedded document.
  */
 public class Attachment {
 
+    @Id
     private String id;
     private String fileName;
     private String filePath;

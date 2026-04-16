@@ -25,6 +25,9 @@ public class Ticket {
     /** MongoDB user id of the account that submitted the ticket (nullable for legacy rows). */
     private String createdByUserId;
 
+    /** Staff-assigned technician (MongoDB user id). */
+    private String assignedTechnicianUserId;
+
     private List<TicketUpdate> updates = new ArrayList<>();
     private List<Attachment> attachments = new ArrayList<>();
 
@@ -103,6 +106,14 @@ public class Ticket {
 
     public void setCreatedByUserId(String createdByUserId) {
         this.createdByUserId = createdByUserId;
+    }
+
+    public String getAssignedTechnicianUserId() {
+        return assignedTechnicianUserId;
+    }
+
+    public void setAssignedTechnicianUserId(String assignedTechnicianUserId) {
+        this.assignedTechnicianUserId = assignedTechnicianUserId;
     }
 
     public List<TicketUpdate> getUpdates() {

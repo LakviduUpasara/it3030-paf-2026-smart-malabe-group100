@@ -23,6 +23,7 @@ function Navbar() {
   const navigate = useNavigate();
   const isLoginPage = location.pathname === "/login";
   const isSignupPage = location.pathname === "/signup";
+  const isAdminTicketsPage = location.pathname === "/admin/tickets";
   const isPublicPage = !isAuthenticated && ["/", "/login", "/signup"].includes(location.pathname);
   const [activePublicSection, setActivePublicSection] = useState(
     isLoginPage || isSignupPage ? null : "home"
@@ -96,7 +97,11 @@ function Navbar() {
   const navigationItems = isAuthenticated ? getNavigationItems(user?.role) : [];
 
   return (
-    <header className={`navbar ${isPublicPage ? "navbar-auth-shell" : ""}`.trim()}>
+    <header
+      className={`navbar ${isPublicPage ? "navbar-auth-shell" : ""} ${
+        isAuthenticated && isAdminTicketsPage ? "navbar--admin-tickets" : ""
+      }`.trim()}
+    >
       <div className="navbar-brand">
         <button
           className="brand-button"

@@ -8,7 +8,12 @@ function AppLayout() {
   const { isAuthenticated } = useAuth();
   const location = useLocation();
   const isPublicMarketingRoute = !isAuthenticated && ["/", "/login", "/signup"].includes(location.pathname);
-  const isTicketsWideLayout = isAuthenticated && location.pathname === "/tickets";
+  const isTicketsWideLayout =
+    isAuthenticated &&
+    (location.pathname === "/tickets" ||
+      location.pathname === "/technician" ||
+      location.pathname === "/admin/tickets");
+  const isAdminTicketsPage = isAuthenticated && location.pathname === "/admin/tickets";
 
   return (
     <div className={isPublicMarketingRoute ? "app-shell app-shell-auth" : "app-shell"}>
@@ -18,9 +23,11 @@ function AppLayout() {
         className={
           isPublicMarketingRoute
             ? "page-shell page-shell-auth"
-            : isTicketsWideLayout
-              ? "page-shell page-shell--tickets-wide"
-              : "page-shell"
+            : isAdminTicketsPage
+              ? "page-shell page-shell--tickets-wide page-shell--admin-tickets"
+              : isTicketsWideLayout
+                ? "page-shell page-shell--tickets-wide"
+                : "page-shell"
         }
       >
         <AppRoutes />

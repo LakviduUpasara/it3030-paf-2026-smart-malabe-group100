@@ -76,6 +76,97 @@ public class DataInitializer {
                         .build());
             }
 
+            if (!userAccountRepository.existsByEmailIgnoreCase("tech.alex@smartcampus.edu")) {
+                userAccountRepository.save(UserAccount.builder()
+                        .fullName("Alex Rivera (Facilities)")
+                        .email("tech.alex@smartcampus.edu")
+                        .passwordHash(passwordEncoder.encode("Tech@12345"))
+                        .role(Role.TECHNICIAN)
+                        .status(AccountStatus.ACTIVE)
+                        .provider(AuthProvider.LOCAL)
+                        .preferredTwoFactorMethod(TwoFactorMethod.EMAIL_OTP)
+                        .authenticatorConfirmed(false)
+                        .build());
+            }
+
+            if (!userAccountRepository.existsByEmailIgnoreCase("tech.sam@smartcampus.edu")) {
+                userAccountRepository.save(UserAccount.builder()
+                        .fullName("Sam Patel (IT)")
+                        .email("tech.sam@smartcampus.edu")
+                        .passwordHash(passwordEncoder.encode("Tech@12345"))
+                        .role(Role.TECHNICIAN)
+                        .status(AccountStatus.ACTIVE)
+                        .provider(AuthProvider.LOCAL)
+                        .preferredTwoFactorMethod(TwoFactorMethod.EMAIL_OTP)
+                        .authenticatorConfirmed(false)
+                        .build());
+            }
+
+            if (!userAccountRepository.existsByEmailIgnoreCase("tech.jordan@smartcampus.edu")) {
+                userAccountRepository.save(UserAccount.builder()
+                        .fullName("Jordan Lee (Facilities)")
+                        .email("tech.jordan@smartcampus.edu")
+                        .passwordHash(passwordEncoder.encode("TechJordan@12345"))
+                        .role(Role.TECHNICIAN)
+                        .status(AccountStatus.ACTIVE)
+                        .provider(AuthProvider.LOCAL)
+                        .preferredTwoFactorMethod(TwoFactorMethod.EMAIL_OTP)
+                        .authenticatorConfirmed(false)
+                        .build());
+            }
+
+            if (!userAccountRepository.existsByEmailIgnoreCase("tech.morgan@smartcampus.edu")) {
+                userAccountRepository.save(UserAccount.builder()
+                        .fullName("Morgan Chen (Electrical)")
+                        .email("tech.morgan@smartcampus.edu")
+                        .passwordHash(passwordEncoder.encode("TechMorgan@12345"))
+                        .role(Role.TECHNICIAN)
+                        .status(AccountStatus.ACTIVE)
+                        .provider(AuthProvider.LOCAL)
+                        .preferredTwoFactorMethod(TwoFactorMethod.EMAIL_OTP)
+                        .authenticatorConfirmed(false)
+                        .build());
+            }
+
+            if (!userAccountRepository.existsByEmailIgnoreCase("tech.casey@smartcampus.edu")) {
+                userAccountRepository.save(UserAccount.builder()
+                        .fullName("Casey Brooks (Cleaning)")
+                        .email("tech.casey@smartcampus.edu")
+                        .passwordHash(passwordEncoder.encode("TechCasey@12345"))
+                        .role(Role.TECHNICIAN)
+                        .status(AccountStatus.ACTIVE)
+                        .provider(AuthProvider.LOCAL)
+                        .preferredTwoFactorMethod(TwoFactorMethod.EMAIL_OTP)
+                        .authenticatorConfirmed(false)
+                        .build());
+            }
+
+            if (!userAccountRepository.existsByEmailIgnoreCase("tech.riley@smartcampus.edu")) {
+                userAccountRepository.save(UserAccount.builder()
+                        .fullName("Riley Nguyen (Security)")
+                        .email("tech.riley@smartcampus.edu")
+                        .passwordHash(passwordEncoder.encode("TechRiley@12345"))
+                        .role(Role.TECHNICIAN)
+                        .status(AccountStatus.ACTIVE)
+                        .provider(AuthProvider.LOCAL)
+                        .preferredTwoFactorMethod(TwoFactorMethod.EMAIL_OTP)
+                        .authenticatorConfirmed(false)
+                        .build());
+            }
+
+            if (!userAccountRepository.existsByEmailIgnoreCase("tech.quinn@smartcampus.edu")) {
+                userAccountRepository.save(UserAccount.builder()
+                        .fullName("Quinn Foster (IT)")
+                        .email("tech.quinn@smartcampus.edu")
+                        .passwordHash(passwordEncoder.encode("TechQuinn@12345"))
+                        .role(Role.TECHNICIAN)
+                        .status(AccountStatus.ACTIVE)
+                        .provider(AuthProvider.LOCAL)
+                        .preferredTwoFactorMethod(TwoFactorMethod.EMAIL_OTP)
+                        .authenticatorConfirmed(false)
+                        .build());
+            }
+
             if (!userAccountRepository.existsByEmailIgnoreCase("google.user@smartcampus.edu")) {
                 userAccountRepository.save(UserAccount.builder()
                         .fullName("Google Campus User")

@@ -34,7 +34,6 @@ export function getNavigationItems(role) {
       { label: "Manage Resources", path: "/admin/resources" },
       { label: "Booking Approvals", path: "/admin/bookings" },
       { label: "Manage Tickets", path: "/admin/tickets" },
-      { label: "Category Setup", path: "/admin/categories" },
       { label: "Notifications", path: "/notifications" },
     ];
   }

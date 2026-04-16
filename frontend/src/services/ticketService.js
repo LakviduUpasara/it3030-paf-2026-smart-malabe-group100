@@ -17,6 +17,39 @@ export const getMyTickets = () =>
 export const getManagedTickets = () =>
   getOrThrow(() => api.get("/tickets"), "Unable to load tickets.");
 
+export const getTicketById = (id) =>
+  getOrThrow(
+    () => api.get(`/tickets/${encodeURIComponent(String(id))}`),
+    "Unable to load ticket.",
+  );
+
+export const assignTicketToTechnician = (ticketId, technicianUserId) =>
+  getOrThrow(
+    () =>
+      api.post(`/tickets/${encodeURIComponent(String(ticketId))}/assign`, {
+        technicianUserId,
+      }),
+    "Unable to assign technician.",
+  );
+
+/**
+ * Loads an attachment with auth; returns a blob URL and mime type (revoke URL when done).
+ */
+export async function fetchAttachmentPreview(ticketId, attachmentId) {
+  const tid = encodeURIComponent(String(ticketId));
+  const aid = encodeURIComponent(String(attachmentId));
+  const res = await api.get(`/tickets/${tid}/attachments/${aid}`, {
+    responseType: "blob",
+  });
+  const mime =
+    res.headers["content-type"] ||
+    res.headers["Content-Type"] ||
+    res.data?.type ||
+    "";
+  const url = URL.createObjectURL(res.data);
+  return { url, mime: String(mime).split(";")[0].trim() };
+}
+
 export const createTicket = (data) =>
   getOrThrow(() => api.post("/tickets", data), "Unable to create ticket.");
 
@@ -49,7 +82,16 @@ export const uploadFile = (id, file) => {
   formData.append("file", file);
 
   return getOrThrow(
-    () => api.post(`/tickets/${id}/attachments`, formData),
+    () => api.post(`/tickets/${encodeURIComponent(String(id))}/attachments`, formData),
     "Unable to upload attachment.",
   );
 };
+
+export const deleteAttachment = (ticketId, attachmentId) =>
+  getOrThrow(
+    () =>
+      api.delete(
+        `/tickets/${encodeURIComponent(String(ticketId))}/attachments/${encodeURIComponent(String(attachmentId))}`,
+      ),
+    "Unable to delete attachment.",
+  );
