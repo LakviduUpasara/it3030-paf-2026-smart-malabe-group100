@@ -138,6 +138,12 @@ public class DataInitializer {
                     "Unauthorized Access", "Lost and Found", "Suspicious Activity");
             seedCategoryWithSubcategories(categoryRepository, subCategoryRepository, "BOOKING", "calendar", "#A855F7",
                     "Double Booking", "Booking Conflict", "Reservation Update");
+            seedCategoryWithSubcategories(categoryRepository, subCategoryRepository, "ACADEMIC", "graduation-cap", "#0EA5E9",
+                    "Course Material Issue", "Lecturer Issue", "Timetable Issue", "Exam Issue",
+                    "LMS Issue", "Classroom Issue", "Results Issue");
+            seedCategoryWithSubcategories(categoryRepository, subCategoryRepository, "TRANSPORT", "bus", "#14B8A6",
+                    "Bus Delay", "Bus Not Available", "Route Issue", "Driver Issue",
+                    "Vehicle Breakdown", "Overcrowding", "Pass Issue", "Parking Issue");
             seedCategoryWithSubcategories(categoryRepository, subCategoryRepository, "OTHER", "circle-help", "#6B7280",
                     "General Inquiry", "Other Incident");
         };

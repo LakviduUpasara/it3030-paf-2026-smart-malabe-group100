@@ -5,6 +5,7 @@ import LoadingSpinner from "../components/LoadingSpinner";
 import { createTicket, getMyTickets, getTicketSuggestion, uploadFile } from "../services/ticketService";
 import { getCategories, getSubCategories } from "../services/categoryService";
 import { toToken } from "../utils/formatters";
+import { getTicketThumbnailForCategory } from "../utils/ticketCategoryImage";
 import maintenanceIllustration from "../assets/maintenance1.png";
 
 const initialForm = {
@@ -61,6 +62,22 @@ function parseTicketDescription(description) {
     if (key === "contactDetails") parsed.contactDetails = value;
   }
   return parsed;
+}
+
+function formatCategoryLabel(name) {
+  if (!name) return "General";
+  const lower = String(name).trim().toLowerCase();
+  return lower ? lower.charAt(0).toUpperCase() + lower.slice(1) : "General";
+}
+
+function formatTicketStatusLabel(status) {
+  const raw = String(status || "OPEN").trim().toUpperCase().replace(/\s+/g, "_");
+  if (raw === "IN_PROGRESS") return "In Progress";
+  if (raw === "OPEN") return "Open";
+  if (raw === "RESOLVED") return "Resolved";
+  return String(status || "Open")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function MyTicketsPage() {
@@ -431,29 +448,33 @@ function MyTicketsPage() {
         {tickets.length === 0 ? (
           <p className="supporting-text">No tickets yet. Use &quot;Create Ticket&quot; to submit a request.</p>
         ) : (
-          <div className="list-stack">
+          <div className="list-stack my-tickets-list-stack">
             {tickets.map((ticket, index) => {
               const category = categoryById[ticket.categoryId];
               const parsed = parseTicketDescription(ticket.description);
+              const categoryName = category?.name || "";
+              const thumbSrc = getTicketThumbnailForCategory(categoryName);
+              const locationLine = [parsed.location || "—", formatCategoryLabel(categoryName)]
+                .filter(Boolean)
+                .join(" | ");
+              const statusToken = toToken(ticket.status || "open");
               return (
                 <article
-                  className="my-ticket-item"
+                  className="my-ticket-card"
                   key={ticket.id != null ? ticket.id : `my-ticket-${index}`}
                 >
-                  <div className="my-ticket-main">
-                    <strong>{ticket.title || "Untitled Ticket"}</strong>
-                    <p className="supporting-text">
-                      {category?.name || "General"} | {subCategoryById[ticket.subCategoryId] || "Unspecified"}
-                    </p>
-                    {parsed.location ? (
-                      <p className="supporting-text">Location: {parsed.location}</p>
-                    ) : null}
-                    <p className="supporting-text">
-                      {parsed.content || "No description provided."}
+                  <div className="my-ticket-card-thumb" aria-hidden="true">
+                    <img alt="" src={thumbSrc} />
+                  </div>
+                  <div className="my-ticket-card-main">
+                    <h3 className="my-ticket-card-title">{ticket.title || "Untitled Ticket"}</h3>
+                    <p className="my-ticket-card-line my-ticket-card-line--meta">{locationLine}</p>
+                    <p className="my-ticket-card-line my-ticket-card-line--sub">
+                      Priority: {parsed.priority || "Normal"} | Assignee: Unassigned
                     </p>
                   </div>
-                  <span className={`status-badge ${toToken(ticket.status || "open")}`}>
-                    {ticket.status || "Open"}
+                  <span className={`my-ticket-card-badge status-badge ${statusToken}`}>
+                    {formatTicketStatusLabel(ticket.status)}
                   </span>
                 </article>
               );

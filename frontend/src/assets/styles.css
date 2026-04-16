@@ -1454,28 +1454,97 @@ a {
   color: var(--muted);
 }
 
-.my-ticket-item {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+.my-tickets-list-stack {
   gap: 1rem;
-  padding: 1.1rem 1.2rem;
-  border-radius: var(--radius-md);
-  background: var(--surface-muted);
-  border: 1px solid rgba(15, 40, 67, 0.06);
+  padding: 1rem;
+  border-radius: 12px;
+  background: #eef1f6;
 }
 
-.my-ticket-main {
+.my-ticket-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem 1.15rem;
+  padding: 1rem 1.15rem;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid rgba(15, 40, 67, 0.08);
+  box-shadow: 0 8px 24px rgba(15, 40, 67, 0.06);
+}
+
+.my-ticket-card-thumb {
+  flex: 0 0 auto;
+  width: 92px;
+  height: 76px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #e8eef5;
+}
+
+.my-ticket-card-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.my-ticket-card-main {
+  flex: 1 1 auto;
+  min-width: 0;
   display: grid;
-  gap: 0.35rem;
+  gap: 0.28rem;
 }
 
-.my-ticket-main strong {
-  font-size: 1.02rem;
-}
-
-.my-ticket-main p {
+.my-ticket-card-title {
   margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #193158;
+  line-height: 1.25;
+}
+
+.my-ticket-card-line {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+
+.my-ticket-card-line--meta {
+  color: #2f5f9a;
+  font-weight: 600;
+}
+
+.my-ticket-card-line--sub {
+  color: #5a7eb5;
+  font-size: 0.8rem;
+}
+
+.my-ticket-card-badge {
+  flex: 0 0 auto;
+  align-self: center;
+  white-space: nowrap;
+}
+
+/* Card row status colors (match ticket list mockup) */
+.my-ticket-card .my-ticket-card-badge.open,
+.my-ticket-card .my-ticket-card-badge.maintenance,
+.my-ticket-card .my-ticket-card-badge.rejected,
+.my-ticket-card .my-ticket-card-badge.critical {
+  background: rgba(244, 114, 182, 0.22);
+  color: #9f1239;
+}
+
+.my-ticket-card .my-ticket-card-badge.in-progress,
+.my-ticket-card .my-ticket-card-badge.reserved {
+  background: rgba(96, 165, 250, 0.28);
+  color: #1e3a8a;
+}
+
+.my-ticket-card .my-ticket-card-badge.resolved,
+.my-ticket-card .my-ticket-card-badge.approved,
+.my-ticket-card .my-ticket-card-badge.available {
+  background: rgba(74, 222, 128, 0.22);
+  color: #14532d;
 }
 
 .status-badge {
@@ -1875,8 +1944,13 @@ a {
     flex-direction: column;
   }
 
-  .my-ticket-item {
-    flex-direction: column;
+  .my-ticket-card {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .my-ticket-card-badge {
+    margin-left: auto;
   }
 
   .my-tickets-create-top-button {
