@@ -1,7 +1,6 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { Plus } from "lucide-react";
 import Button from "../../components/Button";
-import Modal from "../../components/Modal";
 import AdminPageHeader from "../../components/admin/AdminPageHeader";
 import { useAdminShell } from "../../context/AdminShellContext";
 import * as facultyService from "../../services/facultyService";
@@ -24,7 +23,7 @@ function DegreeProgramsAdminPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
-  const [modalOpen, setModalOpen] = useState(false);
+  const [viewMode, setViewMode] = useState("list");
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({
     code: "",
@@ -69,6 +68,7 @@ function DegreeProgramsAdminPage() {
 
   const openCreate = () => {
     setEditing(null);
+    setError("");
     setForm({
       code: "",
       name: "",
@@ -78,12 +78,13 @@ function DegreeProgramsAdminPage() {
       durationYears: 3,
       status: "DRAFT",
     });
-    setModalOpen(true);
+    setViewMode("form");
     setActiveWindow("Create");
   };
 
   const openEdit = (row) => {
     setEditing(row);
+    setError("");
     setForm({
       code: row.code,
       name: row.name,
@@ -93,12 +94,12 @@ function DegreeProgramsAdminPage() {
       durationYears: row.durationYears,
       status: row.status,
     });
-    setModalOpen(true);
+    setViewMode("form");
     setActiveWindow("Edit");
   };
 
-  const closeModal = () => {
-    setModalOpen(false);
+  const cancelForm = () => {
+    setViewMode("list");
     setActiveWindow("");
   };
 
@@ -126,7 +127,7 @@ function DegreeProgramsAdminPage() {
           status: form.status,
         });
       }
-      closeModal();
+      cancelForm();
       await load();
     } catch (e) {
       setError(e.message || "Save failed.");
@@ -158,15 +159,126 @@ function DegreeProgramsAdminPage() {
     <>
       <AdminPageHeader
         actions={
-          <Button className="inline-flex items-center gap-2" onClick={openCreate} type="button" variant="primary">
-            <Plus className="h-4 w-4" aria-hidden />
-            Add program
-          </Button>
+          viewMode === "list" ? (
+            <Button className="inline-flex items-center gap-2" onClick={openCreate} type="button" variant="primary">
+              <Plus className="h-4 w-4" aria-hidden />
+              Add program
+            </Button>
+          ) : (
+            <Button className="inline-flex items-center gap-2" onClick={cancelForm} type="button" variant="secondary">
+              Cancel
+            </Button>
+          )
         }
         description="Programs under a faculty: award, credits, duration, and lifecycle status."
         title="Degree programs"
       />
 
+      {viewMode === "form" ? (
+        <section className="rounded-3xl border border-border bg-card p-6 shadow-shadow">
+          <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-text/60">
+            {editing ? "Edit program" : "New program"}
+          </h2>
+          <div className="mt-4 space-y-4">
+          {!editing ? (
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-semibold uppercase tracking-[0.08em] text-text/60">Program code</span>
+              <input
+                className="h-12 rounded-2xl border border-border bg-card px-3 text-sm"
+                maxLength={6}
+                onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
+                value={form.code}
+              />
+            </label>
+          ) : (
+            <p className="text-sm text-text/70">
+              Code: <strong className="text-heading">{editing.code}</strong> (immutable)
+            </p>
+          )}
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-semibold uppercase tracking-[0.08em] text-text/60">Name</span>
+            <input
+              className="h-12 rounded-2xl border border-border bg-card px-3 text-sm"
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              value={form.name}
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-semibold uppercase tracking-[0.08em] text-text/60">Faculty</span>
+            <select
+              className="h-12 rounded-2xl border border-border bg-card px-3 text-sm"
+              onChange={(e) => setForm((f) => ({ ...f, facultyCode: e.target.value }))}
+              value={form.facultyCode}
+            >
+              {faculties.map((f) => (
+                <option key={f.code} value={f.code}>
+                  {f.code}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-semibold uppercase tracking-[0.08em] text-text/60">Award</span>
+            <input
+              className="h-12 rounded-2xl border border-border bg-card px-3 text-sm"
+              onChange={(e) => setForm((f) => ({ ...f, award: e.target.value }))}
+              value={form.award}
+            />
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-semibold uppercase tracking-[0.08em] text-text/60">Credits</span>
+              <input
+                className="h-12 rounded-2xl border border-border bg-card px-3 text-sm"
+                min={1}
+                onChange={(e) => setForm((f) => ({ ...f, credits: Number(e.target.value) }))}
+                type="number"
+                value={form.credits}
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-semibold uppercase tracking-[0.08em] text-text/60">Duration (years)</span>
+              <input
+                className="h-12 rounded-2xl border border-border bg-card px-3 text-sm"
+                min={1}
+                onChange={(e) => setForm((f) => ({ ...f, durationYears: Number(e.target.value) }))}
+                type="number"
+                value={form.durationYears}
+              />
+            </label>
+          </div>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-semibold uppercase tracking-[0.08em] text-text/60">Status</span>
+            <select
+              className="h-12 rounded-2xl border border-border bg-card px-3 text-sm"
+              onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
+              value={form.status}
+            >
+              {STATUSES.map((st) => (
+                <option key={st} value={st}>
+                  {st}
+                </option>
+              ))}
+            </select>
+          </label>
+          {error ? (
+            <div className="rounded-2xl border border-border bg-tint p-3 text-sm" role="alert">
+              {error}
+            </div>
+          ) : null}
+          <div className="flex flex-wrap justify-end gap-2 pt-2">
+            <Button onClick={cancelForm} type="button" variant="secondary">
+              Cancel
+            </Button>
+            <Button disabled={submitting} onClick={submit} type="button" variant="primary">
+              {submitting ? "Saving…" : "Save"}
+            </Button>
+          </div>
+          </div>
+        </section>
+      ) : null}
+
+      {viewMode === "list" ? (
       <section className="rounded-3xl border border-border bg-card p-6 shadow-shadow">
         <div className="grid gap-4 border-b border-border pb-4 md:grid-cols-2 lg:grid-cols-4">
           <label className="flex flex-col gap-1">
@@ -319,100 +431,7 @@ function DegreeProgramsAdminPage() {
           </div>
         </div>
       </section>
-
-      <Modal isOpen={modalOpen} onClose={closeModal} title={editing ? "Edit program" : "Create program"}>
-        <div className="space-y-4">
-          {!editing ? (
-            <label className="flex flex-col gap-1">
-              <span className="text-xs font-semibold uppercase tracking-[0.08em] text-text/60">Program code</span>
-              <input
-                className="h-12 rounded-2xl border border-border px-3"
-                maxLength={6}
-                onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
-                value={form.code}
-              />
-            </label>
-          ) : (
-            <p className="text-sm text-text/70">
-              Code: <strong className="text-heading">{editing.code}</strong> (immutable)
-            </p>
-          )}
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-semibold uppercase tracking-[0.08em] text-text/60">Name</span>
-            <input
-              className="h-12 rounded-2xl border border-border px-3"
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              value={form.name}
-            />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-semibold uppercase tracking-[0.08em] text-text/60">Faculty</span>
-            <select
-              className="h-12 rounded-2xl border border-border px-3"
-              onChange={(e) => setForm((f) => ({ ...f, facultyCode: e.target.value }))}
-              value={form.facultyCode}
-            >
-              {faculties.map((f) => (
-                <option key={f.code} value={f.code}>
-                  {f.code}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-semibold uppercase tracking-[0.08em] text-text/60">Award</span>
-            <input
-              className="h-12 rounded-2xl border border-border px-3"
-              onChange={(e) => setForm((f) => ({ ...f, award: e.target.value }))}
-              value={form.award}
-            />
-          </label>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="flex flex-col gap-1">
-              <span className="text-xs font-semibold uppercase tracking-[0.08em] text-text/60">Credits</span>
-              <input
-                className="h-12 rounded-2xl border border-border px-3"
-                min={1}
-                onChange={(e) => setForm((f) => ({ ...f, credits: Number(e.target.value) }))}
-                type="number"
-                value={form.credits}
-              />
-            </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-xs font-semibold uppercase tracking-[0.08em] text-text/60">Duration (years)</span>
-              <input
-                className="h-12 rounded-2xl border border-border px-3"
-                min={1}
-                onChange={(e) => setForm((f) => ({ ...f, durationYears: Number(e.target.value) }))}
-                type="number"
-                value={form.durationYears}
-              />
-            </label>
-          </div>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-semibold uppercase tracking-[0.08em] text-text/60">Status</span>
-            <select
-              className="h-12 rounded-2xl border border-border px-3"
-              onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
-              value={form.status}
-            >
-              {STATUSES.map((st) => (
-                <option key={st} value={st}>
-                  {st}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="flex flex-wrap justify-end gap-2 pt-2">
-            <Button onClick={closeModal} type="button" variant="secondary">
-              Cancel
-            </Button>
-            <Button disabled={submitting} onClick={submit} type="button" variant="primary">
-              {submitting ? "Saving…" : "Save"}
-            </Button>
-          </div>
-        </div>
-      </Modal>
+      ) : null}
     </>
   );
 }

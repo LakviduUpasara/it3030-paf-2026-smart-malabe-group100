@@ -1,7 +1,6 @@
 import { useCallback, useDeferredValue, useEffect, useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import Button from "../../components/Button";
-import Modal from "../../components/Modal";
 import AdminPageHeader from "../../components/admin/AdminPageHeader";
 import { useAdminShell } from "../../context/AdminShellContext";
 import * as facultyService from "../../services/facultyService";
@@ -70,7 +69,7 @@ function IntakesAdminPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
-  const [modalOpen, setModalOpen] = useState(false);
+  const [viewMode, setViewMode] = useState("list");
   const [editingId, setEditingId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
@@ -175,14 +174,14 @@ function IntakesAdminPage() {
       defaultNotifyBeforeDays: 3,
       termRows: emptyTermRows(16, 3),
     });
-    setModalOpen(true);
+    setViewMode("form");
     setActiveWindow("Create");
   };
 
   const openEdit = async (row) => {
     setFormError("");
     setEditingId(row.id);
-    setModalOpen(true);
+    setViewMode("form");
     setActiveWindow("Edit");
     try {
       const d = await intakeService.getIntakeDetail(row.id);
@@ -217,8 +216,9 @@ function IntakesAdminPage() {
     }
   };
 
-  const closeModal = () => {
-    setModalOpen(false);
+  const cancelForm = () => {
+    setViewMode("list");
+    setEditingId(null);
     setActiveWindow("");
   };
 
@@ -283,7 +283,7 @@ function IntakesAdminPage() {
       } else {
         await intakeService.createIntake(payload);
       }
-      closeModal();
+      cancelForm();
       await loadList();
     } catch (e) {
       setFormError(e.message || "Save failed.");
@@ -311,15 +311,22 @@ function IntakesAdminPage() {
     <>
       <AdminPageHeader
         actions={
-          <Button className="inline-flex items-center gap-2" onClick={openCreate} type="button" variant="primary">
-            <Plus className="h-4 w-4" aria-hidden />
-            Add intake
-          </Button>
+          viewMode === "list" ? (
+            <Button className="inline-flex items-center gap-2" onClick={openCreate} type="button" variant="primary">
+              <Plus className="h-4 w-4" aria-hidden />
+              Add intake
+            </Button>
+          ) : (
+            <Button className="inline-flex items-center gap-2" onClick={cancelForm} type="button" variant="secondary">
+              Cancel
+            </Button>
+          )
         }
         description="One intake = one cohort for a faculty and degree, with an 8-term calendar and policies for student ID prefixes."
         title="Intakes / Batches"
       />
 
+      {viewMode === "list" ? (
       <section className="rounded-3xl border border-border bg-card p-6 shadow-shadow">
         <div className="flex flex-col gap-4 border-b border-border pb-4">
           <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
@@ -499,14 +506,14 @@ function IntakesAdminPage() {
           </div>
         </div>
       </section>
+      ) : null}
 
-      <Modal
-        contentClassName="admin-lms-modal-content max-w-4xl"
-        isOpen={modalOpen}
-        onClose={closeModal}
-        title={editingId ? "Edit intake" : "Create intake"}
-      >
-        <div className="flex max-h-[85vh] flex-col gap-4 overflow-y-auto pr-1">
+      {viewMode === "form" ? (
+        <section className="rounded-3xl border border-border bg-card p-6 shadow-shadow">
+          <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-text/60">
+            {editingId ? "Edit intake" : "New intake"}
+          </h2>
+        <div className="mt-4 flex max-h-[min(85vh,900px)] flex-col gap-4 overflow-y-auto pr-1">
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="flex flex-col gap-1 sm:col-span-2">
               <span className="text-xs font-semibold text-text/70">Intake name *</span>
@@ -725,7 +732,7 @@ function IntakesAdminPage() {
           ) : null}
 
           <div className="flex justify-end gap-2 border-t border-border pt-3">
-            <Button type="button" variant="ghost" onClick={closeModal}>
+            <Button type="button" variant="secondary" onClick={cancelForm}>
               Cancel
             </Button>
             <Button type="button" variant="primary" disabled={submitting} onClick={submit}>
@@ -733,7 +740,8 @@ function IntakesAdminPage() {
             </Button>
           </div>
         </div>
-      </Modal>
+        </section>
+      ) : null}
     </>
   );
 }

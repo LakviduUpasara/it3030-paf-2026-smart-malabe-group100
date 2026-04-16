@@ -62,36 +62,39 @@ function AdminScaffoldPage() {
         title={`${meta.title}${titleSuffix}`}
       />
 
-      <div className="inline-flex items-center rounded-full border border-border bg-tint px-2.5 py-1 text-xs font-semibold text-text/80">
-        Scaffold · Backend pending
-      </div>
+      <section className="rounded-3xl border border-border bg-card p-6 shadow-shadow">
+        <p className="text-sm text-text/72">
+          This screen is not connected to live data yet. The cards below outline the intended scope and UX so future work
+          matches the rest of the admin console.
+        </p>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <section className="rounded-3xl border border-border bg-card p-6 shadow-shadow">
-          <h2 className="text-base font-semibold text-heading">Scope</h2>
-          <ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-text/72">
-            {meta.scope.map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
-        </section>
-        <section className="rounded-3xl border border-border bg-card p-6 shadow-shadow">
-          <h2 className="text-base font-semibold text-heading">Workflows</h2>
-          <ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-text/72">
-            {meta.workflows.map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
-        </section>
-        <section className="rounded-3xl border border-border bg-card p-6 shadow-shadow">
-          <h2 className="text-base font-semibold text-heading">Highlights</h2>
-          <ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-text/72">
-            {meta.highlights.map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
-        </section>
-      </div>
+        <div className="mt-6 grid gap-6 lg:grid-cols-3">
+          <div className="rounded-2xl border border-border bg-tint/40 p-5">
+            <h2 className="text-base font-semibold text-heading">Scope</h2>
+            <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-text/72">
+              {meta.scope.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          </div>
+          <div className="rounded-2xl border border-border bg-tint/40 p-5">
+            <h2 className="text-base font-semibold text-heading">Workflows</h2>
+            <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-text/72">
+              {meta.workflows.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          </div>
+          <div className="rounded-2xl border border-border bg-tint/40 p-5">
+            <h2 className="text-base font-semibold text-heading">Highlights</h2>
+            <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-text/72">
+              {meta.highlights.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </section>
     </>
   );
 }

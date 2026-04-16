@@ -21,7 +21,15 @@ api.interceptors.request.use((config) => {
 });
 
 export function createServiceError(error, fallbackMessage) {
-  const responseMessage = error?.response?.data?.message;
+  const data = error?.response?.data;
+  let responseMessage = data?.message;
+  if (data?.errors && typeof data.errors === "object" && !Array.isArray(data.errors)) {
+    const parts = Object.entries(data.errors).map(([k, v]) => `${k}: ${v}`);
+    if (parts.length) {
+      const base = responseMessage && responseMessage !== "Validation failed" ? `${responseMessage} ` : "";
+      responseMessage = `${base}${parts.join("; ")}`.trim();
+    }
+  }
   const message = responseMessage || error?.message || fallbackMessage;
   const normalizedError = new Error(message);
 

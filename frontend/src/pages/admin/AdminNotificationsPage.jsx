@@ -8,7 +8,9 @@ import { useAuth } from "../../hooks/useAuth";
 import {
   buildNotificationAudience,
   rebuildFeedFromAnnouncements,
+  resolveNotificationsForUser,
 } from "../../models/notification-center";
+import { mergeReadIds } from "../../utils/notificationReadState";
 import * as facultyService from "../../services/facultyService";
 import * as degreeService from "../../services/lmsDegreeProgramService";
 import * as intakeService from "../../services/intakeService";
@@ -102,6 +104,24 @@ function AdminNotificationsPage() {
   useEffect(() => {
     loadAll();
   }, [loadAll]);
+
+  useEffect(() => {
+    if (loading || !user?.id) {
+      return;
+    }
+    const feed = rebuildFeedFromAnnouncements(announcements);
+    const viewer = { userId: user.id, appRole: user.role, role: user.role };
+    const resolved = resolveNotificationsForUser(feed, viewer);
+    const ids = resolved.map((x) => x.id).filter(Boolean);
+    if (isSuperAdmin) {
+      for (const n of inbox) {
+        if (n?.id != null) {
+          ids.push(`inbox-${n.id}`);
+        }
+      }
+    }
+    mergeReadIds(user.id, ids);
+  }, [loading, user?.id, user?.role, announcements, inbox, isSuperAdmin]);
 
   useEffect(() => {
     facultyService.listFaculties().then(setFaculties).catch(() => setFaculties([]));

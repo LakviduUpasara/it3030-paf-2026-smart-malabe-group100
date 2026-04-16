@@ -136,7 +136,7 @@ export function getNavigationItems(role) {
     return [
       ...commonItems,
       { label: "Admin Dashboard", path: "/admin" },
-      { label: "User Approvals", path: "/admin/registrations" },
+      { label: "User requests", path: "/admin/users/requests" },
       { label: "Manage Resources", path: "/admin/campus/resources" },
       { label: "Booking Approvals", path: "/admin/bookings" },
       { label: "Manage Tickets", path: "/admin/tickets" },

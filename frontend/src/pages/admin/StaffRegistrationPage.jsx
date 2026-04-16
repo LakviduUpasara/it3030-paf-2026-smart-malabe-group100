@@ -10,6 +10,19 @@ import * as registrationService from "../../services/registrationService";
 
 const STATUSES = ["ACTIVE", "INACTIVE"];
 
+function emptyStaffForm() {
+  return {
+    fullName: "",
+    optionalEmail: "",
+    phone: "",
+    nicStaffId: "",
+    status: "ACTIVE",
+    facultyIds: [],
+    degreeProgramIds: [],
+    moduleIds: [],
+  };
+}
+
 function Chip({ children }) {
   return (
     <span className="inline-flex items-center rounded-full border border-border bg-tint px-2.5 py-1 text-xs font-semibold text-heading">
@@ -23,6 +36,7 @@ function Chip({ children }) {
  */
 function StaffRegistrationPage({ variant }) {
   const { setActiveWindow } = useAdminShell();
+  const [viewMode, setViewMode] = useState("list");
   const isLab = variant === "labAssistant";
   const title = isLab ? "Lab assistants" : "Lecturers";
   const description = isLab
@@ -37,20 +51,12 @@ function StaffRegistrationPage({ variant }) {
   const [statusFilter, setStatusFilter] = useState("");
   const deferredSearch = useDeferredValue(search);
 
-  const [form, setForm] = useState({
-    fullName: "",
-    optionalEmail: "",
-    phone: "",
-    nicStaffId: "",
-    status: "ACTIVE",
-    facultyIds: [],
-    degreeProgramIds: [],
-    moduleIds: [],
-  });
+  const [form, setForm] = useState(() => emptyStaffForm());
   const [degrees, setDegrees] = useState([]);
   const [modules, setModules] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
+  const [formSuccess, setFormSuccess] = useState("");
 
   const loadList = useCallback(async () => {
     setLoading(true);
@@ -169,6 +175,21 @@ function StaffRegistrationPage({ variant }) {
     });
   };
 
+  const openAdd = () => {
+    setForm(emptyStaffForm());
+    setFormError("");
+    setFormSuccess("");
+    setViewMode("add");
+    setActiveWindow("Register");
+  };
+
+  const cancelAdd = () => {
+    setViewMode("list");
+    setFormError("");
+    setFormSuccess("");
+    setActiveWindow("");
+  };
+
   const eligibilityCounts = useMemo(
     () => ({
       faculties: form.facultyIds.length,
@@ -181,6 +202,7 @@ function StaffRegistrationPage({ variant }) {
   const submit = async () => {
     setSubmitting(true);
     setFormError("");
+    setFormSuccess("");
     try {
       const payload = {
         fullName: form.fullName.trim(),
@@ -197,17 +219,12 @@ function StaffRegistrationPage({ variant }) {
       } else {
         await registrationService.createLecturer(payload);
       }
-      setForm({
-        fullName: "",
-        optionalEmail: "",
-        phone: "",
-        nicStaffId: "",
-        status: "ACTIVE",
-        facultyIds: [],
-        degreeProgramIds: [],
-        moduleIds: [],
-      });
+      setFormSuccess(
+        `${isLab ? "Lab assistant" : "Lecturer"} ${payload.fullName} registered. Login email appears in the directory.`
+      );
+      setForm(emptyStaffForm());
       setActiveWindow("");
+      setViewMode("list");
       await loadList();
     } catch (e) {
       setFormError(e.message || "Create failed.");
@@ -218,9 +235,24 @@ function StaffRegistrationPage({ variant }) {
 
   return (
     <>
-      <AdminPageHeader description={description} title={title} />
+      <AdminPageHeader
+        actions={
+          viewMode === "list" ? (
+            <Button className="inline-flex items-center gap-2" onClick={openAdd} type="button" variant="primary">
+              <Plus className="h-4 w-4" aria-hidden />
+              Add {isLab ? "lab assistant" : "lecturer"}
+            </Button>
+          ) : (
+            <Button className="inline-flex items-center gap-2" onClick={cancelAdd} type="button" variant="secondary">
+              Cancel
+            </Button>
+          )
+        }
+        description={description}
+        title={title}
+      />
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      {viewMode === "add" ? (
         <section className="rounded-3xl border border-border bg-card p-6 shadow-shadow">
           <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-text/60">Profile</h2>
           <div className="mt-4 flex flex-col gap-3">
@@ -362,7 +394,7 @@ function StaffRegistrationPage({ variant }) {
             </div>
           ) : null}
 
-          <div className="mt-6">
+          <div className="mt-6 flex flex-wrap gap-2">
             <Button
               className="inline-flex w-full items-center justify-center gap-2 sm:w-auto"
               disabled={submitting}
@@ -373,10 +405,23 @@ function StaffRegistrationPage({ variant }) {
               <Plus className="h-4 w-4" aria-hidden />
               Create {isLab ? "lab assistant" : "lecturer"}
             </Button>
+            <Button type="button" variant="secondary" onClick={cancelAdd}>
+              Cancel
+            </Button>
           </div>
         </section>
+      ) : null}
 
+      {viewMode === "list" ? (
         <section className="rounded-3xl border border-border bg-card p-6 shadow-shadow">
+          {formSuccess ? (
+            <div
+              className="mb-4 rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-emerald-900 dark:text-emerald-100"
+              role="status"
+            >
+              {formSuccess}
+            </div>
+          ) : null}
           <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-text/60">Directory</h2>
           <div className="mt-4 flex flex-col gap-4 border-b border-border pb-4 md:flex-row md:items-end">
             <label className="flex flex-1 flex-col gap-1">
@@ -450,7 +495,7 @@ function StaffRegistrationPage({ variant }) {
             ) : null}
           </div>
         </section>
-      </div>
+      ) : null}
     </>
   );
 }

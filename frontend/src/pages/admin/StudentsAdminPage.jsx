@@ -11,15 +11,8 @@ const PROFILE_STATUSES = ["ACTIVE", "INACTIVE"];
 const STREAMS = ["WEEKDAY", "WEEKEND"];
 const ENROLL_STATUSES = ["ACTIVE", "INACTIVE"];
 
-function StudentsAdminPage() {
-  const { setActiveWindow } = useAdminShell();
-  const [faculties, setFaculties] = useState([]);
-  const [degrees, setDegrees] = useState([]);
-  const [intakes, setIntakes] = useState([]);
-  const [subgroupOptions, setSubgroupOptions] = useState([]);
-  const [loadingSubgroups, setLoadingSubgroups] = useState(false);
-
-  const [form, setForm] = useState({
+function emptyStudentForm() {
+  return {
     firstName: "",
     lastName: "",
     nicNumber: "",
@@ -32,7 +25,19 @@ function StudentsAdminPage() {
     stream: "WEEKDAY",
     subgroup: "",
     enrollmentStatus: "ACTIVE",
-  });
+  };
+}
+
+function StudentsAdminPage() {
+  const { setActiveWindow } = useAdminShell();
+  const [viewMode, setViewMode] = useState("list");
+  const [faculties, setFaculties] = useState([]);
+  const [degrees, setDegrees] = useState([]);
+  const [intakes, setIntakes] = useState([]);
+  const [subgroupOptions, setSubgroupOptions] = useState([]);
+  const [loadingSubgroups, setLoadingSubgroups] = useState(false);
+
+  const [form, setForm] = useState(() => emptyStudentForm());
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
   const [formSuccess, setFormSuccess] = useState("");
@@ -150,6 +155,21 @@ function StudentsAdminPage() {
     setPage(0);
   }, [deferredSearch, statusFilter]);
 
+  const openAdd = () => {
+    setForm(emptyStudentForm());
+    setFormError("");
+    setFormSuccess("");
+    setViewMode("add");
+    setActiveWindow("Register");
+  };
+
+  const cancelAdd = () => {
+    setViewMode("list");
+    setFormError("");
+    setFormSuccess("");
+    setActiveWindow("");
+  };
+
   const submit = async () => {
     setSubmitting(true);
     setFormError("");
@@ -173,16 +193,9 @@ function StudentsAdminPage() {
       setFormSuccess(
         `Created ${created.studentId} — login email ${created.email} (password is NIC at creation).`
       );
-      setForm((f) => ({
-        ...f,
-        firstName: "",
-        lastName: "",
-        nicNumber: "",
-        phone: "",
-        optionalEmail: "",
-        subgroup: "",
-      }));
+      setForm(emptyStudentForm());
       setActiveWindow("");
+      setViewMode("list");
       await loadList();
     } catch (e) {
       setFormError(e.message || "Create failed.");
@@ -194,11 +207,23 @@ function StudentsAdminPage() {
   return (
     <>
       <AdminPageHeader
+        actions={
+          viewMode === "list" ? (
+            <Button className="inline-flex items-center gap-2" onClick={openAdd} type="button" variant="primary">
+              <Plus className="h-4 w-4" aria-hidden />
+              Add student
+            </Button>
+          ) : (
+            <Button className="inline-flex items-center gap-2" onClick={cancelAdd} type="button" variant="secondary">
+              Cancel
+            </Button>
+          )
+        }
         description="Register a student with faculty, degree, intake, and stream. Subgroup must already exist for that cohort unless left blank."
         title="Students"
       />
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      {viewMode === "add" ? (
         <section className="rounded-3xl border border-border bg-card p-6 shadow-shadow">
           <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-text/60">New student</h2>
 
@@ -392,7 +417,7 @@ function StudentsAdminPage() {
             </div>
           ) : null}
 
-          <div className="mt-6">
+          <div className="mt-6 flex flex-wrap gap-2">
             <Button
               className="inline-flex items-center gap-2"
               disabled={submitting}
@@ -403,10 +428,23 @@ function StudentsAdminPage() {
               <Plus className="h-4 w-4" aria-hidden />
               Create student
             </Button>
+            <Button type="button" variant="secondary" onClick={cancelAdd}>
+              Cancel
+            </Button>
           </div>
         </section>
+      ) : null}
 
+      {viewMode === "list" ? (
         <section className="rounded-3xl border border-border bg-card p-6 shadow-shadow">
+          {formSuccess ? (
+            <div
+              className="mb-4 rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-emerald-900 dark:text-emerald-100"
+              role="status"
+            >
+              {formSuccess}
+            </div>
+          ) : null}
           <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-text/60">Directory</h2>
           <div className="mt-4 flex flex-col gap-4 border-b border-border pb-4 md:flex-row md:items-end">
             <label className="flex flex-1 flex-col gap-1">
@@ -507,7 +545,7 @@ function StudentsAdminPage() {
             </div>
           </div>
         </section>
-      </div>
+      ) : null}
     </>
   );
 }

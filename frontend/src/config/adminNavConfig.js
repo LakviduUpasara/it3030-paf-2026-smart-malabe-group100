@@ -50,8 +50,6 @@ export const ADMIN_NAV_SECTIONS = [
       { id: "faculties", label: "Faculties", href: "/admin/academics/faculties", matchHrefs: ["/admin/faculty"], allowedRoles: [LMS_ROLES.SUPER_ADMIN] },
       { id: "degree-programs", label: "Degree Programs", href: "/admin/academics/degree-programs", allowedRoles: [LMS_ROLES.SUPER_ADMIN] },
       { id: "intakes", label: "Intakes / Batches", href: "/admin/academics/intakes", allowedRoles: [LMS_ROLES.SUPER_ADMIN] },
-      { id: "academic-terms", label: "Academic Terms", href: "/admin/academics/academic-terms", allowedRoles: [LMS_ROLES.SUPER_ADMIN] },
-      { id: "streams", label: "Streams", href: "/admin/academics/streams", allowedRoles: [LMS_ROLES.SUPER_ADMIN] },
       { id: "subgroups", label: "Subgroups", href: "/admin/academics/subgroups", allowedRoles: [LMS_ROLES.SUPER_ADMIN] },
       { id: "modules", label: "Modules", href: "/admin/academics/modules", matchHrefs: ["/admin/modules"], allowedRoles: [LMS_ROLES.SUPER_ADMIN] },
       { id: "module-offerings", label: "Module Offerings", href: "/admin/academics/module-offerings", allowedRoles: [LMS_ROLES.SUPER_ADMIN] },
@@ -67,9 +65,9 @@ export const ADMIN_NAV_SECTIONS = [
       { id: "students", label: "Students", href: "/admin/users/students", allowedRoles: [LMS_ROLES.SUPER_ADMIN] },
       { id: "lecturers", label: "Lecturers", href: "/admin/users/lecturers", allowedRoles: [LMS_ROLES.SUPER_ADMIN] },
       { id: "lab-assistants", label: "Lab Assistants", href: "/admin/users/lab-assistants", allowedRoles: [LMS_ROLES.SUPER_ADMIN] },
+      { id: "user-requests", label: "User requests", href: "/admin/users/requests", matchHrefs: ["/admin/registrations"], allowedRoles: [LMS_ROLES.SUPER_ADMIN] },
       { id: "admins", label: "Admins", href: "/admin/users/admins", allowedRoles: [LMS_ROLES.SUPER_ADMIN] },
       { id: "roles", label: "Roles & Permissions", href: "/admin/users/roles-permissions", allowedRoles: [LMS_ROLES.SUPER_ADMIN] },
-      { id: "bulk-import", label: "Bulk Import", href: "/admin/users/bulk-import", allowedRoles: [LMS_ROLES.SUPER_ADMIN] },
     ],
   },
   {
@@ -135,6 +133,18 @@ export const ADMIN_NAV_SECTIONS = [
     ],
   },
   {
+    id: "campus-ops",
+    label: "Campus operations",
+    icon: Building2,
+    allowedRoles: [LMS_ROLES.SUPER_ADMIN],
+    defaultOpen: false,
+    items: [
+      { id: "campus-resources", label: "Resource catalog", href: "/admin/campus/resources", allowedRoles: [LMS_ROLES.SUPER_ADMIN] },
+      { id: "bookings", label: "Booking approvals", href: "/admin/bookings", allowedRoles: [LMS_ROLES.SUPER_ADMIN] },
+      { id: "tickets", label: "Tickets", href: "/admin/tickets", allowedRoles: [LMS_ROLES.SUPER_ADMIN] },
+    ],
+  },
+  {
     id: "administration",
     label: "Administration",
     icon: Settings,
@@ -145,19 +155,6 @@ export const ADMIN_NAV_SECTIONS = [
       { id: "audit-logs", label: "Audit Logs", href: "/admin/administration/audit-logs", allowedRoles: [LMS_ROLES.SUPER_ADMIN] },
       { id: "security", label: "Security Settings", href: "/admin/administration/security-settings", allowedRoles: [LMS_ROLES.SUPER_ADMIN] },
       { id: "backups", label: "Backup Management", href: "/admin/administration/backup-management", allowedRoles: [LMS_ROLES.SUPER_ADMIN] },
-    ],
-  },
-  {
-    id: "campus-ops",
-    label: "Campus operations",
-    icon: Building2,
-    allowedRoles: [LMS_ROLES.SUPER_ADMIN],
-    defaultOpen: false,
-    items: [
-      { id: "campus-resources", label: "Resource catalog", href: "/admin/campus/resources", allowedRoles: [LMS_ROLES.SUPER_ADMIN] },
-      { id: "bookings", label: "Booking approvals", href: "/admin/bookings", allowedRoles: [LMS_ROLES.SUPER_ADMIN] },
-      { id: "tickets", label: "Tickets", href: "/admin/tickets", allowedRoles: [LMS_ROLES.SUPER_ADMIN] },
-      { id: "registrations", label: "User registrations", href: "/admin/registrations", allowedRoles: [LMS_ROLES.SUPER_ADMIN] },
     ],
   },
 ];

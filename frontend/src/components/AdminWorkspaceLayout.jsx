@@ -26,7 +26,7 @@ import { ADMIN_ACADEMIC_NAV_ITEMS } from "../utils/roleUtils";
 const PRIMARY_LINKS = [
   { label: "Overview", path: "/admin", icon: HiSquares2X2, end: true },
   { label: "Resources", path: "/admin/resources", icon: HiBuildingOffice2, end: false },
-  { label: "User Approvals", path: "/admin/registrations", icon: HiUsers, end: false },
+  { label: "User requests", path: "/admin/users/requests", icon: HiUsers, end: false },
   { label: "Booking Queue", path: "/admin/bookings", icon: HiClipboardDocumentCheck, end: false },
   { label: "Ticket Desk", path: "/admin/tickets", icon: HiWrenchScrewdriver, end: false },
 ];

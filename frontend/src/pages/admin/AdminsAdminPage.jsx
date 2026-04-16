@@ -1,13 +1,27 @@
 import { useCallback, useDeferredValue, useEffect, useState } from "react";
-import { Copy } from "lucide-react";
+import { Copy, Plus } from "lucide-react";
 import Button from "../../components/Button";
 import AdminPageHeader from "../../components/admin/AdminPageHeader";
+import { useAdminShell } from "../../context/AdminShellContext";
 import * as registrationService from "../../services/registrationService";
 
 const ROLES = ["ADMIN", "LOST_ITEM_ADMIN"];
 const STATUSES = ["ACTIVE", "INACTIVE"];
 
+function emptyAdminForm() {
+  return {
+    fullName: "",
+    username: "",
+    email: "",
+    password: "",
+    role: "ADMIN",
+    status: "ACTIVE",
+  };
+}
+
 function AdminsAdminPage() {
+  const { setActiveWindow } = useAdminShell();
+  const [viewMode, setViewMode] = useState("list");
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -16,16 +30,10 @@ function AdminsAdminPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const deferredSearch = useDeferredValue(search);
 
-  const [form, setForm] = useState({
-    fullName: "",
-    username: "",
-    email: "",
-    password: "",
-    role: "ADMIN",
-    status: "ACTIVE",
-  });
+  const [form, setForm] = useState(() => emptyAdminForm());
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
+  const [formSuccess, setFormSuccess] = useState("");
   const [lastGeneratedPassword, setLastGeneratedPassword] = useState("");
 
   const load = useCallback(async () => {
@@ -49,6 +57,21 @@ function AdminsAdminPage() {
     load();
   }, [load]);
 
+  const openAdd = () => {
+    setForm(emptyAdminForm());
+    setFormError("");
+    setFormSuccess("");
+    setLastGeneratedPassword("");
+    setViewMode("form");
+    setActiveWindow("Register");
+  };
+
+  const cancelAdd = () => {
+    setViewMode("list");
+    setFormError("");
+    setActiveWindow("");
+  };
+
   const submit = async () => {
     setSubmitting(true);
     setFormError("");
@@ -68,14 +91,10 @@ function AdminsAdminPage() {
       if (res.generatedPassword) {
         setLastGeneratedPassword(res.generatedPassword);
       }
-      setForm({
-        fullName: "",
-        username: "",
-        email: "",
-        password: "",
-        role: "ADMIN",
-        status: "ACTIVE",
-      });
+      setFormSuccess("Admin account created.");
+      setForm(emptyAdminForm());
+      setViewMode("list");
+      setActiveWindow("");
       await load();
     } catch (e) {
       setFormError(e.message || "Create failed.");
@@ -95,11 +114,23 @@ function AdminsAdminPage() {
   return (
     <>
       <AdminPageHeader
+        actions={
+          viewMode === "list" ? (
+            <Button className="inline-flex items-center gap-2" onClick={openAdd} type="button" variant="primary">
+              <Plus className="h-4 w-4" aria-hidden />
+              Add admin
+            </Button>
+          ) : (
+            <Button className="inline-flex items-center gap-2" onClick={cancelAdd} type="button" variant="secondary">
+              Cancel
+            </Button>
+          )
+        }
         description="Create console admin user accounts (no separate staff profile). Optional password — otherwise the server generates one and shows it once."
         title="Admins"
       />
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      {viewMode === "form" ? (
         <section className="rounded-3xl border border-border bg-card p-6 shadow-shadow">
           <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-text/60">New admin</h2>
           <div className="mt-4 flex flex-col gap-3">
@@ -178,8 +209,30 @@ function AdminsAdminPage() {
             </div>
           ) : null}
 
+          <div className="mt-6 flex flex-wrap gap-2">
+            <Button disabled={submitting} onClick={submit} type="button" variant="primary">
+              Create admin
+            </Button>
+            <Button type="button" variant="secondary" onClick={cancelAdd}>
+              Cancel
+            </Button>
+          </div>
+        </section>
+      ) : null}
+
+      {viewMode === "list" ? (
+        <section className="rounded-3xl border border-border bg-card p-6 shadow-shadow">
+          {formSuccess ? (
+            <div
+              className="mb-4 rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-emerald-900 dark:text-emerald-100"
+              role="status"
+            >
+              {formSuccess}
+            </div>
+          ) : null}
+
           {lastGeneratedPassword ? (
-            <div className="mt-4 rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-4">
+            <div className="mb-4 rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-4">
               <p className="text-xs font-semibold uppercase tracking-[0.08em] text-emerald-800 dark:text-emerald-200">
                 Generated password (copy now — shown once)
               </p>
@@ -193,14 +246,6 @@ function AdminsAdminPage() {
             </div>
           ) : null}
 
-          <div className="mt-6">
-            <Button disabled={submitting} onClick={submit} type="button" variant="primary">
-              Create admin
-            </Button>
-          </div>
-        </section>
-
-        <section className="rounded-3xl border border-border bg-card p-6 shadow-shadow">
           <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-text/60">Directory</h2>
           <div className="mt-4 flex flex-col gap-4 border-b border-border pb-4 md:flex-row md:flex-wrap md:items-end">
             <label className="flex min-w-[160px] flex-1 flex-col gap-1">
@@ -287,7 +332,7 @@ function AdminsAdminPage() {
             ) : null}
           </div>
         </section>
-      </div>
+      ) : null}
     </>
   );
 }

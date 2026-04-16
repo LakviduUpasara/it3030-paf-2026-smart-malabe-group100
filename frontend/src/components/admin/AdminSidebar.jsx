@@ -256,7 +256,7 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
                   ].join(" ")
                 }
                 title={collapsed ? "Notifications" : undefined}
-                to="/notifications"
+                to="/admin/notifications"
                 onClick={onMobileClose}
               >
                 <Bell className="h-[18px] w-[18px] shrink-0" strokeWidth={1.75} aria-hidden />

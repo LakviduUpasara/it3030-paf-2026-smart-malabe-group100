@@ -173,8 +173,8 @@ function AppRoutes() {
           <Route path="academics/faculties" element={<FacultiesAdminPage />} />
           <Route path="academics/degree-programs" element={<DegreeProgramsAdminPage />} />
           <Route path="academics/intakes" element={<IntakesAdminPage />} />
-          <Route path="academics/academic-terms" element={<AdminScaffoldPage />} />
-          <Route path="academics/streams" element={<AdminScaffoldPage />} />
+          <Route path="academics/academic-terms" element={<Navigate to="/admin/academics/faculties" replace />} />
+          <Route path="academics/streams" element={<Navigate to="/admin/academics/faculties" replace />} />
           <Route path="academics/subgroups" element={<SubgroupsAdminPage />} />
           <Route path="academics/modules" element={<CatalogModulesAdminPage />} />
           <Route path="academics/module-offerings" element={<ModuleOfferingsAdminPage />} />
@@ -188,7 +188,9 @@ function AppRoutes() {
           <Route path="users/lab-assistants" element={<StaffRegistrationPage variant="labAssistant" />} />
           <Route path="users/admins" element={<AdminsAdminPage />} />
           <Route path="users/roles-permissions" element={<AdminScaffoldPage />} />
-          <Route path="users/bulk-import" element={<AdminScaffoldPage />} />
+          <Route path="users/bulk-import" element={<Navigate to="/admin/users/students" replace />} />
+          <Route path="users/requests" element={<ManageSignupRequestsPage />} />
+          <Route path="registrations" element={<Navigate to="/admin/users/requests" replace />} />
 
           {/* Administration */}
           <Route path="administration/system-settings" element={<AdminScaffoldPage />} />
@@ -198,7 +200,6 @@ function AppRoutes() {
 
           {/* Campus operations (legacy Smart Campus) */}
           <Route path="campus/resources" element={<ManageResourcesPage />} />
-          <Route path="registrations" element={<ManageSignupRequestsPage />} />
           <Route path="bookings" element={<ApproveBookingsPage />} />
           <Route path="tickets" element={<ManageTicketsPage />} />
         </Route>

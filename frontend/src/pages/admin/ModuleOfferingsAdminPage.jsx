@@ -1,7 +1,6 @@
 import { useCallback, useDeferredValue, useEffect, useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import Button from "../../components/Button";
-import Modal from "../../components/Modal";
 import AdminPageHeader from "../../components/admin/AdminPageHeader";
 import { useAdminShell } from "../../context/AdminShellContext";
 import * as facultyService from "../../services/facultyService";
@@ -53,7 +52,7 @@ function ModuleOfferingsAdminPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const [modalOpen, setModalOpen] = useState(false);
+  const [viewMode, setViewMode] = useState("list");
   const [editingId, setEditingId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
@@ -193,7 +192,7 @@ function ModuleOfferingsAdminPage() {
         search: deferredSearch.trim() || undefined,
       });
       setItems(data.items || []);
-      setTotal(data.total ?? 0);
+      setTotal(data.total ?? data.totalCount ?? 0);
     } catch (e) {
       setError(e.message || "Failed to load module offerings.");
       setItems([]);
@@ -219,14 +218,14 @@ function ModuleOfferingsAdminPage() {
     setFormStatus("ACTIVE");
     setSelLecturerIds([]);
     setSelLabIds([]);
-    setModalOpen(true);
+    setViewMode("form");
     setActiveWindow("Create");
   };
 
   const openEdit = async (row) => {
     setFormError("");
     setEditingId(row.id);
-    setModalOpen(true);
+    setViewMode("form");
     setActiveWindow("Edit");
     try {
       const full = await moduleOfferingService.getModuleOffering(row.id);
@@ -244,8 +243,8 @@ function ModuleOfferingsAdminPage() {
     }
   };
 
-  const closeModal = () => {
-    setModalOpen(false);
+  const cancelForm = () => {
+    setViewMode("list");
     setEditingId(null);
     setActiveWindow("List");
   };
@@ -278,7 +277,7 @@ function ModuleOfferingsAdminPage() {
       } else {
         await moduleOfferingService.createModuleOffering(payload);
       }
-      closeModal();
+      cancelForm();
       await load();
     } catch (e) {
       setFormError(e.message || "Save failed.");
@@ -300,23 +299,31 @@ function ModuleOfferingsAdminPage() {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
-    <div className="mx-auto max-w-[1400px] px-4 py-8 sm:px-6 lg:px-8">
+    <>
       <AdminPageHeader
         title="Module offerings"
         description="Assign catalog modules to an intake cohort for a specific term. One offering per intake × term × module."
         actions={
-          <Button
-            type="button"
-            onClick={openCreate}
-            className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium text-white"
-            style={{ backgroundColor: PRIMARY }}
-          >
-            <Plus className="h-4 w-4" />
-            Add offering
-          </Button>
+          viewMode === "list" ? (
+            <Button
+              type="button"
+              onClick={openCreate}
+              className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium text-white"
+              style={{ backgroundColor: PRIMARY }}
+            >
+              <Plus className="h-4 w-4" />
+              Add offering
+            </Button>
+          ) : (
+            <Button type="button" variant="secondary" onClick={cancelForm}>
+              Cancel
+            </Button>
+          )
         }
       />
 
+      {viewMode === "list" ? (
+      <>
       <div
         className="mb-6 rounded-2xl border border-border bg-surface p-5 shadow-sm"
         style={{ borderLeftWidth: 4, borderLeftColor: PRIMARY }}
@@ -582,14 +589,15 @@ function ModuleOfferingsAdminPage() {
           </Button>
         </div>
       </div>
+      </>
+      ) : null}
 
-      <Modal
-        isOpen={modalOpen}
-        onClose={closeModal}
-        title={editingId ? "Edit module offering" : "Add module offering"}
-        panelClassName="max-w-2xl rounded-2xl"
-      >
-        <div className="space-y-4 p-1">
+      {viewMode === "form" ? (
+        <section className="rounded-3xl border border-border bg-card p-6 shadow-shadow">
+          <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-text/60">
+            {editingId ? "Edit module offering" : "New module offering"}
+          </h2>
+        <div className="mt-4 space-y-4 p-1">
           {formError ? (
             <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-900 dark:text-rose-100">
               {formError}
@@ -742,7 +750,7 @@ function ModuleOfferingsAdminPage() {
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="secondary" onClick={closeModal}>
+            <Button type="button" variant="secondary" onClick={cancelForm}>
               Cancel
             </Button>
             <Button
@@ -756,8 +764,9 @@ function ModuleOfferingsAdminPage() {
             </Button>
           </div>
         </div>
-      </Modal>
-    </div>
+        </section>
+      ) : null}
+    </>
   );
 }
 

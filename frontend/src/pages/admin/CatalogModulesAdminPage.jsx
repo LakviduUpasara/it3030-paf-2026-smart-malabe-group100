@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Plus } from "lucide-react";
 import Button from "../../components/Button";
-import Modal from "../../components/Modal";
 import AdminPageHeader from "../../components/admin/AdminPageHeader";
 import { useAdminShell } from "../../context/AdminShellContext";
 import * as catalogModuleService from "../../services/catalogModuleService";
@@ -31,7 +30,7 @@ function CatalogModulesAdminPage() {
 
   const [degreesForFaculty, setDegreesForFaculty] = useState([]);
 
-  const [modalOpen, setModalOpen] = useState(false);
+  const [viewMode, setViewMode] = useState("list");
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({
     code: "",
@@ -94,6 +93,7 @@ function CatalogModulesAdminPage() {
 
   const openCreate = () => {
     setEditing(null);
+    setError("");
     setForm({
       code: "",
       name: "",
@@ -103,12 +103,13 @@ function CatalogModulesAdminPage() {
       applicableDegrees: [],
       defaultSyllabusVersion: "NEW",
     });
-    setModalOpen(true);
+    setViewMode("form");
     setActiveWindow("Create");
   };
 
   const openEdit = (row) => {
     setEditing(row);
+    setError("");
     setForm({
       code: row.code,
       name: row.name,
@@ -118,12 +119,12 @@ function CatalogModulesAdminPage() {
       applicableDegrees: row.applicableDegrees || [],
       defaultSyllabusVersion: row.defaultSyllabusVersion || "NEW",
     });
-    setModalOpen(true);
+    setViewMode("form");
     setActiveWindow("Edit");
   };
 
-  const closeModal = () => {
-    setModalOpen(false);
+  const cancelForm = () => {
+    setViewMode("list");
     setActiveWindow("");
   };
 
@@ -178,7 +179,7 @@ function CatalogModulesAdminPage() {
       } else {
         await catalogModuleService.createCatalogModule(payload);
       }
-      closeModal();
+      cancelForm();
       await load();
     } catch (e) {
       setError(e.message || "Save failed.");
@@ -212,15 +213,155 @@ function CatalogModulesAdminPage() {
     <>
       <AdminPageHeader
         actions={
-          <Button className="inline-flex items-center gap-2" onClick={openCreate} type="button" variant="primary">
-            <Plus className="h-4 w-4" aria-hidden />
-            Add module
-          </Button>
+          viewMode === "list" ? (
+            <Button className="inline-flex items-center gap-2" onClick={openCreate} type="button" variant="primary">
+              <Plus className="h-4 w-4" aria-hidden />
+              Add module
+            </Button>
+          ) : (
+            <Button className="inline-flex items-center gap-2" onClick={cancelForm} type="button" variant="secondary">
+              Cancel
+            </Button>
+          )
         }
         description="Catalog modules: faculty scope, applicable terms (Y1S1–Y4S2), and allowed degree codes."
         title="Module catalog"
       />
 
+      {viewMode === "form" ? (
+        <section className="rounded-3xl border border-border bg-card p-6 shadow-shadow">
+          <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-text/60">
+            {editing ? "Edit module" : "New module"}
+          </h2>
+          <div className="mt-4 max-h-[min(80vh,720px)] space-y-4 overflow-y-auto pr-1">
+          {!editing ? (
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-semibold uppercase tracking-[0.08em] text-text/60">Module code</span>
+              <input
+                className="h-12 rounded-2xl border border-border bg-card px-3 text-sm"
+                maxLength={10}
+                onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
+                value={form.code}
+              />
+            </label>
+          ) : (
+            <p className="text-sm text-text/70">
+              Code: <strong className="text-heading">{editing.code}</strong>
+            </p>
+          )}
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-semibold uppercase tracking-[0.08em] text-text/60">Name</span>
+            <input
+              className="h-12 rounded-2xl border border-border bg-card px-3 text-sm"
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              value={form.name}
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-semibold uppercase tracking-[0.08em] text-text/60">Faculty</span>
+            <select
+              className="h-12 rounded-2xl border border-border bg-card px-3 text-sm"
+              onChange={(e) =>
+                setForm((f) => ({
+                  ...f,
+                  facultyCode: e.target.value,
+                  applicableDegrees: [],
+                }))
+              }
+              value={form.facultyCode}
+            >
+              {faculties.map((f) => (
+                <option key={f.code} value={f.code}>
+                  {f.code}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-semibold uppercase tracking-[0.08em] text-text/60">Credits</span>
+            <input
+              className="h-12 rounded-2xl border border-border bg-card px-3 text-sm"
+              max={30}
+              min={1}
+              onChange={(e) => setForm((f) => ({ ...f, credits: Number(e.target.value) }))}
+              type="number"
+              value={form.credits}
+            />
+          </label>
+
+          <fieldset>
+            <legend className="mb-2 text-xs font-semibold uppercase tracking-[0.08em] text-text/60">
+              Applicable terms
+            </legend>
+            <div className="flex flex-wrap gap-2">
+              {TERM_CODES.map((t) => (
+                <label key={t} className="inline-flex items-center gap-2 text-sm">
+                  <input
+                    checked={form.applicableTerms.includes(t)}
+                    onChange={() => toggleTerm(t)}
+                    type="checkbox"
+                  />
+                  {t}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend className="mb-2 text-xs font-semibold uppercase tracking-[0.08em] text-text/60">
+              Applicable degrees (same faculty)
+            </legend>
+            <div className="max-h-40 space-y-2 overflow-y-auto rounded-2xl border border-border p-3">
+              {degreesForFaculty.length === 0 ? (
+                <p className="text-sm text-text/60">Select a faculty with degree programs.</p>
+              ) : (
+                degreesForFaculty.map((d) => (
+                  <label key={d.code} className="flex items-center gap-2 text-sm">
+                    <input
+                      checked={form.applicableDegrees.includes(d.code)}
+                      onChange={() => toggleDegree(d.code)}
+                      type="checkbox"
+                    />
+                    {d.code} — {d.name}
+                  </label>
+                ))
+              )}
+            </div>
+          </fieldset>
+
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-semibold uppercase tracking-[0.08em] text-text/60">
+              Default syllabus version
+            </span>
+            <select
+              className="h-12 rounded-2xl border border-border bg-card px-3 text-sm"
+              onChange={(e) => setForm((f) => ({ ...f, defaultSyllabusVersion: e.target.value }))}
+              value={form.defaultSyllabusVersion}
+            >
+              <option value="OLD">OLD</option>
+              <option value="NEW">NEW</option>
+            </select>
+          </label>
+
+          {error ? (
+            <div className="rounded-2xl border border-border bg-tint p-3 text-sm" role="alert">
+              {error}
+            </div>
+          ) : null}
+
+          <div className="flex flex-wrap justify-end gap-2 pt-2">
+            <Button onClick={cancelForm} type="button" variant="secondary">
+              Cancel
+            </Button>
+            <Button disabled={submitting} onClick={submit} type="button" variant="primary">
+              {submitting ? "Saving…" : "Save"}
+            </Button>
+          </div>
+          </div>
+        </section>
+      ) : null}
+
+      {viewMode === "list" ? (
       <section className="rounded-3xl border border-border bg-card p-6 shadow-shadow">
         <div className="flex flex-wrap gap-4 border-b border-border pb-4">
           <label className="flex flex-col gap-1">
@@ -321,128 +462,7 @@ function CatalogModulesAdminPage() {
           </div>
         </div>
       </section>
-
-      <Modal isOpen={modalOpen} onClose={closeModal} title={editing ? "Edit module" : "Create module"}>
-        <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
-          {!editing ? (
-            <label className="flex flex-col gap-1">
-              <span className="text-xs font-semibold uppercase tracking-[0.08em] text-text/60">Module code</span>
-              <input
-                className="h-12 rounded-2xl border border-border px-3"
-                maxLength={10}
-                onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
-                value={form.code}
-              />
-            </label>
-          ) : (
-            <p className="text-sm text-text/70">
-              Code: <strong className="text-heading">{editing.code}</strong>
-            </p>
-          )}
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-semibold uppercase tracking-[0.08em] text-text/60">Name</span>
-            <input
-              className="h-12 rounded-2xl border border-border px-3"
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              value={form.name}
-            />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-semibold uppercase tracking-[0.08em] text-text/60">Faculty</span>
-            <select
-              className="h-12 rounded-2xl border border-border px-3"
-              onChange={(e) =>
-                setForm((f) => ({
-                  ...f,
-                  facultyCode: e.target.value,
-                  applicableDegrees: [],
-                }))
-              }
-              value={form.facultyCode}
-            >
-              {faculties.map((f) => (
-                <option key={f.code} value={f.code}>
-                  {f.code}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-semibold uppercase tracking-[0.08em] text-text/60">Credits</span>
-            <input
-              className="h-12 rounded-2xl border border-border px-3"
-              max={30}
-              min={1}
-              onChange={(e) => setForm((f) => ({ ...f, credits: Number(e.target.value) }))}
-              type="number"
-              value={form.credits}
-            />
-          </label>
-
-          <fieldset>
-            <legend className="mb-2 text-xs font-semibold uppercase tracking-[0.08em] text-text/60">
-              Applicable terms
-            </legend>
-            <div className="flex flex-wrap gap-2">
-              {TERM_CODES.map((t) => (
-                <label key={t} className="inline-flex items-center gap-2 text-sm">
-                  <input
-                    checked={form.applicableTerms.includes(t)}
-                    onChange={() => toggleTerm(t)}
-                    type="checkbox"
-                  />
-                  {t}
-                </label>
-              ))}
-            </div>
-          </fieldset>
-
-          <fieldset>
-            <legend className="mb-2 text-xs font-semibold uppercase tracking-[0.08em] text-text/60">
-              Applicable degrees (same faculty)
-            </legend>
-            <div className="max-h-40 space-y-2 overflow-y-auto rounded-2xl border border-border p-3">
-              {degreesForFaculty.length === 0 ? (
-                <p className="text-sm text-text/60">Select a faculty with degree programs.</p>
-              ) : (
-                degreesForFaculty.map((d) => (
-                  <label key={d.code} className="flex items-center gap-2 text-sm">
-                    <input
-                      checked={form.applicableDegrees.includes(d.code)}
-                      onChange={() => toggleDegree(d.code)}
-                      type="checkbox"
-                    />
-                    {d.code} — {d.name}
-                  </label>
-                ))
-              )}
-            </div>
-          </fieldset>
-
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-semibold uppercase tracking-[0.08em] text-text/60">
-              Default syllabus version
-            </span>
-            <select
-              className="h-12 rounded-2xl border border-border px-3"
-              onChange={(e) => setForm((f) => ({ ...f, defaultSyllabusVersion: e.target.value }))}
-              value={form.defaultSyllabusVersion}
-            >
-              <option value="OLD">OLD</option>
-              <option value="NEW">NEW</option>
-            </select>
-          </label>
-
-          <div className="flex flex-wrap justify-end gap-2 pt-2">
-            <Button onClick={closeModal} type="button" variant="secondary">
-              Cancel
-            </Button>
-            <Button disabled={submitting} onClick={submit} type="button" variant="primary">
-              {submitting ? "Saving…" : "Save"}
-            </Button>
-          </div>
-        </div>
-      </Modal>
+      ) : null}
     </>
   );
 }

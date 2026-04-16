@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import Button from "../components/Button";
-import Card from "../components/Card";
 import AdminPageHeader from "../components/admin/AdminPageHeader";
 import LoadingSpinner from "../components/LoadingSpinner";
+import { useAdminShell } from "../context/AdminShellContext";
 import {
   approveSignupRequest,
   getPendingSignupRequests,
@@ -10,19 +10,19 @@ import {
 } from "../services/authService";
 import { ROLES } from "../utils/roleUtils";
 
-const defaultRoleSelections = {
-  [ROLES.ADMIN]: ROLES.ADMIN,
-  [ROLES.TECHNICIAN]: ROLES.TECHNICIAN,
-  [ROLES.USER]: ROLES.USER,
-};
-
 function ManageSignupRequestsPage() {
+  const { setActiveWindow } = useAdminShell();
   const [requests, setRequests] = useState([]);
   const [roleSelections, setRoleSelections] = useState({});
   const [notes, setNotes] = useState({});
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmittingId, setIsSubmittingId] = useState("");
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    setActiveWindow("List");
+    return () => setActiveWindow("");
+  }, [setActiveWindow]);
 
   useEffect(() => {
     const loadRequests = async () => {
@@ -62,9 +62,7 @@ function ManageSignupRequestsPage() {
   };
 
   const removeRequest = (requestId) => {
-    setRequests((currentRequests) =>
-      currentRequests.filter((request) => request.id !== requestId),
-    );
+    setRequests((currentRequests) => currentRequests.filter((request) => request.id !== requestId));
   };
 
   const handleApprove = async (requestId) => {
@@ -101,77 +99,82 @@ function ManageSignupRequestsPage() {
   };
 
   return (
-    <div className="page-stack">
+    <>
       <AdminPageHeader
-        actions={<span className="status-pill status-pending">{requestCountLabel}</span>}
-        description="Review incoming sign up requests, assign roles, and approve campus access."
-        title="User registration approvals"
+        actions={<span className="rounded-full border border-border bg-tint px-3 py-1 text-xs font-semibold text-heading">{requestCountLabel}</span>}
+        description="Review incoming sign-up requests, assign roles, and approve or reject campus access."
+        title="User requests"
       />
 
-      <Card
-        title="Pending requests"
-        subtitle="Approve or reject with role assignment and reviewer notes."
-      >
-        <p className="supporting-text">
-          Approved applicants can sign in after role assignment. Rejected requests stay
-          visible to the applicant inside their approval dashboard.
+      <section className="rounded-3xl border border-border bg-card p-6 shadow-shadow">
+        <p className="text-sm text-text/72">
+          Approved applicants can sign in after role assignment. Rejected requests are removed from this queue.
         </p>
-      </Card>
+      </section>
 
-      {error ? <p className="alert alert-error">{error}</p> : null}
+      {error ? (
+        <div className="mt-4 rounded-2xl border border-border bg-tint p-4 text-sm text-heading" role="alert">
+          {error}
+        </div>
+      ) : null}
 
       {isLoading ? (
-        <LoadingSpinner label="Loading pending sign up requests..." />
+        <div className="mt-6">
+          <LoadingSpinner label="Loading pending requests…" />
+        </div>
       ) : requests.length === 0 ? (
-        <Card title="No pending requests">
-          <p className="supporting-text">
-            All sign up requests have already been reviewed.
-          </p>
-        </Card>
+        <section className="mt-6 rounded-3xl border border-border bg-card p-8 text-center shadow-shadow">
+          <p className="text-sm text-text/70">All sign-up requests have been reviewed.</p>
+        </section>
       ) : (
-        <div className="approval-request-list">
+        <div className="mt-6 flex flex-col gap-4">
           {requests.map((request) => (
-            <Card
+            <section
               key={request.id}
-              className="approval-request-card"
-              title={request.fullName}
-              subtitle={`${request.email} • ${request.department}`}
+              className="rounded-3xl border border-border bg-card p-6 shadow-shadow"
             >
-              <div className="request-detail-grid">
+              <div className="border-b border-border pb-4">
+                <h2 className="text-lg font-semibold text-heading">{request.fullName}</h2>
+                <p className="mt-1 text-sm text-text/70">
+                  {request.email} · {request.department}
+                </p>
+              </div>
+
+              <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <div>
-                  <strong>Campus ID</strong>
-                  <p>{request.campusId}</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-text/60">Campus ID</p>
+                  <p className="mt-1 text-sm">{request.campusId}</p>
                 </div>
                 <div>
-                  <strong>Phone</strong>
-                  <p>{request.phoneNumber}</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-text/60">Phone</p>
+                  <p className="mt-1 text-sm">{request.phoneNumber}</p>
                 </div>
                 <div>
-                  <strong>Requested 2FA</strong>
-                  <p>{request.preferredTwoFactorMethod}</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-text/60">Requested 2FA</p>
+                  <p className="mt-1 text-sm">{request.preferredTwoFactorMethod}</p>
                 </div>
                 <div>
-                  <strong>Provider</strong>
-                  <p>{request.authProvider || "LOCAL"}</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-text/60">Provider</p>
+                  <p className="mt-1 text-sm">{request.authProvider || "LOCAL"}</p>
                 </div>
                 <div>
-                  <strong>Submitted</strong>
-                  <p>{new Date(request.requestedAt).toLocaleString()}</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-text/60">Submitted</p>
+                  <p className="mt-1 text-sm">{new Date(request.requestedAt).toLocaleString()}</p>
                 </div>
               </div>
 
-              <div className="auth-help-panel">
-                <strong>Reason for access</strong>
-                <p className="supporting-text">{request.reasonForAccess}</p>
+              <div className="mt-4 rounded-2xl border border-border bg-tint/50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-text/60">Reason for access</p>
+                <p className="mt-2 text-sm text-text/80">{request.reasonForAccess}</p>
               </div>
 
-              <div className="approval-request-grid">
-                <label className="field field-annotated">
-                  <span>Assign role</span>
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-semibold text-text/70">Assign role</span>
                   <select
-                    className="auth-select"
+                    className="h-11 rounded-2xl border border-border bg-card px-3 text-sm"
                     onChange={(event) => handleRoleChange(request.id, event.target.value)}
-                    value={roleSelections[request.id] || defaultRoleSelections[ROLES.USER]}
+                    value={roleSelections[request.id] || ROLES.USER}
                   >
                     <option value={ROLES.USER}>USER</option>
                     <option value={ROLES.TECHNICIAN}>TECHNICIAN</option>
@@ -179,39 +182,41 @@ function ManageSignupRequestsPage() {
                   </select>
                 </label>
 
-                <label className="field field-annotated">
-                  <span>Reviewer note</span>
+                <label className="flex flex-col gap-1 md:col-span-2">
+                  <span className="text-xs font-semibold text-text/70">Reviewer note</span>
                   <textarea
-                    className="auth-textarea"
+                    className="min-h-[88px] rounded-2xl border border-border bg-card px-3 py-2 text-sm"
                     onChange={(event) => handleNoteChange(request.id, event.target.value)}
                     placeholder="Add an approval note or rejection reason."
-                    rows="3"
+                    rows={3}
                     value={notes[request.id] || ""}
                   />
                 </label>
               </div>
 
-              <div className="auth-actions-row">
+              <div className="mt-6 flex flex-wrap gap-2">
                 <Button
                   disabled={Boolean(isSubmittingId)}
                   onClick={() => handleApprove(request.id)}
                   variant="primary"
+                  type="button"
                 >
-                  {isSubmittingId === request.id ? "Submitting..." : "Approve"}
+                  {isSubmittingId === request.id ? "Submitting…" : "Approve"}
                 </Button>
                 <Button
                   disabled={Boolean(isSubmittingId)}
                   onClick={() => handleReject(request.id)}
                   variant="secondary"
+                  type="button"
                 >
                   Reject
                 </Button>
               </div>
-            </Card>
+            </section>
           ))}
         </div>
       )}
-    </div>
+    </>
   );
 }
 
