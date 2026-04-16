@@ -23,6 +23,7 @@ import ManageTicketsPage from "../pages/ManageTicketsPage";
 import MyBookingsPage from "../pages/MyBookingsPage";
 import MyTicketsPage from "../pages/MyTicketsPage";
 import NotificationsPage from "../pages/NotificationsPage";
+import AdminNotificationsPage from "../pages/admin/AdminNotificationsPage";
 import NotFoundPage from "../pages/NotFoundPage";
 import PublicLandingPage from "../pages/PublicLandingPage";
 import SignupPage from "../pages/SignupPage";
@@ -139,7 +140,7 @@ function AppRoutes() {
 
         {/* Communication & reports (super admin + lecturer) */}
         <Route path="communication/announcements" element={<AdminScaffoldPage />} />
-        <Route path="communication/targeted-notifications" element={<AdminScaffoldPage />} />
+        <Route path="communication/targeted-notifications" element={<AdminNotificationsPage />} />
         <Route path="communication/messages" element={<AdminScaffoldPage />} />
 
         <Route path="reports/student-analytics" element={<AdminScaffoldPage />} />
@@ -147,7 +148,7 @@ function AppRoutes() {
         <Route path="reports/lecturer-workload" element={<AdminScaffoldPage />} />
 
         {/* Optional in-shell routes */}
-        <Route path="notifications" element={<NotificationsPage />} />
+        <Route path="notifications" element={<AdminNotificationsPage />} />
         <Route path="analytics" element={<AdminScaffoldPage />} />
         <Route path="moderation" element={<AdminScaffoldPage />} />
         <Route path="groups/add-students" element={<AdminScaffoldPage />} />

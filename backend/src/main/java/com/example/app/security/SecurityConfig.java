@@ -3,6 +3,7 @@ package com.example.app.security;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -39,6 +40,16 @@ public class SecurityConfig {
                                 .hasAnyRole("ADMIN", "LOST_ITEM_ADMIN")
                         .requestMatchers("/api/v1/module-offerings/**")
                                 .hasAnyRole("ADMIN", "LOST_ITEM_ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/portal-data/notification-feed")
+                                .authenticated()
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/portal-data/**")
+                                .hasAnyRole("ADMIN", "LOST_ITEM_ADMIN", "LECTURER")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/portal-data/**")
+                                .hasAnyRole("ADMIN", "LOST_ITEM_ADMIN", "LECTURER")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/notifications/audience")
+                                .hasAnyRole("ADMIN", "LOST_ITEM_ADMIN", "LECTURER")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/notifications/email")
+                                .hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .addFilterBefore(sessionAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .httpBasic(AbstractHttpConfigurer::disable)

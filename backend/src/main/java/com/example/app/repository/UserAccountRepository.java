@@ -1,6 +1,7 @@
 package com.example.app.repository;
 
 import com.example.app.entity.UserAccount;
+import com.example.app.entity.enums.AccountStatus;
 import com.example.app.entity.enums.AuthProvider;
 import com.example.app.entity.enums.Role;
 import java.util.List;
@@ -8,6 +9,8 @@ import java.util.Optional;
 import org.springframework.data.mongodb.repository.MongoRepository;
 
 public interface UserAccountRepository extends MongoRepository<UserAccount, String> {
+
+    List<UserAccount> findByStatus(AccountStatus status);
 
     List<UserAccount> findByRoleInOrderByCreatedAtDesc(List<Role> roles);
 
