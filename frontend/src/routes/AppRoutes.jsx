@@ -10,6 +10,7 @@ import AdminsAdminPage from "../pages/admin/AdminsAdminPage";
 import StaffRegistrationPage from "../pages/admin/StaffRegistrationPage";
 import StudentsAdminPage from "../pages/admin/StudentsAdminPage";
 import IntakesAdminPage from "../pages/admin/IntakesAdminPage";
+import SubgroupsAdminPage from "../pages/admin/SubgroupsAdminPage";
 import ApproveBookingsPage from "../pages/ApproveBookingsPage";
 import ApprovalPendingPage from "../pages/ApprovalPendingPage";
 import CreateBookingPage from "../pages/CreateBookingPage";
@@ -172,7 +173,7 @@ function AppRoutes() {
           <Route path="academics/intakes" element={<IntakesAdminPage />} />
           <Route path="academics/academic-terms" element={<AdminScaffoldPage />} />
           <Route path="academics/streams" element={<AdminScaffoldPage />} />
-          <Route path="academics/subgroups" element={<AdminScaffoldPage />} />
+          <Route path="academics/subgroups" element={<SubgroupsAdminPage />} />
           <Route path="academics/modules" element={<CatalogModulesAdminPage />} />
           <Route path="academics/module-offerings" element={<AdminScaffoldPage />} />
 

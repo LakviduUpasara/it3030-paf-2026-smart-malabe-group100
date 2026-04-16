@@ -10,6 +10,8 @@ import org.springframework.data.mongodb.repository.MongoRepository;
 
 public interface EnrollmentRepository extends MongoRepository<Enrollment, String> {
 
+    List<Enrollment> findByIntakeIdAndEnrollmentStatus(String intakeId, AccountStatus enrollmentStatus);
+
     List<Enrollment> findByStudentProfileIdIn(Collection<String> studentProfileIds);
 
     boolean existsByIntakeIdAndFacultyIdAndDegreeProgramIdAndStreamAndSubgroupAndEnrollmentStatus(

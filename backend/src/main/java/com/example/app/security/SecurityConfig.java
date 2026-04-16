@@ -35,6 +35,8 @@ public class SecurityConfig {
                                 .hasAnyRole("ADMIN", "LOST_ITEM_ADMIN")
                         .requestMatchers("/api/v1/intakes/**")
                                 .hasAnyRole("ADMIN", "LOST_ITEM_ADMIN")
+                        .requestMatchers("/api/v1/subgroups/**")
+                                .hasAnyRole("ADMIN", "LOST_ITEM_ADMIN")
                         .anyRequest().authenticated())
                 .addFilterBefore(sessionAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .httpBasic(AbstractHttpConfigurer::disable)
