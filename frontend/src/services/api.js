@@ -1,8 +1,33 @@
 import axios from "axios";
 import { readStorageValue, STORAGE_KEYS } from "../utils/storage";
 
+const DEFAULT_API_BASE = "http://127.0.0.1:18081/api/v1";
+
+/**
+ * Resolves the backend REST base URL. Relative values (e.g. "/api/v1") are joined to the
+ * current origin so they work with Vite's dev proxy; absolute http(s) URLs are used as-is.
+ * A missing or wrong base URL often causes "No static resource api/v1/..." from the wrong server.
+ */
+function resolveApiBaseUrl() {
+  const raw = import.meta.env.VITE_API_BASE_URL;
+  const trimmed = typeof raw === "string" ? raw.trim() : "";
+  if (!trimmed) {
+    return DEFAULT_API_BASE;
+  }
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+    return trimmed.replace(/\/+$/, "");
+  }
+  if (trimmed.startsWith("/")) {
+    if (typeof window !== "undefined" && window.location?.origin) {
+      return `${window.location.origin}${trimmed}`.replace(/\/+$/, "");
+    }
+    return `${DEFAULT_API_BASE.replace(/\/api\/v1$/, "")}${trimmed}`.replace(/\/+$/, "");
+  }
+  return DEFAULT_API_BASE;
+}
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:18081/api/v1",
+  baseURL: resolveApiBaseUrl(),
   timeout: 8000,
 });
 

@@ -12,6 +12,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -106,6 +107,16 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleIllegalArgumentException(IllegalArgumentException ex) {
         return ResponseEntity.badRequest()
                 .body(buildErrorResponse(ex.getMessage(), HttpStatus.BAD_REQUEST));
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleMvcNoResourceFound(NoResourceFoundException ex) {
+        String path = ex.getResourcePath();
+        String message =
+                path != null && !path.isBlank()
+                        ? "No API or static resource at /" + path
+                        : "Resource not found";
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(buildErrorResponse(message, HttpStatus.NOT_FOUND));
     }
 
     @ExceptionHandler(AccessDeniedException.class)

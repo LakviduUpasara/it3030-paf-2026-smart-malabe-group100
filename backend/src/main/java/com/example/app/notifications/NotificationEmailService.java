@@ -46,8 +46,7 @@ public class NotificationEmailService {
             MimeMessage message = sender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
             helper.setFrom(from);
-            helper.setTo(from);
-            helper.setBcc(clean.toArray(new String[0]));
+            helper.setTo(clean.toArray(new String[0]));
             helper.setSubject(subject != null ? subject : "Notification");
             helper.setText(htmlBody != null ? htmlBody : "", true);
             sender.send(message);
