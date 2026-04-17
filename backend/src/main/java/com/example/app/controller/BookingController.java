@@ -8,6 +8,7 @@ import com.example.app.service.BookingService;
 import jakarta.validation.Valid;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -108,11 +109,23 @@ public class BookingController {
 
     /**
      * Reject a pending booking (Admin action).
+     * 
+     * Sample Request Body:
+     * {
+     *   "reason": "Time conflict with another booking"
+     * }
      */
     @PutMapping("/{id}/reject")
-    public ApiResponse<BookingResponse> rejectBooking(@PathVariable Long id) {
-        logger.info("Rejecting booking with ID {}", id);
-        BookingResponse booking = bookingService.rejectBooking(id);
+    public ApiResponse<BookingResponse> rejectBooking(
+            @PathVariable Long id,
+            @RequestBody Map<String, String> body) {
+        String reason = body.get("reason");
+        if (reason == null || reason.trim().isEmpty()) {
+            logger.warn("Rejection failed: missing or empty reason for booking {}", id);
+            throw new IllegalArgumentException("Rejection reason is required.");
+        }
+        logger.info("Rejecting booking with ID {} - reason: {}", id, reason);
+        BookingResponse booking = bookingService.rejectBooking(id, reason);
         logger.info("Booking {} rejected successfully", id);
         return ApiResponse.success("Booking rejected successfully", booking);
     }
