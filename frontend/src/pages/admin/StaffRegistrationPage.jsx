@@ -1,5 +1,5 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
-import { Plus } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import Button from "../../components/Button";
 import AdminPageHeader from "../../components/admin/AdminPageHeader";
 import { useAdminShell } from "../../context/AdminShellContext";
@@ -37,6 +37,9 @@ function Chip({ children }) {
 function StaffRegistrationPage({ variant }) {
   const { setActiveWindow } = useAdminShell();
   const [viewMode, setViewMode] = useState("list");
+  const [editingId, setEditingId] = useState(null);
+  const [editingLoginEmail, setEditingLoginEmail] = useState("");
+  const [deletingId, setDeletingId] = useState("");
   const isLab = variant === "labAssistant";
   const title = isLab ? "Lab assistants" : "Lecturers";
   const description = isLab
@@ -176,15 +179,38 @@ function StaffRegistrationPage({ variant }) {
   };
 
   const openAdd = () => {
+    setEditingId(null);
+    setEditingLoginEmail("");
     setForm(emptyStaffForm());
     setFormError("");
     setFormSuccess("");
-    setViewMode("add");
+    setViewMode("form");
     setActiveWindow("Register");
   };
 
-  const cancelAdd = () => {
+  const openEdit = (row) => {
+    setEditingId(row.id);
+    setEditingLoginEmail(row.loginEmail || "");
+    setForm({
+      fullName: row.fullName || "",
+      optionalEmail: row.optionalEmail || "",
+      phone: row.phone || "",
+      nicStaffId: row.nicStaffId || "",
+      status: row.status || "ACTIVE",
+      facultyIds: [...(row.facultyIds || [])],
+      degreeProgramIds: [...(row.degreeProgramIds || [])],
+      moduleIds: [...(row.moduleIds || [])],
+    });
+    setFormError("");
+    setFormSuccess("");
+    setViewMode("form");
+    setActiveWindow("Edit");
+  };
+
+  const cancelForm = () => {
     setViewMode("list");
+    setEditingId(null);
+    setEditingLoginEmail("");
     setFormError("");
     setFormSuccess("");
     setActiveWindow("");
@@ -214,15 +240,27 @@ function StaffRegistrationPage({ variant }) {
         degreeProgramIds: form.degreeProgramIds,
         moduleIds: form.moduleIds,
       };
-      if (isLab) {
+      if (editingId) {
+        if (isLab) {
+          await registrationService.updateLabAssistant(editingId, payload);
+        } else {
+          await registrationService.updateLecturer(editingId, payload);
+        }
+        setFormSuccess(`${isLab ? "Lab assistant" : "Lecturer"} updated.`);
+      } else if (isLab) {
         await registrationService.createLabAssistant(payload);
+        setFormSuccess(
+          `Lab assistant ${payload.fullName} registered. Login email appears in the directory.`
+        );
       } else {
         await registrationService.createLecturer(payload);
+        setFormSuccess(
+          `Lecturer ${payload.fullName} registered. Login email appears in the directory.`
+        );
       }
-      setFormSuccess(
-        `${isLab ? "Lab assistant" : "Lecturer"} ${payload.fullName} registered. Login email appears in the directory.`
-      );
       setForm(emptyStaffForm());
+      setEditingId(null);
+      setEditingLoginEmail("");
       setActiveWindow("");
       setViewMode("list");
       await loadList();
@@ -230,6 +268,28 @@ function StaffRegistrationPage({ variant }) {
       setFormError(e.message || "Create failed.");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const confirmDelete = async (row) => {
+    const ok = window.confirm(
+      `Delete ${isLab ? "lab assistant" : "lecturer"} ${row.fullName} (${row.loginEmail})? This cannot be undone.`
+    );
+    if (!ok) return;
+    setDeletingId(row.id);
+    setError("");
+    try {
+      if (isLab) {
+        await registrationService.deleteLabAssistant(row.id);
+      } else {
+        await registrationService.deleteLecturer(row.id);
+      }
+      setFormSuccess("Record deleted.");
+      await loadList();
+    } catch (e) {
+      setError(e.message || "Delete failed.");
+    } finally {
+      setDeletingId("");
     }
   };
 
@@ -243,7 +303,7 @@ function StaffRegistrationPage({ variant }) {
               Add {isLab ? "lab assistant" : "lecturer"}
             </Button>
           ) : (
-            <Button className="inline-flex items-center gap-2" onClick={cancelAdd} type="button" variant="secondary">
+            <Button className="inline-flex items-center gap-2" onClick={cancelForm} type="button" variant="secondary">
               Cancel
             </Button>
           )
@@ -252,9 +312,16 @@ function StaffRegistrationPage({ variant }) {
         title={title}
       />
 
-      {viewMode === "add" ? (
+      {viewMode === "form" ? (
         <section className="rounded-3xl border border-border bg-card p-6 shadow-shadow">
-          <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-text/60">Profile</h2>
+          <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-text/60">
+            {editingId ? "Edit profile" : "Profile"}
+          </h2>
+          {editingId && editingLoginEmail ? (
+            <p className="mt-2 text-sm text-text/70">
+              Login email (system): <span className="font-mono text-heading">{editingLoginEmail}</span>
+            </p>
+          ) : null}
           <div className="mt-4 flex flex-col gap-3">
             <label className="flex flex-col gap-1">
               <span className="text-xs font-semibold text-text/70">Full name *</span>
@@ -402,10 +469,10 @@ function StaffRegistrationPage({ variant }) {
               type="button"
               variant="primary"
             >
-              <Plus className="h-4 w-4" aria-hidden />
-              Create {isLab ? "lab assistant" : "lecturer"}
+              {editingId ? null : <Plus className="h-4 w-4" aria-hidden />}
+              {editingId ? "Save changes" : `Create ${isLab ? "lab assistant" : "lecturer"}`}
             </Button>
-            <Button type="button" variant="secondary" onClick={cancelAdd}>
+            <Button type="button" variant="secondary" onClick={cancelForm}>
               Cancel
             </Button>
           </div>
@@ -468,6 +535,7 @@ function StaffRegistrationPage({ variant }) {
                     <th className="py-3 pr-4">Login email</th>
                     <th className="py-3 pr-4">Scope</th>
                     <th className="py-3 pr-4">Status</th>
+                    <th className="py-3 pr-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -484,6 +552,31 @@ function StaffRegistrationPage({ variant }) {
                         <span className="inline-flex rounded-full border border-border bg-tint px-2.5 py-1 text-xs font-semibold">
                           {row.status}
                         </span>
+                      </td>
+                      <td className="py-3 pl-2 text-right">
+                        <div className="inline-flex flex-wrap items-center justify-end gap-1">
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            className="inline-flex items-center gap-1 px-2 py-1.5 text-xs"
+                            onClick={() => openEdit(row)}
+                            aria-label={`Edit ${row.fullName}`}
+                          >
+                            <Pencil className="h-3.5 w-3.5" aria-hidden />
+                            Edit
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            className="inline-flex items-center gap-1 border-red-500/30 px-2 py-1.5 text-xs text-red-700 hover:bg-red-500/10 dark:text-red-300"
+                            disabled={deletingId === row.id}
+                            onClick={() => confirmDelete(row)}
+                            aria-label={`Delete ${row.fullName}`}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                            {deletingId === row.id ? "…" : "Delete"}
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))}

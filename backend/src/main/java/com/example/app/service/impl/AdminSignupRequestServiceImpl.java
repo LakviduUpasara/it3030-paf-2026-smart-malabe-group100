@@ -16,6 +16,8 @@ import com.example.app.security.AuthenticatedUser;
 import com.example.app.service.AdminSignupRequestService;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -52,9 +54,11 @@ public class AdminSignupRequestServiceImpl implements AdminSignupRequestService 
             throw new ApiException(HttpStatus.CONFLICT, "An account already exists for this email.");
         }
 
+        String username = allocateUsernameForEmail(signupRequest.getEmail());
         UserAccount userAccount = UserAccount.builder()
                 .fullName(signupRequest.getFullName())
                 .email(signupRequest.getEmail())
+                .username(username)
                 .providerSubject(signupRequest.getProviderSubject())
                 .passwordHash(signupRequest.getAuthProvider() == AuthProvider.LOCAL ? signupRequest.getPasswordHash() : null)
                 .role(request.getAssignedRole())
@@ -62,6 +66,7 @@ public class AdminSignupRequestServiceImpl implements AdminSignupRequestService 
                 .provider(signupRequest.getAuthProvider() == null ? AuthProvider.LOCAL : signupRequest.getAuthProvider())
                 .preferredTwoFactorMethod(signupRequest.getPreferredTwoFactorMethod())
                 .authenticatorConfirmed(false)
+                .mustChangePassword(signupRequest.getAuthProvider() == AuthProvider.LOCAL)
                 .build();
         userAccountRepository.save(userAccount);
 
@@ -106,11 +111,31 @@ public class AdminSignupRequestServiceImpl implements AdminSignupRequestService 
                 .reasonForAccess(signupRequest.getReasonForAccess())
                 .preferredTwoFactorMethod(signupRequest.getPreferredTwoFactorMethod())
                 .status(signupRequest.getStatus())
+                .requestedRole(signupRequest.getRequestedRole())
                 .assignedRole(signupRequest.getAssignedRole())
                 .reviewerNote(signupRequest.getReviewerNote())
                 .requestedAt(signupRequest.getRequestedAt())
                 .reviewedAt(signupRequest.getReviewedAt())
                 .build();
+    }
+
+    private String allocateUsernameForEmail(String email) {
+        if (email == null || !email.contains("@")) {
+            return "user-" + UUID.randomUUID().toString().substring(0, 8);
+        }
+        String local = email.substring(0, email.indexOf('@')).toLowerCase(Locale.ROOT);
+        local = local.replaceAll("[^a-z0-9._-]", "");
+        if (local.isEmpty()) {
+            local = "user";
+        }
+        String candidate = local;
+        for (int i = 0; i < 20; i++) {
+            if (!userAccountRepository.existsByUsernameIgnoreCase(candidate)) {
+                return candidate;
+            }
+            candidate = local + (i + 1);
+        }
+        return local + "-" + UUID.randomUUID().toString().substring(0, 8);
     }
 
     private String trimNullable(String value) {

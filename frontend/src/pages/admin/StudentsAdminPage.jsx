@@ -1,5 +1,5 @@
 import { useCallback, useDeferredValue, useEffect, useState } from "react";
-import { Plus } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import Button from "../../components/Button";
 import AdminPageHeader from "../../components/admin/AdminPageHeader";
 import { useAdminShell } from "../../context/AdminShellContext";
@@ -31,6 +31,9 @@ function emptyStudentForm() {
 function StudentsAdminPage() {
   const { setActiveWindow } = useAdminShell();
   const [viewMode, setViewMode] = useState("list");
+  const [editingId, setEditingId] = useState(null);
+  const [editingStudentIdLabel, setEditingStudentIdLabel] = useState("");
+  const [deletingId, setDeletingId] = useState("");
   const [faculties, setFaculties] = useState([]);
   const [degrees, setDegrees] = useState([]);
   const [intakes, setIntakes] = useState([]);
@@ -156,15 +159,45 @@ function StudentsAdminPage() {
   }, [deferredSearch, statusFilter]);
 
   const openAdd = () => {
+    setEditingId(null);
+    setEditingStudentIdLabel("");
     setForm(emptyStudentForm());
     setFormError("");
     setFormSuccess("");
-    setViewMode("add");
+    setViewMode("form");
     setActiveWindow("Register");
   };
 
-  const cancelAdd = () => {
+  const openEdit = (row) => {
+    const le = row.latestEnrollment || {};
+    const streamVal =
+      typeof le.stream === "string" ? le.stream : le.stream?.name || le.stream || "WEEKDAY";
+    setEditingId(row.id);
+    setEditingStudentIdLabel(row.studentId || "");
+    setForm({
+      firstName: row.firstName || "",
+      lastName: row.lastName || "",
+      nicNumber: row.nicNumber || "",
+      phone: row.phone || "",
+      optionalEmail: row.optionalEmail || "",
+      status: row.status || "ACTIVE",
+      facultyId: le.facultyCode || "",
+      degreeProgramId: le.degreeCode || "",
+      intakeId: le.intakeId || "",
+      stream: String(streamVal).toUpperCase(),
+      subgroup: le.subgroup || "",
+      enrollmentStatus: le.enrollmentStatus || "ACTIVE",
+    });
+    setFormError("");
+    setFormSuccess("");
+    setViewMode("form");
+    setActiveWindow("Edit");
+  };
+
+  const cancelForm = () => {
     setViewMode("list");
+    setEditingId(null);
+    setEditingStudentIdLabel("");
     setFormError("");
     setFormSuccess("");
     setActiveWindow("");
@@ -189,18 +222,43 @@ function StudentsAdminPage() {
         subgroup: form.subgroup.trim() || undefined,
         enrollmentStatus: form.enrollmentStatus,
       };
-      const created = await registrationService.createStudent(payload);
-      setFormSuccess(
-        `Created ${created.studentId} — login email ${created.email} (password is NIC at creation).`
-      );
+      if (editingId) {
+        await registrationService.updateStudent(editingId, payload);
+        setFormSuccess("Student updated.");
+      } else {
+        const created = await registrationService.createStudent(payload);
+        setFormSuccess(
+          `Created ${created.studentId} — login email ${created.email} (password is NIC at creation).`
+        );
+      }
       setForm(emptyStudentForm());
+      setEditingId(null);
+      setEditingStudentIdLabel("");
       setActiveWindow("");
       setViewMode("list");
       await loadList();
     } catch (e) {
-      setFormError(e.message || "Create failed.");
+      setFormError(e.message || "Save failed.");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const confirmDelete = async (row) => {
+    const ok = window.confirm(
+      `Delete student ${row.studentId} (${row.firstName} ${row.lastName})? This removes enrollments and the login account.`
+    );
+    if (!ok) return;
+    setDeletingId(row.id);
+    setError("");
+    try {
+      await registrationService.deleteStudent(row.id);
+      setFormSuccess("Student deleted.");
+      await loadList();
+    } catch (e) {
+      setError(e.message || "Delete failed.");
+    } finally {
+      setDeletingId("");
     }
   };
 
@@ -214,7 +272,7 @@ function StudentsAdminPage() {
               Add student
             </Button>
           ) : (
-            <Button className="inline-flex items-center gap-2" onClick={cancelAdd} type="button" variant="secondary">
+            <Button className="inline-flex items-center gap-2" onClick={cancelForm} type="button" variant="secondary">
               Cancel
             </Button>
           )
@@ -223,9 +281,17 @@ function StudentsAdminPage() {
         title="Students"
       />
 
-      {viewMode === "add" ? (
+      {viewMode === "form" ? (
         <section className="rounded-3xl border border-border bg-card p-6 shadow-shadow">
-          <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-text/60">New student</h2>
+          <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-text/60">
+            {editingId ? "Edit student" : "New student"}
+          </h2>
+          {editingId && editingStudentIdLabel ? (
+            <p className="mt-2 text-sm text-text/70">
+              Student ID: <span className="font-mono font-medium text-heading">{editingStudentIdLabel}</span> (login email
+              is fixed to this id)
+            </p>
+          ) : null}
 
           <div className="mt-4 flex flex-col gap-3">
             <div className="grid gap-3 sm:grid-cols-2">
@@ -425,10 +491,10 @@ function StudentsAdminPage() {
               type="button"
               variant="primary"
             >
-              <Plus className="h-4 w-4" aria-hidden />
-              Create student
+              {editingId ? null : <Plus className="h-4 w-4" aria-hidden />}
+              {editingId ? "Save changes" : "Create student"}
             </Button>
-            <Button type="button" variant="secondary" onClick={cancelAdd}>
+            <Button type="button" variant="secondary" onClick={cancelForm}>
               Cancel
             </Button>
           </div>
@@ -493,6 +559,7 @@ function StudentsAdminPage() {
                     <th className="py-3 pr-4">Enrollments</th>
                     <th className="py-3 pr-4">Latest</th>
                     <th className="py-3 pr-4">Status</th>
+                    <th className="py-3 pr-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -513,6 +580,31 @@ function StudentsAdminPage() {
                         <span className="inline-flex rounded-full border border-border bg-tint px-2.5 py-1 text-xs font-semibold">
                           {row.status}
                         </span>
+                      </td>
+                      <td className="py-3 pl-2 text-right">
+                        <div className="inline-flex flex-wrap items-center justify-end gap-1">
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            className="inline-flex items-center gap-1 px-2 py-1.5 text-xs"
+                            onClick={() => openEdit(row)}
+                            aria-label={`Edit ${row.studentId}`}
+                          >
+                            <Pencil className="h-3.5 w-3.5" aria-hidden />
+                            Edit
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            className="inline-flex items-center gap-1 border-red-500/30 px-2 py-1.5 text-xs text-red-700 hover:bg-red-500/10 dark:text-red-300"
+                            disabled={deletingId === row.id}
+                            onClick={() => confirmDelete(row)}
+                            aria-label={`Delete ${row.studentId}`}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                            {deletingId === row.id ? "…" : "Delete"}
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))}

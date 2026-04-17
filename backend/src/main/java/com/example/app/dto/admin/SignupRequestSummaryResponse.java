@@ -26,6 +26,7 @@ public class SignupRequestSummaryResponse {
     private String reasonForAccess;
     private TwoFactorMethod preferredTwoFactorMethod;
     private SignupRequestStatus status;
+    private Role requestedRole;
     private Role assignedRole;
     private String reviewerNote;
     private LocalDateTime requestedAt;

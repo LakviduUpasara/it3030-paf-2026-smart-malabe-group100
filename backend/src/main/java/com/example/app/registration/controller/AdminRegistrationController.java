@@ -43,6 +43,11 @@ public class AdminRegistrationController {
         return adminRegistrationService.list(role, status, search);
     }
 
+    @GetMapping("/{id}")
+    public AdminUserResponse getById(@PathVariable String id) {
+        return adminRegistrationService.getById(id);
+    }
+
     @PutMapping("/{id}")
     public AdminUserResponse update(@PathVariable String id, @Valid @RequestBody AdminUpdateRequest request) {
         return adminRegistrationService.update(id, request);

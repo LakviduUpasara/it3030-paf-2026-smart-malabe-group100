@@ -50,6 +50,9 @@ public class SignupRequest {
 
     private SignupRequestStatus status;
 
+    /** Role the applicant asks for when registering (reviewer may assign a different role on approval). */
+    private Role requestedRole;
+
     private Role assignedRole;
 
     private String reviewerNote;

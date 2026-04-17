@@ -20,6 +20,7 @@ public class PendingApprovalResponse {
     private String email;
     private AuthProvider provider;
     private SignupRequestStatus status;
+    private Role requestedRole;
     private Role assignedRole;
     private String reviewerNote;
     private LocalDateTime requestedAt;

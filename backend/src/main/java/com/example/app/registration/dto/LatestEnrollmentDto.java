@@ -1,5 +1,6 @@
 package com.example.app.registration.dto;
 
+import com.example.app.entity.enums.AccountStatus;
 import com.example.app.registration.enums.StudentStream;
 import lombok.Builder;
 import lombok.Value;
@@ -16,4 +17,5 @@ public class LatestEnrollmentDto {
     String currentTerm;
     StudentStream stream;
     String subgroup;
+    AccountStatus enrollmentStatus;
 }

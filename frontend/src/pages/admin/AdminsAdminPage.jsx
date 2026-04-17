@@ -4,8 +4,19 @@ import Button from "../../components/Button";
 import AdminPageHeader from "../../components/admin/AdminPageHeader";
 import { useAdminShell } from "../../context/AdminShellContext";
 import * as registrationService from "../../services/registrationService";
+import { ROLES } from "../../utils/roleUtils";
 
-const ROLES = ["ADMIN", "USER", "TECHNICIAN", "MANAGER", "LOST_ITEM_ADMIN"];
+/** Matches backend `Role` enum — same set admins can assign as signup approval. */
+const DIRECTORY_ROLES = [
+  ROLES.USER,
+  ROLES.STUDENT,
+  ROLES.LECTURER,
+  ROLES.LAB_ASSISTANT,
+  ROLES.TECHNICIAN,
+  ROLES.MANAGER,
+  ROLES.ADMIN,
+  ROLES.LOST_ITEM_ADMIN,
+];
 const STATUSES = ["ACTIVE", "INACTIVE"];
 
 function emptyAdminForm() {
@@ -237,7 +248,7 @@ function AdminsAdminPage() {
                   value={form.role}
                   onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
                 >
-                  {ROLES.map((r) => (
+                  {DIRECTORY_ROLES.map((r) => (
                     <option key={r} value={r}>
                       {r.replaceAll("_", " ")}
                     </option>
@@ -324,7 +335,7 @@ function AdminsAdminPage() {
                 onChange={(e) => setRoleFilter(e.target.value)}
               >
                 <option value="">All</option>
-                {ROLES.map((r) => (
+                {DIRECTORY_ROLES.map((r) => (
                   <option key={r} value={r}>
                     {r.replaceAll("_", " ")}
                   </option>

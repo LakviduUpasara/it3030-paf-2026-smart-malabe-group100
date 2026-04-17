@@ -392,7 +392,9 @@ function LoginPanel({ showHeading = true }) {
       ) : sessionPhase === "TWO_FACTOR_METHOD_SELECTION" ? (
         <div className="login-form auth-verification-form">
           <p className="supporting-text">
-            Next, choose how you want to complete two-step verification for this sign-in.
+            Choose your preferred second step. Email sends a code to your inbox. Authenticator shows a QR code to link the
+            app once; after that, sign-in uses the app. Until the app is linked, email codes are used if authenticator is
+            not set up yet.
           </p>
           <div className="auth-actions-row signup-form-actions flex-col gap-2 sm:flex-row">
             <Button

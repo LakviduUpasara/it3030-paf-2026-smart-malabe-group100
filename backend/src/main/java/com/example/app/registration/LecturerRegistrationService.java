@@ -123,6 +123,73 @@ public class LecturerRegistrationService {
         throw new ApiException(HttpStatus.CONFLICT, "Could not allocate a unique lecturer email");
     }
 
+    public LecturerResponse update(String id, LecturerCreateRequest request) {
+        Lecturer lecturer =
+                lecturerRepository.findById(id).orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Lecturer not found"));
+
+        String fullName = RegistrationStringUtils.sanitizePersonName(request.getFullName());
+        if (fullName == null || fullName.isBlank()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Full name is required");
+        }
+        AccountStatus status = request.getStatus() == null ? AccountStatus.ACTIVE : request.getStatus();
+        if (status != AccountStatus.ACTIVE && status != AccountStatus.INACTIVE) {
+            status = AccountStatus.ACTIVE;
+        }
+
+        StaffScopeResult scope = staffEligibilityService.validateStaffEligibilityWithDb(
+                request.getFacultyIds(), request.getDegreeProgramIds(), request.getModuleIds());
+
+        String optionalEmail = RegistrationStringUtils.sanitizeOptionalContact(request.getOptionalEmail());
+        String phone = RegistrationStringUtils.sanitizeOptionalContact(request.getPhone());
+        String nicStaffId = RegistrationStringUtils.sanitizeOptionalContact(request.getNicStaffId());
+
+        String previousNic = lecturer.getNicStaffId();
+        if (nicStaffId != null
+                && (previousNic == null || !nicStaffId.equalsIgnoreCase(previousNic))) {
+            if (lecturerRepository.existsByNicStaffIdIgnoreCaseAndIdNot(nicStaffId, id)) {
+                throw new ApiException(HttpStatus.CONFLICT, "NIC/Staff ID already exists");
+            }
+        }
+
+        lecturer.setFullName(fullName);
+        lecturer.setOptionalEmail(optionalEmail);
+        lecturer.setPhone(phone);
+        lecturer.setNicStaffId(nicStaffId);
+        lecturer.setStatus(status);
+        lecturer.setFacultyIds(new ArrayList<>(scope.getFacultyIds()));
+        lecturer.setDegreeProgramIds(new ArrayList<>(scope.getDegreeProgramIds()));
+        lecturer.setModuleIds(new ArrayList<>(scope.getModuleIds()));
+        try {
+            lecturer = lecturerRepository.save(lecturer);
+        } catch (DuplicateKeyException e) {
+            String msg = String.valueOf(e.getMessage());
+            if (msg.contains("nicStaffId") || msg.contains("nic_staff_id")) {
+                throw new ApiException(HttpStatus.CONFLICT, "NIC/Staff ID already exists");
+            }
+            throw e;
+        }
+
+        UserAccount user = userAccountRepository
+                .findByLecturerRef(lecturer.getId())
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Account not found"));
+        if (user.getRole() != Role.LECTURER) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Linked account is not a lecturer account");
+        }
+        user.setFullName(fullName);
+        user.setStatus(mapUserStatus(status));
+        userAccountRepository.save(user);
+
+        moduleOfferingSyncService.syncLecturerAssignmentsAcrossModuleOfferings(lecturer);
+        return toResponse(lecturer);
+    }
+
+    public void delete(String id) {
+        Lecturer lecturer =
+                lecturerRepository.findById(id).orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Lecturer not found"));
+        userAccountRepository.findByLecturerRef(id).ifPresent(userAccountRepository::delete);
+        lecturerRepository.delete(lecturer);
+    }
+
     public List<LecturerResponse> list(AccountStatus statusFilter, String search) {
         Query query = new Query();
         if (statusFilter != null) {

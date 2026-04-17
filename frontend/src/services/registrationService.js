@@ -21,6 +21,23 @@ export async function createLecturer(payload) {
   }
 }
 
+export async function updateLecturer(id, payload) {
+  try {
+    const { data } = await api.put(`/lecturers/${encodeURIComponent(id)}`, payload);
+    return data;
+  } catch (e) {
+    throw createServiceError(e, "Unable to update lecturer.");
+  }
+}
+
+export async function deleteLecturer(id) {
+  try {
+    await api.delete(`/lecturers/${encodeURIComponent(id)}`);
+  } catch (e) {
+    throw createServiceError(e, "Unable to delete lecturer.");
+  }
+}
+
 export async function listLecturers(query) {
   try {
     const { data } = await api.get(`/lecturers${toParams(query)}`);
@@ -37,6 +54,23 @@ export async function createLabAssistant(payload) {
     return data;
   } catch (e) {
     throw createServiceError(e, "Unable to create lab assistant.");
+  }
+}
+
+export async function updateLabAssistant(id, payload) {
+  try {
+    const { data } = await api.put(`/lab-assistants/${encodeURIComponent(id)}`, payload);
+    return data;
+  } catch (e) {
+    throw createServiceError(e, "Unable to update lab assistant.");
+  }
+}
+
+export async function deleteLabAssistant(id) {
+  try {
+    await api.delete(`/lab-assistants/${encodeURIComponent(id)}`);
+  } catch (e) {
+    throw createServiceError(e, "Unable to delete lab assistant.");
   }
 }
 
@@ -68,6 +102,15 @@ export async function listAdmins(query) {
   }
 }
 
+export async function getAdmin(id) {
+  try {
+    const { data } = await api.get(`/admins/${encodeURIComponent(id)}`);
+    return data;
+  } catch (e) {
+    throw createServiceError(e, "Unable to load account.");
+  }
+}
+
 export async function updateAdmin(id, payload) {
   try {
     const { data } = await api.put(`/admins/${encodeURIComponent(id)}`, payload);
@@ -92,6 +135,23 @@ export async function createStudent(payload) {
     return data;
   } catch (e) {
     throw createServiceError(e, "Unable to create student.");
+  }
+}
+
+export async function updateStudent(id, payload) {
+  try {
+    const { data } = await api.put(`/students/${encodeURIComponent(id)}`, payload);
+    return data;
+  } catch (e) {
+    throw createServiceError(e, "Unable to update student.");
+  }
+}
+
+export async function deleteStudent(id) {
+  try {
+    await api.delete(`/students/${encodeURIComponent(id)}`);
+  } catch (e) {
+    throw createServiceError(e, "Unable to delete student.");
   }
 }
 

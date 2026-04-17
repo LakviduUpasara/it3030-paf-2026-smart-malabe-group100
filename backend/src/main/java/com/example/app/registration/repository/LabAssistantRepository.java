@@ -9,6 +9,8 @@ public interface LabAssistantRepository extends MongoRepository<LabAssistant, St
 
     boolean existsByLoginEmailIgnoreCase(String loginEmail);
 
+    boolean existsByNicStaffIdIgnoreCaseAndIdNot(String nicStaffId, String id);
+
     List<LabAssistant> findByStatusOrderByCreatedAtDesc(AccountStatus status);
 
     List<LabAssistant> findAllByOrderByCreatedAtDesc();

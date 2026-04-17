@@ -10,6 +10,10 @@ import org.springframework.data.mongodb.repository.MongoRepository;
 
 public interface EnrollmentRepository extends MongoRepository<Enrollment, String> {
 
+    List<Enrollment> findByStudentProfileId(String studentProfileId);
+
+    void deleteByStudentProfileId(String studentProfileId);
+
     List<Enrollment> findByIntakeIdAndEnrollmentStatus(String intakeId, AccountStatus enrollmentStatus);
 
     List<Enrollment> findByEnrollmentStatus(AccountStatus enrollmentStatus);

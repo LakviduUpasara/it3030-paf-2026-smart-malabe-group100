@@ -21,6 +21,7 @@ import com.example.app.entity.TwoFactorChallenge;
 import com.example.app.entity.UserAccount;
 import com.example.app.entity.enums.AccountStatus;
 import com.example.app.entity.enums.AuthProvider;
+import com.example.app.entity.enums.Role;
 import com.example.app.entity.enums.SignupRequestStatus;
 import com.example.app.entity.enums.TwoFactorMethod;
 import com.example.app.config.AppProperties;
@@ -117,6 +118,13 @@ public class AuthServiceImpl implements AuthService {
             throw new ApiException(HttpStatus.CONFLICT, "An approved account already exists for this email.");
         }
 
+        Role requestedRole = request.getRequestedRole() == null ? Role.USER : request.getRequestedRole();
+        if (requestedRole == Role.ADMIN || requestedRole == Role.LOST_ITEM_ADMIN) {
+            throw new ApiException(
+                    HttpStatus.BAD_REQUEST,
+                    "Those roles cannot be requested on sign up. Submit a request for a campus role; an administrator may assign elevated access after review.");
+        }
+
         SignupRequest signupRequest = signupRequestRepository.findByEmailIgnoreCase(normalizedEmail)
                 .orElseGet(() -> SignupRequest.builder().id(UUID.randomUUID().toString()).build());
 
@@ -137,6 +145,7 @@ public class AuthServiceImpl implements AuthService {
         signupRequest.setAuthProvider(authProvider);
         signupRequest.setPreferredTwoFactorMethod(preferredTwoFactorMethod);
         signupRequest.setStatus(SignupRequestStatus.PENDING);
+        signupRequest.setRequestedRole(requestedRole);
         signupRequest.setAssignedRole(null);
         signupRequest.setReviewerNote(null);
         signupRequest.setReviewedAt(null);
@@ -177,7 +186,7 @@ public class AuthServiceImpl implements AuthService {
             return passwordChangeRequiredResponse(userAccount);
         }
 
-        return buildTwoFactorChallenge(userAccount);
+        return buildTwoFactorChallenge(userAccount, false);
     }
 
     @Override
@@ -290,7 +299,7 @@ public class AuthServiceImpl implements AuthService {
             userAccountRepository.save(userAccount);
         }
 
-        return buildTwoFactorChallenge(userAccount);
+        return buildTwoFactorChallenge(userAccount, false);
     }
 
     @Override
@@ -398,7 +407,7 @@ public class AuthServiceImpl implements AuthService {
             return passwordChangeRequiredResponse(userAccount);
         }
 
-        return buildTwoFactorChallenge(userAccount);
+        return buildTwoFactorChallenge(userAccount, false);
     }
 
     @Override
@@ -491,7 +500,8 @@ public class AuthServiceImpl implements AuthService {
             userAccount.setAuthenticatorSecret(null);
             userAccount.setAuthenticatorConfirmed(false);
         } else {
-            userAccount.setAuthenticatorSecret(null);
+            GoogleAuthenticatorKey key = googleAuthenticator.createCredentials();
+            userAccount.setAuthenticatorSecret(key.getKey());
             userAccount.setAuthenticatorConfirmed(false);
         }
         userAccountRepository.save(userAccount);
@@ -501,7 +511,8 @@ public class AuthServiceImpl implements AuthService {
         UserAccount reloaded = userAccountRepository
                 .findById(userAccount.getId())
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "Account not found."));
-        return buildTwoFactorChallenge(reloaded);
+        boolean enrollmentStep = request.getMethod() == TwoFactorMethod.AUTHENTICATOR_APP;
+        return buildTwoFactorChallenge(reloaded, enrollmentStep);
     }
 
     @Override
@@ -548,13 +559,43 @@ public class AuthServiceImpl implements AuthService {
         }
     }
 
+    /**
+     * Chooses email OTP vs authenticator based on the account.
+     *
+     * @param authenticatorEnrollmentStep when {@code true}, the user just chose the authenticator app during first-login
+     *                                      and a new secret was saved — show QR/setup. When {@code false} (normal sign-in),
+     *                                      if a secret exists but the app was never confirmed, send email OTP instead so
+     *                                      abandoned setups do not block access.
+     */
+    private TwoFactorMethod resolveEffectiveTwoFactorMethod(
+            UserAccount userAccount, boolean authenticatorEnrollmentStep
+    ) {
+        TwoFactorMethod preferred = userAccount.getPreferredTwoFactorMethod();
+        if (preferred == null || preferred == TwoFactorMethod.EMAIL_OTP) {
+            return TwoFactorMethod.EMAIL_OTP;
+        }
+        String secret = userAccount.getAuthenticatorSecret();
+        boolean hasSecret = secret != null && !secret.isBlank();
+        if (!hasSecret) {
+            return TwoFactorMethod.EMAIL_OTP;
+        }
+        if (!userAccount.isAuthenticatorConfirmed()) {
+            if (authenticatorEnrollmentStep) {
+                return TwoFactorMethod.AUTHENTICATOR_APP;
+            }
+            return TwoFactorMethod.EMAIL_OTP;
+        }
+        return TwoFactorMethod.AUTHENTICATOR_APP;
+    }
+
     private AuthFlowResponse buildTwoFactorChallenge(UserAccount userAccount) {
+        return buildTwoFactorChallenge(userAccount, false);
+    }
+
+    private AuthFlowResponse buildTwoFactorChallenge(UserAccount userAccount, boolean authenticatorEnrollmentStep) {
         twoFactorChallengeRepository.deleteByUserId(userAccount.getId());
 
-        TwoFactorMethod method =
-                userAccount.getPreferredTwoFactorMethod() == null
-                        ? TwoFactorMethod.EMAIL_OTP
-                        : userAccount.getPreferredTwoFactorMethod();
+        TwoFactorMethod method = resolveEffectiveTwoFactorMethod(userAccount, authenticatorEnrollmentStep);
 
         // Persist the challenge as a small Mongo document so 2FA can be resumed safely.
         TwoFactorChallenge challenge = TwoFactorChallenge.builder()
@@ -573,15 +614,18 @@ public class AuthServiceImpl implements AuthService {
             String otpCode = generateOtpCode();
             challenge.setOtpCode(otpCode);
             authEmailOtpNotifier.sendSignInOtp(userAccount.getEmail(), otpCode);
+            if (userAccount.getPreferredTwoFactorMethod() == TwoFactorMethod.AUTHENTICATOR_APP) {
+                message =
+                        "We sent a one-time code to your email. Use it to sign in. If you have not finished linking Google Authenticator, you can complete that later from your account settings.";
+            }
         } else {
             if (userAccount.getAuthenticatorSecret() == null || userAccount.getAuthenticatorSecret().isBlank()) {
-                GoogleAuthenticatorKey key = googleAuthenticator.createCredentials();
-                userAccount.setAuthenticatorSecret(key.getKey());
-                userAccount.setAuthenticatorConfirmed(false);
-                userAccountRepository.save(userAccount);
-            }
-
-            if (!userAccount.isAuthenticatorConfirmed()) {
+                log.warn("Effective method was AUTHENTICATOR_APP but secret missing for user {}", userAccount.getId());
+                String otpCode = generateOtpCode();
+                challenge.setMethod(TwoFactorMethod.EMAIL_OTP);
+                challenge.setOtpCode(otpCode);
+                authEmailOtpNotifier.sendSignInOtp(userAccount.getEmail(), otpCode);
+            } else if (!userAccount.isAuthenticatorConfirmed()) {
                 authFlowStatus = AuthFlowStatus.AUTHENTICATOR_SETUP_REQUIRED;
                 message = "Set up your authenticator app with the provided key and enter the generated code.";
             }
@@ -661,6 +705,7 @@ public class AuthServiceImpl implements AuthService {
                 .email(signupRequest.getEmail())
                 .provider(signupRequest.getAuthProvider() == null ? AuthProvider.LOCAL : signupRequest.getAuthProvider())
                 .status(signupRequest.getStatus())
+                .requestedRole(signupRequest.getRequestedRole())
                 .assignedRole(signupRequest.getAssignedRole())
                 .reviewerNote(signupRequest.getReviewerNote())
                 .requestedAt(signupRequest.getRequestedAt())
@@ -785,6 +830,6 @@ public class AuthServiceImpl implements AuthService {
             userAccountRepository.save(userAccount);
         }
 
-        return buildTwoFactorChallenge(userAccount);
+        return buildTwoFactorChallenge(userAccount, false);
     }
 }

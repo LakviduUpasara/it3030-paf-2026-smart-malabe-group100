@@ -218,8 +218,24 @@ function ApprovalPendingPage() {
                 <p>{new Date(pendingApproval.requestedAt).toLocaleString()}</p>
               </div>
               <div>
-                <strong>Assigned Role</strong>
-                <p>{pendingApproval.assignedRole || "Pending admin decision"}</p>
+                <strong>Requested role</strong>
+                <p>
+                  {pendingApproval.requestedRole
+                    ? String(pendingApproval.requestedRole).replaceAll("_", " ")
+                    : "—"}
+                </p>
+              </div>
+              <div>
+                <strong>Assigned role</strong>
+                <p>
+                  {pendingApproval.status === "APPROVED" && pendingApproval.assignedRole
+                    ? String(pendingApproval.assignedRole).replaceAll("_", " ")
+                    : pendingApproval.status === "PENDING"
+                      ? "Awaiting administrator"
+                      : pendingApproval.assignedRole
+                        ? String(pendingApproval.assignedRole).replaceAll("_", " ")
+                        : "—"}
+                </p>
               </div>
               <div>
                 <strong>Latest Update</strong>

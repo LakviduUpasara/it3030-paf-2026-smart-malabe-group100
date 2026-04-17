@@ -1,6 +1,7 @@
 package com.example.app.dto.auth;
 
 import com.example.app.entity.enums.AuthProvider;
+import com.example.app.entity.enums.Role;
 import com.example.app.entity.enums.TwoFactorMethod;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -33,6 +34,9 @@ public class RegisterRequest {
     @NotBlank(message = "Reason for access is required.")
     @Size(max = 1000, message = "Reason for access is too long.")
     private String reasonForAccess;
+
+    /** Campus role the applicant is requesting (platform-only roles cannot be self-requested). */
+    private Role requestedRole;
 
     private AuthProvider authProvider;
 

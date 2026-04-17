@@ -34,9 +34,8 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class AdminRegistrationService {
 
-    /** Roles that may be created, listed, updated, or deleted from the console “Admins” API. */
-    private static final Set<Role> MANAGEABLE_ROLES =
-            EnumSet.of(Role.ADMIN, Role.LOST_ITEM_ADMIN, Role.USER, Role.TECHNICIAN, Role.MANAGER);
+    /** Roles that may be created, listed, updated, or deleted from the console user directory (includes sign-up approvals). */
+    private static final Set<Role> MANAGEABLE_ROLES = EnumSet.allOf(Role.class);
 
     private final UserAccountRepository userAccountRepository;
     private final PasswordEncoder passwordEncoder;
@@ -110,6 +109,16 @@ public class AdminRegistrationService {
                 .item(toAdminUserResponse(user))
                 .generatedPassword(generatedPassword)
                 .build();
+    }
+
+    public AdminUserResponse getById(String id) {
+        UserAccount user = userAccountRepository
+                .findById(id)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Account not found"));
+        if (!MANAGEABLE_ROLES.contains(user.getRole())) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "Account not found");
+        }
+        return toAdminUserResponse(user);
     }
 
     public AdminUserResponse update(String id, AdminUpdateRequest request) {

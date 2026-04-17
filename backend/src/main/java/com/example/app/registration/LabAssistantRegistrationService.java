@@ -131,6 +131,73 @@ public class LabAssistantRegistrationService {
         throw new ApiException(HttpStatus.CONFLICT, "Could not allocate a unique lab assistant email");
     }
 
+    public LabAssistantResponse update(String id, LabAssistantCreateRequest request) {
+        LabAssistant labAssistant =
+                labAssistantRepository.findById(id).orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Lab assistant not found"));
+
+        String fullName = RegistrationStringUtils.sanitizePersonName(request.getFullName());
+        if (fullName == null || fullName.isBlank()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Full name is required");
+        }
+        AccountStatus status = request.getStatus() == null ? AccountStatus.ACTIVE : request.getStatus();
+        if (status != AccountStatus.ACTIVE && status != AccountStatus.INACTIVE) {
+            status = AccountStatus.ACTIVE;
+        }
+
+        StaffScopeResult scope = staffEligibilityService.validateStaffEligibilityWithDb(
+                request.getFacultyIds(), request.getDegreeProgramIds(), request.getModuleIds());
+
+        String optionalEmail = RegistrationStringUtils.sanitizeOptionalContact(request.getOptionalEmail());
+        String phone = RegistrationStringUtils.sanitizeOptionalContact(request.getPhone());
+        String nicStaffId = RegistrationStringUtils.sanitizeOptionalContact(request.getNicStaffId());
+
+        String previousNic = labAssistant.getNicStaffId();
+        if (nicStaffId != null
+                && (previousNic == null || !nicStaffId.equalsIgnoreCase(previousNic))) {
+            if (labAssistantRepository.existsByNicStaffIdIgnoreCaseAndIdNot(nicStaffId, id)) {
+                throw new ApiException(HttpStatus.CONFLICT, "NIC/Staff ID already exists");
+            }
+        }
+
+        labAssistant.setFullName(fullName);
+        labAssistant.setOptionalEmail(optionalEmail);
+        labAssistant.setPhone(phone);
+        labAssistant.setNicStaffId(nicStaffId);
+        labAssistant.setStatus(status);
+        labAssistant.setFacultyIds(new ArrayList<>(scope.getFacultyIds()));
+        labAssistant.setDegreeProgramIds(new ArrayList<>(scope.getDegreeProgramIds()));
+        labAssistant.setModuleIds(new ArrayList<>(scope.getModuleIds()));
+        try {
+            labAssistant = labAssistantRepository.save(labAssistant);
+        } catch (DuplicateKeyException e) {
+            String msg = String.valueOf(e.getMessage());
+            if (msg.contains("nicStaffId") || msg.contains("nic_staff_id")) {
+                throw new ApiException(HttpStatus.CONFLICT, "NIC/Staff ID already exists");
+            }
+            throw e;
+        }
+
+        UserAccount user = userAccountRepository
+                .findByLabAssistantRef(labAssistant.getId())
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Account not found"));
+        if (user.getRole() != Role.LAB_ASSISTANT) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Linked account is not a lab assistant account");
+        }
+        user.setFullName(fullName);
+        user.setStatus(mapUserStatus(status));
+        userAccountRepository.save(user);
+
+        moduleOfferingSyncService.syncLabAssistantAssignmentsAcrossModuleOfferings(labAssistant);
+        return toResponse(labAssistant);
+    }
+
+    public void delete(String id) {
+        LabAssistant labAssistant =
+                labAssistantRepository.findById(id).orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Lab assistant not found"));
+        userAccountRepository.findByLabAssistantRef(id).ifPresent(userAccountRepository::delete);
+        labAssistantRepository.delete(labAssistant);
+    }
+
     public List<LabAssistantResponse> list(AccountStatus statusFilter, String search) {
         Query query = new Query();
         if (statusFilter != null) {

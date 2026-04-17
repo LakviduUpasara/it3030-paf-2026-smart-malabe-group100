@@ -192,6 +192,125 @@ public class StudentRegistrationService {
         return toListItem(student, List.of(enrollment));
     }
 
+    public StudentListItemResponse update(String id, StudentCreateRequest request) {
+        Student student =
+                studentRepository.findById(id).orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Student not found"));
+
+        String firstName = RegistrationStringUtils.trimToNull(request.getFirstName());
+        String lastName = RegistrationStringUtils.trimToNull(request.getLastName());
+        String nicNumber = RegistrationStringUtils.trimToNull(request.getNicNumber());
+        String facultyId = RegistrationStringUtils.trimToNull(request.getFacultyId());
+        String degreeProgramId = RegistrationStringUtils.trimToNull(request.getDegreeProgramId());
+        String intakeId = RegistrationStringUtils.trimToNull(request.getIntakeId());
+        String streamRaw = RegistrationStringUtils.trimToNull(request.getStream());
+
+        if (firstName == null
+                || lastName == null
+                || nicNumber == null
+                || facultyId == null
+                || degreeProgramId == null
+                || intakeId == null
+                || streamRaw == null) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, REQUIRED_PROFILE);
+        }
+
+        StudentStream stream;
+        try {
+            stream = StudentStream.valueOf(streamRaw.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, REQUIRED_PROFILE);
+        }
+
+        String subgroup = RegistrationStringUtils.trimToNull(request.getSubgroup());
+        if (subgroup != null && subgroup.length() > 40) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Subgroup must be at most 40 characters");
+        }
+
+        AccountStatus profileStatus = request.getStatus() == null ? AccountStatus.ACTIVE : request.getStatus();
+        if (profileStatus != AccountStatus.ACTIVE && profileStatus != AccountStatus.INACTIVE) {
+            profileStatus = AccountStatus.ACTIVE;
+        }
+
+        AccountStatus enrollmentStatus =
+                request.getEnrollmentStatus() == null ? AccountStatus.ACTIVE : request.getEnrollmentStatus();
+        if (enrollmentStatus != AccountStatus.ACTIVE && enrollmentStatus != AccountStatus.INACTIVE) {
+            enrollmentStatus = AccountStatus.ACTIVE;
+        }
+
+        String facultyCode = facultyId.toUpperCase(Locale.ROOT);
+        String degreeCode = degreeProgramId.trim();
+
+        studentRelationValidationService.validateStudentRelations(
+                facultyCode, degreeCode, intakeId, stream, subgroup);
+
+        String previousNic = student.getNicNumber();
+        if (!nicNumber.equalsIgnoreCase(previousNic)
+                && studentRepository.existsByNicNumberIgnoreCaseAndIdNot(nicNumber, id)) {
+            throw new ApiException(HttpStatus.CONFLICT, "NIC number already exists");
+        }
+
+        String phone = RegistrationStringUtils.sanitizeOptionalContact(request.getPhone());
+        String optionalEmail = RegistrationStringUtils.sanitizeOptionalContact(request.getOptionalEmail());
+
+        student.setFirstName(firstName);
+        student.setLastName(lastName);
+        student.setNicNumber(nicNumber);
+        student.setPhone(phone);
+        student.setOptionalEmail(optionalEmail);
+        student.setStatus(profileStatus);
+        studentRepository.save(student);
+
+        UserAccount user = userAccountRepository
+                .findById(student.getUserAccountId())
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Account not found"));
+        if (user.getRole() != Role.STUDENT) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Linked account is not a student account");
+        }
+        user.setFullName(firstName + " " + lastName);
+        user.setStatus(mapUserStatus(profileStatus));
+        if (!nicNumber.equalsIgnoreCase(previousNic)) {
+            user.setPasswordHash(passwordEncoder.encode(nicNumber));
+            user.setMustChangePassword(true);
+        }
+        userAccountRepository.save(user);
+
+        Optional<Enrollment> latestOpt = enrollmentRepository.findFirstByStudentProfileIdOrderByCreatedAtDesc(id);
+        if (latestOpt.isEmpty()) {
+            Enrollment enrollment = Enrollment.builder()
+                    .studentProfileId(student.getId())
+                    .facultyId(facultyCode)
+                    .degreeProgramId(degreeCode)
+                    .intakeId(intakeId.trim())
+                    .stream(stream)
+                    .subgroup(subgroup)
+                    .enrollmentStatus(enrollmentStatus)
+                    .build();
+            enrollmentRepository.save(enrollment);
+        } else {
+            Enrollment e = latestOpt.get();
+            e.setFacultyId(facultyCode);
+            e.setDegreeProgramId(degreeCode);
+            e.setIntakeId(intakeId.trim());
+            e.setStream(stream);
+            e.setSubgroup(subgroup);
+            e.setEnrollmentStatus(enrollmentStatus);
+            enrollmentRepository.save(e);
+        }
+
+        List<Enrollment> all = enrollmentRepository.findByStudentProfileId(id);
+        return toListItem(student, all);
+    }
+
+    public void delete(String id) {
+        Student student =
+                studentRepository.findById(id).orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Student not found"));
+        enrollmentRepository.deleteByStudentProfileId(id);
+        if (student.getUserAccountId() != null) {
+            userAccountRepository.deleteById(student.getUserAccountId());
+        }
+        studentRepository.deleteById(id);
+    }
+
     public PagedStudentListResponse list(
             String search, AccountStatus status, String sort, int page, int pageSize) {
         int safePage = Math.max(page, 0);
@@ -288,6 +407,7 @@ public class StudentRegistrationService {
                     .currentTerm(null)
                     .stream(e.getStream())
                     .subgroup(e.getSubgroup())
+                    .enrollmentStatus(e.getEnrollmentStatus())
                     .build();
         }
 
@@ -299,6 +419,7 @@ public class StudentRegistrationService {
                 .email(email)
                 .optionalEmail(s.getOptionalEmail())
                 .nicNumber(s.getNicNumber())
+                .phone(s.getPhone())
                 .status(s.getStatus())
                 .enrollmentCount(enrollments.size())
                 .latestEnrollment(latestDto)

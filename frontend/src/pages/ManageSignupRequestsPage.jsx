@@ -96,13 +96,24 @@ function ManageSignupRequestsPage() {
     setRequests((currentRequests) => currentRequests.filter((request) => request.id !== requestId));
   };
 
-  const handleApprove = async (requestId) => {
+  const resolveApproveRole = (request) => {
+    const manual = roleSelections[request.id];
+    if (manual && assignableRoles.includes(manual)) {
+      return manual;
+    }
+    if (request.requestedRole && assignableRoles.includes(request.requestedRole)) {
+      return request.requestedRole;
+    }
+    return assignableRoles.includes(defaultAssignableRole) ? defaultAssignableRole : assignableRoles[0];
+  };
+
+  const handleApprove = async (request) => {
+    const requestId = request.id;
     setIsSubmittingId(requestId);
     setError("");
 
     try {
-      const chosen = roleSelections[requestId] || defaultAssignableRole;
-      const safeRole = assignableRoles.includes(chosen) ? chosen : defaultAssignableRole;
+      const safeRole = resolveApproveRole(request);
 
       await approveSignupRequest(requestId, {
         assignedRole: safeRole,
@@ -195,6 +206,12 @@ function ManageSignupRequestsPage() {
                   <p className="text-xs font-semibold uppercase tracking-[0.08em] text-text/60">Submitted</p>
                   <p className="mt-1 text-sm">{new Date(request.requestedAt).toLocaleString()}</p>
                 </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-text/60">Requested role</p>
+                  <p className="mt-1 text-sm">
+                    {request.requestedRole ? String(request.requestedRole).replaceAll("_", " ") : "—"}
+                  </p>
+                </div>
               </div>
 
               <div className="mt-4 rounded-2xl border border-border bg-tint/50 p-4">
@@ -208,11 +225,7 @@ function ManageSignupRequestsPage() {
                   <select
                     className="h-11 rounded-2xl border border-border bg-card px-3 text-sm"
                     onChange={(event) => handleRoleChange(request.id, event.target.value)}
-                    value={
-                      assignableRoles.includes(roleSelections[request.id])
-                        ? roleSelections[request.id]
-                        : defaultAssignableRole
-                    }
+                    value={resolveApproveRole(request)}
                   >
                     {assignableRoles.map((roleValue) => (
                       <option key={roleValue} value={roleValue}>
@@ -237,7 +250,7 @@ function ManageSignupRequestsPage() {
               <div className="mt-6 flex flex-wrap gap-2">
                 <Button
                   disabled={Boolean(isSubmittingId)}
-                  onClick={() => handleApprove(request.id)}
+                  onClick={() => handleApprove(request)}
                   variant="primary"
                   type="button"
                 >

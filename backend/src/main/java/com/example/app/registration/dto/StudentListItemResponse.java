@@ -14,6 +14,7 @@ public class StudentListItemResponse {
     String email;
     String optionalEmail;
     String nicNumber;
+    String phone;
     AccountStatus status;
     int enrollmentCount;
     LatestEnrollmentDto latestEnrollment;

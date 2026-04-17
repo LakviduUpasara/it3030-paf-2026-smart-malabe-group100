@@ -79,6 +79,8 @@ const PROVIDER_ACCOUNT_CHOICES = {
   ],
 };
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** Roles applicants may request (platform roles are assigned only after review). */
+const REQUESTABLE_ROLES = ["USER", "STUDENT", "LECTURER", "LAB_ASSISTANT", "TECHNICIAN", "MANAGER"];
 const initialForm = {
   fullName: "",
   email: "",
@@ -88,6 +90,7 @@ const initialForm = {
   phoneNumber: "",
   department: "",
   reasonForAccess: "",
+  requestedRole: "USER",
   preferredTwoFactorMethod: "EMAIL_OTP",
 };
 
@@ -161,6 +164,7 @@ function SignupPage() {
       phoneNumber: String(data.get("phoneNumber") || formState.phoneNumber || ""),
       department: String(data.get("department") || formState.department || ""),
       reasonForAccess: String(data.get("reasonForAccess") || formState.reasonForAccess || ""),
+      requestedRole: String(data.get("requestedRole") || formState.requestedRole || "USER"),
       preferredTwoFactorMethod: String(
         data.get("preferredTwoFactorMethod") || formState.preferredTwoFactorMethod || "EMAIL_OTP",
       ),
@@ -319,6 +323,7 @@ function SignupPage() {
         ...current,
         fullName: identity.fullName,
         email: identity.email,
+        requestedRole: current.requestedRole || "USER",
         authProvider: provider,
         socialSignupToken,
       });
@@ -516,6 +521,28 @@ function SignupPage() {
                   <div className="input-shell">
                     <input className="login-input" name="department" onChange={handleChange} onInput={handleChange} placeholder="Computing / Facilities / Administration" type="text" value={formState.department} />
                   </div>
+                </label>
+
+                <label className="field field-annotated field-full">
+                  <span>Requested campus role</span>
+                  <div className="input-shell">
+                    <select
+                      className="login-input"
+                      name="requestedRole"
+                      onChange={handleChange}
+                      value={formState.requestedRole}
+                    >
+                      {REQUESTABLE_ROLES.map((r) => (
+                        <option key={r} value={r}>
+                          {r.replaceAll("_", " ")}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <p className="supporting-text mt-1 text-xs text-text/60">
+                    Administrators review this request; the final role may differ. Platform administrator roles are not
+                    self-service.
+                  </p>
                 </label>
 
                 <label className="field field-annotated field-full">

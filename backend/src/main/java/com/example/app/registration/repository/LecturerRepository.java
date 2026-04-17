@@ -9,6 +9,8 @@ public interface LecturerRepository extends MongoRepository<Lecturer, String> {
 
     boolean existsByLoginEmailIgnoreCase(String loginEmail);
 
+    boolean existsByNicStaffIdIgnoreCaseAndIdNot(String nicStaffId, String id);
+
     List<Lecturer> findByStatusOrderByCreatedAtDesc(AccountStatus status);
 
     List<Lecturer> findAllByOrderByCreatedAtDesc();

@@ -17,6 +17,8 @@ public interface StudentRepository extends MongoRepository<Student, String> {
 
     boolean existsByNicNumberIgnoreCase(String nicNumber);
 
+    boolean existsByNicNumberIgnoreCaseAndIdNot(String nicNumber, String id);
+
     Page<Student> findByStatus(AccountStatus status, Pageable pageable);
 
     Page<Student> findAll(Pageable pageable);

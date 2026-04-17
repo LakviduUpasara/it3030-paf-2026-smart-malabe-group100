@@ -27,4 +27,10 @@ public interface UserAccountRepository extends MongoRepository<UserAccount, Stri
     boolean existsByEmailIgnoreCaseAndIdNot(String email, String id);
 
     boolean existsByUsernameIgnoreCaseAndIdNot(String username, String id);
+
+    Optional<UserAccount> findByStudentRef(String studentRef);
+
+    Optional<UserAccount> findByLecturerRef(String lecturerRef);
+
+    Optional<UserAccount> findByLabAssistantRef(String labAssistantRef);
 }
