@@ -1,8 +1,15 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Notification from '../components/Notification';
 import { bookingAPI } from '../services/api';
 
 const CreateBookingPage = () => {
+  const resources = [
+    { id: 1, name: 'Lab A', type: 'Computer Lab' },
+    { id: 2, name: 'Lab B', type: 'Computer Lab' },
+    { id: 3, name: 'Meeting Room 1', type: 'Room' },
+    { id: 4, name: 'Projector 1', type: 'Equipment' },
+  ];
+
   const [formData, setFormData] = useState({
     resourceId: '',
     userId: '',
@@ -11,8 +18,42 @@ const CreateBookingPage = () => {
     purpose: '',
   });
 
+  const [prefilledFromAvailability, setPrefilledFromAvailability] = useState(false);
   const [loading, setLoading] = useState(false);
   const [notification, setNotification] = useState(null);
+
+  const emptyFormState = {
+    resourceId: '',
+    userId: '',
+    startTime: '',
+    endTime: '',
+    purpose: '',
+  };
+
+  useEffect(() => {
+    const savedBookingData = sessionStorage.getItem('bookingData');
+
+    if (!savedBookingData) {
+      return;
+    }
+
+    try {
+      const parsedBookingData = JSON.parse(savedBookingData);
+
+      setFormData((prev) => ({
+        ...prev,
+        resourceId: parsedBookingData.resourceId ? String(parsedBookingData.resourceId) : '',
+        startTime: toDateTimeInputValue(parsedBookingData.startTime),
+        endTime: toDateTimeInputValue(parsedBookingData.endTime),
+      }));
+
+      setPrefilledFromAvailability(
+        Boolean(parsedBookingData.lockResourceSelection) || Boolean(parsedBookingData.resourceId),
+      );
+    } catch (error) {
+      console.error('Failed to parse booking data from session storage:', error);
+    }
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -25,6 +66,21 @@ const CreateBookingPage = () => {
     const [y, m, d] = date.split('-').map(Number);
     const [h, min] = time.split(':').map(Number);
     return new Date(y, m - 1, d, h, min, 0);
+  };
+
+  const toDateTimeInputValue = (value) => {
+    if (!value) return '';
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
   };
 
   const formatDateTimeLocal = (date) => {
@@ -42,6 +98,14 @@ const CreateBookingPage = () => {
     setLoading(true);
 
     try {
+      if (!formData.resourceId) {
+        setNotification({
+          type: 'warning',
+          message: 'Please select a resource.',
+        });
+        return;
+      }
+
       const now = new Date();
       const minTime = new Date(now.getTime() + 5 * 60 * 1000);
 
@@ -84,7 +148,9 @@ const CreateBookingPage = () => {
       await bookingAPI.createBooking(payload);
 
       setNotification({ type: 'success', message: 'Booking created successfully!' });
-      setFormData({ resourceId: '', userId: '', startTime: '', endTime: '', purpose: '' });
+      setFormData(emptyFormState);
+      setPrefilledFromAvailability(false);
+      sessionStorage.removeItem('bookingData');
 
       setTimeout(() => {
         window.location.href = '/bookings';
@@ -111,24 +177,66 @@ const CreateBookingPage = () => {
     }
   };
 
+  const handleCancel = () => {
+    setFormData(emptyFormState);
+    setPrefilledFromAvailability(false);
+    setNotification(null);
+    sessionStorage.removeItem('bookingData');
+    window.history.back();
+  };
+
+  const getGroupLabel = (type) => {
+    const labels = {
+      'Computer Lab': 'Labs',
+      Room: 'Rooms',
+      Equipment: 'Equipment',
+    };
+
+    return labels[type] || type;
+  };
+
+  const groupedResources = resources.reduce((acc, resource) => {
+    if (!acc[resource.type]) {
+      acc[resource.type] = [];
+    }
+
+    acc[resource.type].push(resource);
+    return acc;
+  }, {});
+
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4">
       <div className="bg-white rounded-xl shadow-md p-8 max-w-2xl mx-auto">
         <h1 className="text-3xl font-bold mb-8 text-gray-900 text-center">Create Booking</h1>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Resource ID */}
+          {/* Resource */}
           <div>
-            <label className="text-gray-600 text-sm font-medium mb-1 block">Resource ID</label>
-            <input
-              type="number"
+            <label className="text-gray-600 text-sm font-medium mb-1 block">Resource</label>
+            <select
               name="resourceId"
               value={formData.resourceId}
               onChange={handleChange}
-              placeholder="Enter resource ID"
+              disabled={prefilledFromAvailability}
               required
               className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+            >
+              <option value="">Select Resource</option>
+              {Object.entries(groupedResources).map(([type, resourcesInGroup]) => (
+                <optgroup key={type} label={`${getGroupLabel(type)} (${resourcesInGroup.length})`}>
+                  {resourcesInGroup.map((resource) => (
+                    <option key={resource.id} value={resource.id}>
+                      {resource.name}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+            {prefilledFromAvailability && (
+              <p className="text-xs text-green-600 mt-1">
+                Resource is locked to the selection from Availability.
+              </p>
+            )}
           </div>
 
           {/* User ID */}
@@ -196,7 +304,7 @@ const CreateBookingPage = () => {
             </button>
             <button
               type="button"
-              onClick={() => window.history.back()}
+              onClick={handleCancel}
               className="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded-lg transition-colors"
             >
               Cancel
