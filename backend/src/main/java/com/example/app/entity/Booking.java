@@ -48,6 +48,9 @@ public class Booking {
     @Column(nullable = false)
     private BookingStatus status;
 
+    @Column(length = 500)
+    private String rejectionReason;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -75,6 +78,8 @@ public class Booking {
     public void setPurpose(String purpose) { this.purpose = purpose; }
     public BookingStatus getStatus() { return status; }
     public void setStatus(BookingStatus status) { this.status = status; }
+    public String getRejectionReason() { return rejectionReason; }
+    public void setRejectionReason(String rejectionReason) { this.rejectionReason = rejectionReason; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 }
