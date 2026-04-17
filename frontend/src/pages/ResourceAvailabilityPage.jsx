@@ -112,11 +112,18 @@ const ResourceAvailabilityPage = () => {
   };
 
   const handleBookSlot = (slot) => {
+    const selectedResource = resources.find(
+      (resource) => String(resource.id) === String(resourceId),
+    );
+
     const bookingData = {
-      resourceId,
+      resourceId: Number(resourceId),
+      resourceName: selectedResource?.name || `Resource ${resourceId}`,
       startTime: slot.startTime.toISOString(),
       endTime: slot.endTime.toISOString(),
+      lockResourceSelection: true,
     };
+
     sessionStorage.setItem('bookingData', JSON.stringify(bookingData));
     window.location.href = '/booking/create';
   };
