@@ -1,7 +1,4 @@
 import React, { useState } from 'react';
-import Card from '../components/Card';
-import Button from '../components/Button';
-import Input from '../components/Input';
 import Notification from '../components/Notification';
 import { bookingAPI } from '../services/api';
 import { FiSearch, FiCalendar, FiClock } from 'react-icons/fi';
@@ -89,65 +86,79 @@ const ResourceAvailabilityPage = () => {
 
   return (
     <div>
-      <h1 className="text-3xl font-bold mb-8 text-white">Resource Availability</h1>
+      <h1 className="text-3xl font-bold mb-8 text-gray-900">Resource Availability</h1>
 
       {/* Search Section */}
-      <Card className="mb-8">
-        <h2 className="text-xl font-bold mb-4 text-white flex items-center gap-2">
-          <FiSearch /> Check Availability
+      <div className="bg-white rounded-xl shadow-md p-6 mb-8">
+        <h2 className="text-xl font-bold mb-6 text-gray-900 flex items-center gap-2">
+          <FiSearch className="text-blue-500" /> Check Availability
         </h2>
 
-        <div className="grid grid-cols-3 gap-4 mb-6">
-          <Input
-            label="Resource ID"
-            type="number"
-            value={resourceId}
-            onChange={(e) => setResourceId(e.target.value)}
-            placeholder="Enter resource ID"
-          />
-
-          <Input
-            label="Select Date"
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-          />
-
-          <div className="flex items-end">
-            <Button
-              onClick={handleCheckAvailability}
-              disabled={loading}
-              className="w-full"
-            >
-              {loading ? 'Checking...' : 'Check Availability'}
-            </Button>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+          {/* Resource ID Input */}
+          <div>
+            <label className="text-gray-600 text-sm font-medium mb-2 block flex items-center gap-2">
+              <FiSearch className="text-gray-500" /> Resource ID
+            </label>
+            <input
+              type="number"
+              value={resourceId}
+              onChange={(e) => setResourceId(e.target.value)}
+              placeholder="Enter resource ID"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800"
+            />
           </div>
+
+          {/* Date Input */}
+          <div>
+            <label className="text-gray-600 text-sm font-medium mb-2 block flex items-center gap-2">
+              <FiCalendar className="text-gray-500" /> Select Date
+            </label>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800"
+            />
+          </div>
+
+          {/* Check Availability Button */}
+          <button
+            onClick={handleCheckAvailability}
+            disabled={loading}
+            className="px-6 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white font-semibold rounded-lg transition-colors"
+          >
+            {loading ? 'Checking...' : 'Check Availability'}
+          </button>
         </div>
-      </Card>
+      </div>
 
       {/* Time Slots Section */}
       {timeSlots.length > 0 && (
         <div>
-          <h2 className="text-2xl font-bold mb-4 text-white flex items-center gap-2">
-            <FiClock /> Available Time Slots
+          <h2 className="text-2xl font-bold mb-4 text-gray-900 flex items-center gap-2">
+            <FiClock className="text-blue-500" /> Available Time Slots
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {timeSlots.map((slot, idx) => (
-              <Card key={idx} className="flex flex-col items-center text-center">
-                <p className="text-lg font-semibold text-white mb-3">{slot.time}</p>
-                <p className="text-sm text-gray-400 mb-4">
-                  {availability?.available ? 'Available' : 'Not Available'}
+              <div key={idx} className="bg-white rounded-xl shadow-md p-6 flex flex-col items-center text-center">
+                <p className="text-lg font-semibold text-gray-900 mb-3">{slot.time}</p>
+                <p className="text-sm text-gray-500 mb-4">
+                  {availability?.available ? '✓ Available' : '✗ Not Available'}
                 </p>
-                <Button
+                <button
                   onClick={() => handleBookSlot(slot)}
-                  variant={availability?.available ? 'success' : 'secondary'}
                   disabled={!availability?.available}
-                  className="w-full"
+                  className={`w-full px-4 py-2 rounded-lg font-semibold transition-colors ${
+                    availability?.available
+                      ? 'bg-green-500 hover:bg-green-600 text-white'
+                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  }`}
                 >
-                  Book Now
-                </Button>
-              </Card>
+                  {availability?.available ? 'Book Now' : 'Unavailable'}
+                </button>
+              </div>
             ))}
           </div>
         </div>
@@ -155,13 +166,13 @@ const ResourceAvailabilityPage = () => {
 
       {/* Info Section */}
       {availability && (
-        <Card className="mt-8 bg-blue-900 border-blue-700">
-          <h3 className="text-lg font-bold text-white mb-2">Status</h3>
-          <p className="text-gray-300">{availability.message}</p>
-          <p className="text-sm text-gray-400 mt-2">
+        <div className="mt-8 bg-blue-100 rounded-xl shadow-md p-6 border border-blue-200">
+          <h3 className="text-lg font-bold text-gray-900 mb-2">Status</h3>
+          <p className="text-gray-800">{availability.message}</p>
+          <p className="text-sm text-gray-600 mt-2">
             Resource ID: {availability.resourceId} | Date: {selectedDate}
           </p>
-        </Card>
+        </div>
       )}
 
       {notification && (
