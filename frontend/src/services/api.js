@@ -29,4 +29,63 @@ export const healthAPI = {
   check: () => api.get('/health'),
 };
 
+function extractApiErrorMessage(error) {
+  if (!error) {
+    return null;
+  }
+
+  const data = error.response?.data;
+
+  if (typeof data === "string" && data.trim()) {
+    return data.trim();
+  }
+
+  if (data && typeof data === "object") {
+    if (typeof data.message === "string" && data.message.trim()) {
+      return data.message.trim();
+    }
+    if (typeof data.error === "string" && data.error.trim()) {
+      return data.error.trim();
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Builds an Error with a user-facing message (prefers backend body, then fallback).
+ */
+export function createServiceError(error, fallbackMessage) {
+  const message =
+    extractApiErrorMessage(error) ||
+    fallbackMessage ||
+    "Something went wrong.";
+
+  const err = new Error(message);
+  const status = error?.response?.status;
+  if (status != null) {
+    err.status = status;
+  }
+  return err;
+}
+
+/**
+ * Calls the API; on success returns response.data. If the route is missing or unreachable,
+ * runs fallback (e.g. mock data) so local dev works without a full backend.
+ */
+export async function requestWithFallback(request, fallback, errorMessage) {
+  try {
+    const res = await request();
+    return res?.data;
+  } catch (error) {
+    const useFallback = !error?.response || error.response.status === 404;
+
+    if (useFallback) {
+      return await fallback();
+    }
+
+    throw createServiceError(error, errorMessage);
+  }
+}
+
 export default api;

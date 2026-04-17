@@ -120,6 +120,21 @@ async function loginWithProvider(provider, email) {
   }
 }
 
+export async function prepareGoogleSignup(credential) {
+  if (!credential?.trim()) {
+    throw new Error("Google sign-in did not return a valid credential.");
+  }
+
+  try {
+    const response = await api.post("/v1/auth/google/signup-session", {
+      credential: credential.trim(),
+    });
+    return response.data;
+  } catch (error) {
+    throw createServiceError(error, "Unable to start Google sign up.");
+  }
+}
+
 export async function loginWithGoogle(credential) {
   if (!credential?.trim()) {
     throw new Error("Google sign-in did not return a valid credential.");
