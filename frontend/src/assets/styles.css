@@ -2713,7 +2713,7 @@ a {
 
 .my-tickets-list-scroll {
   flex: 1 1 auto;
-  min-height: 12rem;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior: contain;
@@ -3508,6 +3508,28 @@ a {
 
 .field-full {
   grid-column: 1 / -1;
+}
+
+.field--invalid.field input:not(.login-input),
+.field--invalid.field select,
+.field--invalid.field textarea,
+.field--invalid.field .ticket-category-search {
+  border-color: #c0392b;
+  box-shadow: 0 0 0 1px rgba(192, 57, 43, 0.2);
+}
+
+.field-error {
+  color: #c0392b;
+  font-size: 0.85rem;
+  margin: 0;
+  line-height: 1.45;
+}
+
+.field-char-count {
+  font-size: 0.82rem;
+  color: var(--muted);
+  font-weight: 500;
+  margin: 0;
 }
 
 .modal-backdrop {

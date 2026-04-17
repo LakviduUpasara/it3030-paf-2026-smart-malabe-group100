@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import Button from "../components/Button";
 import Card from "../components/Card";
 import LoadingSpinner from "../components/LoadingSpinner";
@@ -22,17 +24,14 @@ import {
   formatWithdrawalReasonForDisplay,
 } from "../utils/withdrawalReason";
 import maintenanceIllustration from "../assets/maintenance1.png";
+import {
+  createTicketDefaultValues,
+  DESCRIPTION_MAX_LENGTH,
+  ticketCreateFormSchema,
+  TITLE_MAX_LENGTH,
+} from "../utils/ticketCreateValidation";
 
-const initialForm = {
-  title: "",
-  location: "",
-  categoryId: "",
-  subCategoryId: "",
-  priority: "Normal",
-  description: "",
-  preferredContactMethod: "Phone",
-  preferredContactDetails: "",
-};
+const initialForm = createTicketDefaultValues;
 
 function composeTicketDescription(formData) {
   const base = formData.description.trim();
@@ -174,7 +173,6 @@ function EvidenceAttachmentThumbnails({
 function MyTicketsPage() {
   const [tickets, setTickets] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [formData, setFormData] = useState(initialForm);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -208,6 +206,28 @@ function MyTicketsPage() {
   const [filterPriority, setFilterPriority] = useState("");
   const [withdrawReason, setWithdrawReason] = useState("");
   const [withdrawOtherReason, setWithdrawOtherReason] = useState("");
+
+  const {
+    register: registerCreate,
+    handleSubmit: submitCreateTicket,
+    watch: watchCreate,
+    setValue: setCreateValue,
+    getValues: getCreateValues,
+    reset: resetCreateForm,
+    formState: { errors: createErrors },
+  } = useForm({
+    resolver: zodResolver(ticketCreateFormSchema),
+    defaultValues: createTicketDefaultValues,
+    mode: "all",
+    shouldFocusError: true,
+  });
+
+  const watchCategoryId = watchCreate("categoryId");
+  const watchedCreateTitle = watchCreate("title");
+  const watchedCreateDescription = watchCreate("description");
+  const watchedContactMethod = watchCreate("preferredContactMethod");
+  const createFormValuesWatched = watchCreate();
+  const isCreateFormSchemaOk = ticketCreateFormSchema.safeParse(createFormValuesWatched).success;
 
   useEffect(() => {
     let active = true;
@@ -300,7 +320,7 @@ function MyTicketsPage() {
 
   useEffect(() => {
     let active = true;
-    const categoryId = formData.categoryId;
+    const categoryId = watchCategoryId;
     if (!categoryId) {
       setSubCategories([]);
       return () => {
@@ -324,7 +344,16 @@ function MyTicketsPage() {
     return () => {
       active = false;
     };
-  }, [formData.categoryId]);
+  }, [watchCategoryId]);
+
+  useEffect(() => {
+    if (!isFormOpen) return;
+    resetCreateForm(createTicketDefaultValues);
+    setCategorySearch("");
+    setAttachments([]);
+    setSuggestion(null);
+    setError("");
+  }, [isFormOpen, resetCreateForm]);
 
   useEffect(() => {
     if (detailSubView !== "edit" || !editFormData.categoryId) {
@@ -350,40 +379,25 @@ function MyTicketsPage() {
     };
   }, [detailSubView, editFormData.categoryId]);
 
-  const handleChange = (event) => {
-    const { name, value } = event.target;
-    setFormData((previous) => ({
-      ...previous,
-      [name]: value,
-      ...(name === "categoryId" ? { subCategoryId: "" } : {}),
-    }));
-  };
-
   const handleCategorySearchChange = (event) => {
     const value = event.target.value;
     setCategorySearch(value);
     setIsCategoryDropdownOpen(true);
     setActiveCategoryIndex(-1);
-    setFormData((previous) => ({
-      ...previous,
-      categoryId: "",
-      subCategoryId: "",
-    }));
+    setCreateValue("categoryId", "", { shouldValidate: true, shouldDirty: true, shouldTouch: true });
+    setCreateValue("subCategoryId", "", { shouldValidate: true, shouldDirty: true, shouldTouch: true });
   };
 
   const handleSelectCategory = (category) => {
     setCategorySearch(category.name || "");
     setIsCategoryDropdownOpen(false);
     setActiveCategoryIndex(-1);
-    setFormData((previous) => ({
-      ...previous,
-      categoryId: category.id,
-      subCategoryId: "",
-    }));
+    setCreateValue("categoryId", category.id, { shouldValidate: true, shouldDirty: true, shouldTouch: true });
+    setCreateValue("subCategoryId", "", { shouldValidate: true, shouldDirty: true, shouldTouch: true });
   };
 
   const handleDescriptionSuggestion = async () => {
-    const content = formData.description.trim();
+    const content = getCreateValues("description").trim();
     if (content.length < 5) {
       return;
     }
@@ -402,12 +416,15 @@ function MyTicketsPage() {
     setCategorySearch(suggestion.categoryName || "");
     setIsCategoryDropdownOpen(false);
     setActiveCategoryIndex(-1);
-    setFormData((previous) => ({
-      ...previous,
-      categoryId: suggestion.categoryId,
-      subCategoryId: suggestion.subCategoryId || "",
-    }));
+    setCreateValue("categoryId", suggestion.categoryId, { shouldValidate: true, shouldDirty: true, shouldTouch: true });
+    setCreateValue("subCategoryId", suggestion.subCategoryId || "", {
+      shouldValidate: true,
+      shouldDirty: true,
+      shouldTouch: true,
+    });
   };
+
+  const descriptionRegister = registerCreate("description");
 
   const handleAttachmentChange = (event) => {
     const fileList = Array.from(event.target.files || []);
@@ -432,46 +449,21 @@ function MyTicketsPage() {
     event.target.value = "";
   };
 
-  const handleSubmit = async (event) => {
-    event.preventDefault();
+  const onCreateTicketSubmit = async (values) => {
     setIsSubmitting(true);
     setError("");
     setSuccessMessage("");
 
     try {
-      if (!formData.title.trim()) {
-        throw new Error("Title is required.");
-      }
-      if (!formData.description.trim()) {
-        throw new Error("Description is required.");
-      }
-      if (!formData.categoryId) {
-        throw new Error("Please select a category from the list.");
-      }
-      if (!formData.subCategoryId) {
-        throw new Error("Subcategory is required.");
-      }
-      if (!formData.location.trim()) {
-        throw new Error("Resource / Location is required.");
-      }
-      if (!formData.priority) {
-        throw new Error("Priority is required.");
-      }
-      if (!formData.preferredContactMethod) {
-        throw new Error("Preferred contact method is required.");
-      }
-      if (!formData.preferredContactDetails.trim()) {
-        throw new Error("Preferred contact details are required.");
-      }
       if (attachments.length > MAX_EVIDENCE_IMAGES) {
         throw new Error(`You can upload up to ${MAX_EVIDENCE_IMAGES} images per ticket.`);
       }
 
       const res = await createTicket({
-        title: formData.title.trim(),
-        description: composeTicketDescription(formData),
-        categoryId: formData.categoryId,
-        subCategoryId: formData.subCategoryId,
+        title: values.title.trim(),
+        description: composeTicketDescription(values),
+        categoryId: values.categoryId,
+        subCategoryId: values.subCategoryId,
         suggestions:
           suggestion?.matched && suggestion?.subCategoryName
             ? [suggestion.subCategoryName]
@@ -506,7 +498,8 @@ function MyTicketsPage() {
           : "";
       setSuccessMessage(`Ticket submitted successfully${idPart}${attachmentPart}.`);
       setTickets((previous) => [ticketForList, ...previous]);
-      setFormData(initialForm);
+      resetCreateForm(createTicketDefaultValues);
+      setCategorySearch("");
       setAttachments([]);
       setSuggestion(null);
       setIsFormOpen(false);
@@ -1587,40 +1580,61 @@ function MyTicketsPage() {
             <div className="modal-content">
               <form
                 className="form-grid my-tickets-create-form my-tickets-create-form-modal"
-                onSubmit={handleSubmit}
+                noValidate
+                onSubmit={submitCreateTicket(onCreateTicketSubmit)}
               >
-                <label className="field field-full">
+                <input type="hidden" {...registerCreate("categoryId")} />
+
+                <label className={`field field-full${createErrors.title ? " field--invalid" : ""}`}>
                   <span>
                     Title <span className="required-mark">*</span>
                   </span>
                   <input
-                    name="title"
-                    onChange={handleChange}
-                    placeholder="Short summary of the issue"
-                    required
                     type="text"
-                    value={formData.title}
+                    placeholder="Short summary of the issue"
+                    maxLength={TITLE_MAX_LENGTH}
+                    aria-invalid={createErrors.title ? "true" : "false"}
+                    {...registerCreate("title")}
                   />
+                  {createErrors.title?.message ? (
+                    <p className="field-error" role="alert">
+                      {createErrors.title.message}
+                    </p>
+                  ) : null}
+                  <p className="field-char-count" aria-live="polite">
+                    {(watchedCreateTitle || "").length} / {TITLE_MAX_LENGTH}
+                  </p>
                 </label>
 
-                <label className="field field-full">
+                <label className={`field field-full${createErrors.description ? " field--invalid" : ""}`}>
                   <span>
                     Description <span className="required-mark">*</span>
                   </span>
                   <textarea
-                    name="description"
-                    onChange={handleChange}
-                    onBlur={handleDescriptionSuggestion}
                     placeholder="What happened, where, and any relevant details"
-                    required
-                    rows="5"
-                    value={formData.description}
+                    rows={5}
+                    maxLength={DESCRIPTION_MAX_LENGTH}
+                    aria-invalid={createErrors.description ? "true" : "false"}
+                    {...descriptionRegister}
+                    onBlur={(e) => {
+                      descriptionRegister.onBlur(e);
+                      void handleDescriptionSuggestion();
+                    }}
                   />
+                  {createErrors.description?.message ? (
+                    <p className="field-error" role="alert">
+                      {createErrors.description.message}
+                    </p>
+                  ) : null}
+                  <p className="field-char-count" aria-live="polite">
+                    {(watchedCreateDescription || "").length} / {DESCRIPTION_MAX_LENGTH}
+                  </p>
                 </label>
                 {suggestion?.matched ? (
                   <div className="field field-full ticket-suggestion-box">
                     <p>
-                      Suggested: {suggestion.categoryName} {suggestion.subCategoryName ? `-> ${suggestion.subCategoryName}` : ""}
+                      Suggested: {suggestion.categoryName}{" "}
+                      {suggestion.subCategoryName ? `-> ${suggestion.subCategoryName}` : ""}
                     </p>
                     <Button onClick={applySuggestion} type="button" variant="secondary">
                       Apply Suggestion
@@ -1628,7 +1642,9 @@ function MyTicketsPage() {
                   </div>
                 ) : null}
 
-                <label className="field ticket-category-field">
+                <label
+                  className={`field ticket-category-field${createErrors.categoryId ? " field--invalid" : ""}`}
+                >
                   <span>
                     Category <span className="required-mark">*</span>
                   </span>
@@ -1675,30 +1691,32 @@ function MyTicketsPage() {
                       </div>
                     ) : null}
                   </div>
-                  {!formData.categoryId ? (
+                  {createErrors.categoryId?.message ? (
+                    <p className="field-error" role="alert">
+                      {createErrors.categoryId.message}
+                    </p>
+                  ) : !watchCategoryId ? (
                     <small className="supporting-text">Select a category from suggestions.</small>
                   ) : null}
-                  {formData.categoryId ? (
+                  {watchCategoryId ? (
                     <small className="supporting-text">
-                      Color: {categoryById[formData.categoryId]?.color || "N/A"} | Icon:{" "}
-                      {categoryById[formData.categoryId]?.icon || "N/A"}
+                      Color: {categoryById[watchCategoryId]?.color || "N/A"} | Icon:{" "}
+                      {categoryById[watchCategoryId]?.icon || "N/A"}
                     </small>
                   ) : null}
                 </label>
 
-                <label className="field">
+                <label className={`field${createErrors.subCategoryId ? " field--invalid" : ""}`}>
                   <span>
                     Subcategory <span className="required-mark">*</span>
                   </span>
                   <select
-                    name="subCategoryId"
-                    onChange={handleChange}
-                    required
-                    value={formData.subCategoryId}
-                    disabled={!formData.categoryId}
+                    disabled={!watchCategoryId}
+                    aria-invalid={createErrors.subCategoryId ? "true" : "false"}
+                    {...registerCreate("subCategoryId")}
                   >
                     <option value="">
-                      {formData.categoryId ? "Select Subcategory" : "Select category first"}
+                      {watchCategoryId ? "Select Subcategory" : "Select category first"}
                     </option>
                     {subCategories.map((subCategory) => (
                       <option key={subCategory.id} value={subCategory.id}>
@@ -1706,20 +1724,28 @@ function MyTicketsPage() {
                       </option>
                     ))}
                   </select>
+                  {createErrors.subCategoryId?.message ? (
+                    <p className="field-error" role="alert">
+                      {createErrors.subCategoryId.message}
+                    </p>
+                  ) : null}
                 </label>
 
-                <label className="field">
+                <label className={`field${createErrors.location ? " field--invalid" : ""}`}>
                   <span>
                     Resource / Location <span className="required-mark">*</span>
                   </span>
                   <input
-                    name="location"
-                    onChange={handleChange}
-                    placeholder="e.g. Lecture Hall A, Library 2nd Floor"
-                    required
                     type="text"
-                    value={formData.location}
+                    placeholder="e.g. Lecture Hall A, Library 2nd Floor"
+                    aria-invalid={createErrors.location ? "true" : "false"}
+                    {...registerCreate("location")}
                   />
+                  {createErrors.location?.message ? (
+                    <p className="field-error" role="alert">
+                      {createErrors.location.message}
+                    </p>
+                  ) : null}
                 </label>
 
                 <label className="field field-full">
@@ -1739,7 +1765,7 @@ function MyTicketsPage() {
                   <span>
                     Priority <span className="required-mark">*</span>
                   </span>
-                  <select name="priority" onChange={handleChange} value={formData.priority}>
+                  <select {...registerCreate("priority")}>
                     <option value="Low">Low</option>
                     <option value="Normal">Normal</option>
                     <option value="High">High</option>
@@ -1751,33 +1777,41 @@ function MyTicketsPage() {
                   <span>
                     Preferred Contact Method <span className="required-mark">*</span>
                   </span>
-                  <select
-                    name="preferredContactMethod"
-                    onChange={handleChange}
-                    value={formData.preferredContactMethod}
-                  >
+                  <select {...registerCreate("preferredContactMethod")}>
                     <option value="Phone">Phone</option>
                     <option value="Email">Email</option>
                     <option value="WhatsApp">WhatsApp</option>
                   </select>
                 </label>
 
-                <label className="field field-full">
+                <label className={`field field-full${createErrors.preferredContactDetails ? " field--invalid" : ""}`}>
                   <span>
                     Preferred Contact Details <span className="required-mark">*</span>
                   </span>
                   <input
-                    name="preferredContactDetails"
-                    onChange={handleChange}
-                    placeholder="Phone number, email, or WhatsApp number"
-                    required
                     type="text"
-                    value={formData.preferredContactDetails}
+                    placeholder={
+                      watchedContactMethod === "Email"
+                        ? "name@example.com"
+                        : "10-digit mobile number"
+                    }
+                    autoComplete={watchedContactMethod === "Email" ? "email" : "tel"}
+                    aria-invalid={createErrors.preferredContactDetails ? "true" : "false"}
+                    {...registerCreate("preferredContactDetails")}
                   />
+                  {createErrors.preferredContactDetails?.message ? (
+                    <p className="field-error" role="alert">
+                      {createErrors.preferredContactDetails.message}
+                    </p>
+                  ) : null}
                 </label>
 
                 <div className="field-full">
-                  <Button disabled={isSubmitting} type="submit" variant="primary">
+                  <Button
+                    disabled={isSubmitting || !isCreateFormSchemaOk}
+                    type="submit"
+                    variant="primary"
+                  >
                     {isSubmitting ? "Submitting..." : "Submit Ticket"}
                   </Button>
                 </div>
