@@ -11,6 +11,43 @@ const ResourceAvailabilityPage = () => {
   const [loading, setLoading] = useState(false);
   const [notification, setNotification] = useState(null);
 
+  // Predefined resources
+  const resources = [
+    { id: 1, name: 'Lab A', type: 'Computer Lab' },
+    { id: 2, name: 'Lab B', type: 'Computer Lab' },
+    { id: 3, name: 'Meeting Room 1', type: 'Room' },
+    { id: 4, name: 'Projector 1', type: 'Equipment' },
+  ];
+
+  // Map type to display label
+  const getGroupLabel = (type) => {
+    const labels = {
+      'Computer Lab': 'Labs',
+      'Room': 'Rooms',
+      'Equipment': 'Equipment',
+    };
+    return labels[type] || type;
+  };
+
+  // Group resources by type and sort
+  const groupResourcesByType = () => {
+    const groupOrder = { 'Computer Lab': 0, 'Room': 1, 'Equipment': 2 };
+    const grouped = resources.reduce((acc, resource) => {
+      const type = resource.type;
+      if (!acc[type]) {
+        acc[type] = [];
+      }
+      acc[type].push(resource);
+      return acc;
+    }, {});
+
+    return Object.entries(grouped).sort((a, b) => {
+      const orderA = groupOrder[a[0]] ?? 999;
+      const orderB = groupOrder[b[0]] ?? 999;
+      return orderA - orderB;
+    });
+  };
+
   const formatDateTimeRange = (value) => {
     if (!value) return { start: '', end: '' };
     if (!value.includes('-')) return { start: '', end: '' };
@@ -95,18 +132,27 @@ const ResourceAvailabilityPage = () => {
         </h2>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-          {/* Resource ID Input */}
+          {/* Resource Selection Dropdown */}
           <div>
             <label className="text-gray-600 text-sm font-medium mb-2 block flex items-center gap-2">
-              <FiSearch className="text-gray-500" /> Resource ID
+              <FiSearch className="text-gray-500" /> Resource
             </label>
-            <input
-              type="number"
+            <select
               value={resourceId}
               onChange={(e) => setResourceId(e.target.value)}
-              placeholder="Enter resource ID"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800"
-            />
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800 bg-white cursor-pointer"
+            >
+              <option value="">Select Resource</option>
+              {groupResourcesByType().map(([type, resourcesInGroup]) => (
+                <optgroup key={type} label={`${getGroupLabel(type)} (${resourcesInGroup.length})`}>
+                  {resourcesInGroup.map(resource => (
+                    <option key={resource.id} value={resource.id}>
+                      {resource.name}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
           </div>
 
           {/* Date Input */}
