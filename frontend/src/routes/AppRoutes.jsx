@@ -3,6 +3,7 @@ import { useAuth } from "../hooks/useAuth";
 import AccessDeniedPage from "../pages/AccessDeniedPage";
 import AdminDashboardPage from "../pages/AdminDashboardPage";
 import AdminScaffoldPage from "../pages/admin/AdminScaffoldPage";
+import SystemSettingsPage from "../pages/SystemSettingsPage";
 import CatalogModulesAdminPage from "../pages/admin/CatalogModulesAdminPage";
 import DegreeProgramsAdminPage from "../pages/admin/DegreeProgramsAdminPage";
 import FacultiesAdminPage from "../pages/admin/FacultiesAdminPage";
@@ -95,6 +96,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <NotificationsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/settings/security"
+        element={
+          <ProtectedRoute>
+            <SystemSettingsPage />
           </ProtectedRoute>
         }
       />
@@ -198,7 +207,7 @@ function AppRoutes() {
           <Route path="users/roles-permissions" element={<AdminScaffoldPage />} />
 
           {/* Administration */}
-          <Route path="administration/system-settings" element={<AdminScaffoldPage />} />
+          <Route path="administration/system-settings" element={<SystemSettingsPage />} />
           <Route path="administration/audit-logs" element={<AdminScaffoldPage />} />
           <Route path="administration/security-settings" element={<AdminScaffoldPage />} />
           <Route path="administration/backup-management" element={<AdminScaffoldPage />} />

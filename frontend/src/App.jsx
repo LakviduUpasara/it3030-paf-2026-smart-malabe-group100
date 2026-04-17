@@ -1,9 +1,22 @@
 import { BrowserRouter, useLocation } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import Navbar from "./components/Navbar";
+import GoogleTwoFactorPromptModal from "./components/GoogleTwoFactorPromptModal";
 import TwoFactorSetupReminder from "./components/TwoFactorSetupReminder";
 import { useAuth } from "./hooks/useAuth";
 import AppRoutes from "./routes/AppRoutes";
+
+function GoogleTwoFactorPromptHost() {
+  const { isAuthenticated, googleTwoFactorPrompt } = useAuth();
+  const location = useLocation();
+  if (!isAuthenticated || !googleTwoFactorPrompt) {
+    return null;
+  }
+  if (location.pathname === "/login" || location.pathname === "/signup") {
+    return null;
+  }
+  return <GoogleTwoFactorPromptModal />;
+}
 
 function AppLayout() {
   const { isAuthenticated } = useAuth();
@@ -50,6 +63,7 @@ function App() {
     <AuthProvider>
       <BrowserRouter>
         <AppLayout />
+        <GoogleTwoFactorPromptHost />
       </BrowserRouter>
     </AuthProvider>
   );

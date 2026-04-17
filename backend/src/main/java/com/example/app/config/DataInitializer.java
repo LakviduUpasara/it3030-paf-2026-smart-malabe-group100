@@ -94,6 +94,8 @@ public class DataInitializer {
         account.setPreferredTwoFactorMethod(TwoFactorMethod.EMAIL_OTP);
         account.setAuthenticatorSecret(null);
         account.setAuthenticatorConfirmed(false);
+        account.setTwoFactorEnabled(false);
+        account.setGoogleTwoFactorPromptDismissed(true);
 
         userAccountRepository.save(account);
     }
@@ -118,6 +120,8 @@ public class DataInitializer {
         account.setPreferredTwoFactorMethod(TwoFactorMethod.EMAIL_OTP);
         account.setAuthenticatorSecret(null);
         account.setAuthenticatorConfirmed(false);
+        account.setTwoFactorEnabled(false);
+        account.setGoogleTwoFactorPromptDismissed(provider == AuthProvider.GOOGLE ? false : true);
 
         userAccountRepository.save(account);
     }

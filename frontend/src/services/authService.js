@@ -153,9 +153,17 @@ export async function changeFirstLoginPassword({ currentPassword, newPassword })
   }
 }
 
-export async function selectFirstLoginTwoFactor({ method }) {
+export async function selectFirstLoginTwoFactor({ method, skipTwoFactor }) {
+  if (skipTwoFactor) {
+    try {
+      const response = await api.post("/auth/first-login/select-2fa-method", { skipTwoFactor: true });
+      return response.data;
+    } catch (error) {
+      throw createServiceError(error, "Unable to skip 2-step verification.");
+    }
+  }
   if (!method) {
-    throw new Error("Choose email or authenticator verification.");
+    throw new Error("Choose email or authenticator verification, or skip 2-step verification.");
   }
   try {
     const response = await api.post("/auth/first-login/select-2fa-method", { method });

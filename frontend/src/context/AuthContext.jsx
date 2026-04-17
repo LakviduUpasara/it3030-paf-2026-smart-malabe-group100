@@ -1,5 +1,6 @@
 import { createContext, useEffect, useState } from "react";
 import * as authService from "../services/authService";
+import * as accountService from "../services/accountService";
 import { clearStorage, STORAGE_KEYS } from "../utils/storage";
 
 /** Fallback when /health cannot be reached (offline UI). Server APP_DEVELOPER_MODE is authoritative when health loads. */
@@ -26,6 +27,7 @@ export function AuthProvider({ children }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [developerMode, setDeveloperMode] = useState(false);
+  const [googleTwoFactorPrompt, setGoogleTwoFactorPrompt] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -66,6 +68,7 @@ export function AuthProvider({ children }) {
     clearSessionState();
     setPendingApproval(null);
     clearStorage(STORAGE_KEYS.PENDING_APPROVAL);
+    setGoogleTwoFactorPrompt(false);
   };
 
   const applyAuthFlowResponse = (response) => {
@@ -81,6 +84,9 @@ export function AuthProvider({ children }) {
         setTwoFactorChallenge(null);
         setSessionPhase(null);
         clearStorage(STORAGE_KEYS.SESSION_PHASE);
+        setGoogleTwoFactorPrompt(
+          response.showGoogleTwoFactorSetupPrompt === true || response.user?.showGoogleTwoFactorSetupPrompt === true,
+        );
         break;
       case "PENDING_APPROVAL":
         clearClientState();
@@ -200,6 +206,26 @@ export function AuthProvider({ children }) {
       "Unable to save your verification method.",
     );
 
+  const skipFirstLoginTwoFactor = async () =>
+    performAuthAction(
+      () => authService.selectFirstLoginTwoFactor({ skipTwoFactor: true }),
+      "Unable to skip 2-step verification.",
+    );
+
+  const dismissGoogleTwoFactorPrompt = async () => {
+    setIsLoading(true);
+    setError("");
+    try {
+      await accountService.dismissGoogleTwoFactorPrompt();
+      setGoogleTwoFactorPrompt(false);
+    } catch (requestError) {
+      setError(requestError.message || "Unable to dismiss the prompt.");
+      throw requestError;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const refreshPendingApproval = async (lookup) => {
     setIsLoading(true);
     setError("");
@@ -253,6 +279,8 @@ export function AuthProvider({ children }) {
     twoFactorChallenge,
     sessionPhase,
     developerMode,
+    googleTwoFactorPrompt,
+    dismissGoogleTwoFactorPrompt,
     isAuthenticated: Boolean(user?.email && sessionToken && !sessionPhase),
     isLoading,
     error,
@@ -269,6 +297,7 @@ export function AuthProvider({ children }) {
     resendEmailOtp,
     changeFirstLoginPassword,
     selectFirstLoginTwoFactorMethod,
+    skipFirstLoginTwoFactor,
     refreshPendingApproval,
     activateApprovedSignup,
     logout,

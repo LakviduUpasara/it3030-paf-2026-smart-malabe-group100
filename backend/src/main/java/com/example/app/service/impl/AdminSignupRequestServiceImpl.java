@@ -65,8 +65,10 @@ public class AdminSignupRequestServiceImpl implements AdminSignupRequestService 
                 .role(request.getAssignedRole())
                 .status(AccountStatus.ACTIVE)
                 .provider(signupRequest.getAuthProvider() == null ? AuthProvider.LOCAL : signupRequest.getAuthProvider())
+                .twoFactorEnabled(false)
                 .preferredTwoFactorMethod(signupRequest.getPreferredTwoFactorMethod())
                 .authenticatorConfirmed(false)
+                .googleTwoFactorPromptDismissed(signupRequest.getAuthProvider() == AuthProvider.GOOGLE ? false : true)
                 .mustChangePassword(signupRequest.getAuthProvider() == AuthProvider.LOCAL)
                 .build();
         userAccountRepository.save(userAccount);

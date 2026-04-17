@@ -196,6 +196,10 @@ public class AuthServiceImpl implements AuthService {
             return passwordChangeRequiredResponse(userAccount);
         }
 
+        if (!userAccount.requiresTwoFactorAtLogin()) {
+            return authenticatedResponse(userAccount, "Signed in successfully.");
+        }
+
         return buildTwoFactorChallenge(userAccount, false);
     }
 
@@ -308,6 +312,10 @@ public class AuthServiceImpl implements AuthService {
         if (userAccount.isMustChangePassword()) {
             userAccount.setMustChangePassword(false);
             userAccountRepository.save(userAccount);
+        }
+
+        if (!userAccount.requiresTwoFactorAtLogin()) {
+            return authenticatedResponse(userAccount, "Signed in with Google successfully.");
         }
 
         return buildTwoFactorChallenge(userAccount, false);
@@ -480,6 +488,10 @@ public class AuthServiceImpl implements AuthService {
             return passwordChangeRequiredResponse(userAccount);
         }
 
+        if (!userAccount.requiresTwoFactorAtLogin()) {
+            return authenticatedResponse(userAccount, "Your workspace is ready.");
+        }
+
         return buildTwoFactorChallenge(userAccount, false);
     }
 
@@ -567,7 +579,36 @@ public class AuthServiceImpl implements AuthService {
                 .findById(user.getUserId())
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "Account not found."));
 
+        if (Boolean.TRUE.equals(request.getSkipTwoFactor())) {
+            if (request.getMethod() != null) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "Do not send a method when skipping 2-step verification.");
+            }
+            userAccount.setTwoFactorEnabled(false);
+            userAccount.setAuthenticatorSecret(null);
+            userAccount.setAuthenticatorConfirmed(false);
+            userAccountRepository.save(userAccount);
+
+            sessionTokenRepository.deleteById(tokenValue.trim());
+
+            UserAccount reloaded = userAccountRepository
+                    .findById(userAccount.getId())
+                    .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "Account not found."));
+
+            if (appProperties.isDeveloperMode()) {
+                return authenticatedResponse(reloaded, "Developer mode: 2-step verification skipped.");
+            }
+            return authenticatedResponse(
+                    reloaded,
+                    "You can enable 2-step verification later in Administration → System Settings."
+            );
+        }
+
         TwoFactorMethod method = request.getMethod();
+        if (method == null) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Choose a verification method or skip 2-step verification.");
+        }
+
+        userAccount.setTwoFactorEnabled(true);
         userAccount.setPreferredTwoFactorMethod(method);
         if (method == TwoFactorMethod.EMAIL_OTP) {
             userAccount.setAuthenticatorSecret(null);
@@ -589,7 +630,7 @@ public class AuthServiceImpl implements AuthService {
             return authenticatedResponse(reloaded, "Developer mode: 2FA method saved, second factor is disabled.");
         }
 
-        boolean enrollmentStep = request.getMethod() == TwoFactorMethod.AUTHENTICATOR_APP;
+        boolean enrollmentStep = method == TwoFactorMethod.AUTHENTICATOR_APP;
         return buildTwoFactorChallenge(reloaded, enrollmentStep);
     }
 
@@ -610,10 +651,13 @@ public class AuthServiceImpl implements AuthService {
             }
         }
 
+        boolean googlePrompt = shouldOfferOptionalGoogleTwoFactorPrompt(userAccount);
+
         AuthFlowResponse.AuthFlowResponseBuilder builder = AuthFlowResponse.builder()
                 .authStatus(AuthFlowStatus.AUTHENTICATED)
                 .message("Authenticated session loaded successfully.")
-                .user(toAuthenticatedUserResponse(userAccount));
+                .user(toAuthenticatedUserResponse(userAccount, googlePrompt))
+                .showGoogleTwoFactorSetupPrompt(googlePrompt ? Boolean.TRUE : null);
         if (sessionPhaseName != null) {
             builder.sessionPhase(sessionPhaseName);
         }
@@ -671,6 +715,13 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private AuthFlowResponse buildTwoFactorChallenge(UserAccount userAccount, boolean authenticatorEnrollmentStep) {
+        if (!userAccount.requiresTwoFactorAtLogin()) {
+            throw new ApiException(
+                    HttpStatus.BAD_REQUEST,
+                    "2-step verification is turned off for this account. Sign in again without a verification step."
+            );
+        }
+
         twoFactorChallengeRepository.deleteByUserId(userAccount.getId());
 
         TwoFactorMethod method = resolveEffectiveTwoFactorMethod(userAccount, authenticatorEnrollmentStep);
@@ -773,12 +824,25 @@ public class AuthServiceImpl implements AuthService {
                 .expiresAt(LocalDateTime.now().plusHours(sessionHours))
                 .build());
 
+        UserAccount fresh = userAccountRepository.findById(userAccount.getId()).orElse(userAccount);
+        boolean googlePrompt = shouldOfferOptionalGoogleTwoFactorPrompt(fresh);
+
         return AuthFlowResponse.builder()
                 .authStatus(AuthFlowStatus.AUTHENTICATED)
                 .message(message)
                 .token(sessionToken.getToken())
-                .user(toAuthenticatedUserResponse(userAccount))
+                .user(toAuthenticatedUserResponse(fresh, googlePrompt))
+                .showGoogleTwoFactorSetupPrompt(googlePrompt ? Boolean.TRUE : null)
                 .build();
+    }
+
+    private boolean shouldOfferOptionalGoogleTwoFactorPrompt(UserAccount user) {
+        if (appProperties.isDeveloperMode()) {
+            return false;
+        }
+        return user.getProvider() == AuthProvider.GOOGLE
+                && Boolean.FALSE.equals(user.getTwoFactorEnabled())
+                && !user.isGoogleTwoFactorPromptDismissed();
     }
 
     private AuthFlowResponse pendingResponse(SignupRequest signupRequest, String message) {
@@ -790,6 +854,10 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private AuthenticatedUserResponse toAuthenticatedUserResponse(UserAccount userAccount) {
+        return toAuthenticatedUserResponse(userAccount, false);
+    }
+
+    private AuthenticatedUserResponse toAuthenticatedUserResponse(UserAccount userAccount, boolean showGoogleTwoFactorSetupPrompt) {
         boolean pendingAuthApp =
                 userAccount.getPreferredTwoFactorMethod() == TwoFactorMethod.AUTHENTICATOR_APP
                         && !userAccount.isAuthenticatorConfirmed();
@@ -801,8 +869,12 @@ public class AuthServiceImpl implements AuthService {
                 .status(userAccount.getStatus())
                 .provider(userAccount.getProvider())
                 .preferredTwoFactorMethod(userAccount.getPreferredTwoFactorMethod())
+                .twoFactorEnabled(userAccount.getTwoFactorEnabled())
                 .pendingAuthenticatorSetup(pendingAuthApp)
                 .mustChangePassword(userAccount.isMustChangePassword())
+                .emailNotificationsEnabled(userAccount.isEmailNotificationsEnabled())
+                .appNotificationsEnabled(userAccount.isAppNotificationsEnabled())
+                .showGoogleTwoFactorSetupPrompt(showGoogleTwoFactorSetupPrompt ? Boolean.TRUE : null)
                 .build();
     }
 
@@ -831,6 +903,11 @@ public class AuthServiceImpl implements AuthService {
         return last.plusSeconds(otpResendCooldownSeconds);
     }
 
+    /** QR / manual key only while the authenticator is not yet confirmed (first-time enrollment or reset). */
+    private boolean showAuthenticatorEnrollmentUi(TwoFactorChallenge challenge, UserAccount userAccount) {
+        return challenge.getMethod() == TwoFactorMethod.AUTHENTICATOR_APP && !userAccount.isAuthenticatorConfirmed();
+    }
+
     private TwoFactorChallengeResponse toTwoFactorResponse(
             TwoFactorChallenge challenge,
             UserAccount userAccount,
@@ -850,11 +927,13 @@ public class AuthServiceImpl implements AuthService {
                         ? (appProperties.getNotifications().getEmail().isEnabled()
                         ? "The one-time code was sent to your campus email address."
                         : "Email delivery is turned off; use the development-only code below if your administrator enabled it.")
-                        : "Open Google Authenticator (or a compatible app), add the provided manual key, then enter the generated 6-digit code.")
-                .manualEntryKey(challenge.getMethod() == TwoFactorMethod.AUTHENTICATOR_APP
+                        : (!userAccount.isAuthenticatorConfirmed()
+                        ? "Scan the QR code or add the manual key, then enter the code from your authenticator app."
+                        : "Open your authenticator app and enter the current 6-digit code."))
+                .manualEntryKey(showAuthenticatorEnrollmentUi(challenge, userAccount)
                         ? userAccount.getAuthenticatorSecret()
                         : null)
-                .qrCodeUri(challenge.getMethod() == TwoFactorMethod.AUTHENTICATOR_APP
+                .qrCodeUri(showAuthenticatorEnrollmentUi(challenge, userAccount)
                         ? buildOtpAuthUri(userAccount)
                         : null)
                 .debugCode(exposeDevelopmentOtp && challenge.getMethod() == TwoFactorMethod.EMAIL_OTP
@@ -967,6 +1046,10 @@ public class AuthServiceImpl implements AuthService {
         if (userAccount.isMustChangePassword()) {
             userAccount.setMustChangePassword(false);
             userAccountRepository.save(userAccount);
+        }
+
+        if (!userAccount.requiresTwoFactorAtLogin()) {
+            return authenticatedResponse(userAccount, "Signed in successfully.");
         }
 
         return buildTwoFactorChallenge(userAccount, false);

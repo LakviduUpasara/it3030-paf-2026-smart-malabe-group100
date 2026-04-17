@@ -89,6 +89,7 @@ public class AdminRegistrationService {
                 .role(role)
                 .status(status)
                 .provider(AuthProvider.LOCAL)
+                .twoFactorEnabled(false)
                 .mustChangePassword(true)
                 .build();
 

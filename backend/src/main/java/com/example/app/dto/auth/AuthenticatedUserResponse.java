@@ -23,8 +23,18 @@ public class AuthenticatedUserResponse {
     private AuthProvider provider;
     private TwoFactorMethod preferredTwoFactorMethod;
 
+    /** Mirrors {@code UserAccount.twoFactorEnabled}; null means legacy account (2FA expected at sign-in). */
+    private Boolean twoFactorEnabled;
+
     /** True when the user chose the authenticator app but has not confirmed it yet (sign-in falls back to email OTP). */
     private Boolean pendingAuthenticatorSetup;
 
     private Boolean mustChangePassword;
+
+    private Boolean emailNotificationsEnabled;
+
+    private Boolean appNotificationsEnabled;
+
+    /** True when optional first Google sign-in 2FA prompt should be shown (client-only hint). */
+    private Boolean showGoogleTwoFactorSetupPrompt;
 }

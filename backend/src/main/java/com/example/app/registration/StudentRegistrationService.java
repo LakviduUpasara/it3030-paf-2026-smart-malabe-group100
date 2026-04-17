@@ -157,6 +157,7 @@ public class StudentRegistrationService {
                     .role(Role.STUDENT)
                     .status(mapUserStatus(profileStatus))
                     .provider(AuthProvider.LOCAL)
+                    .twoFactorEnabled(false)
                     .mustChangePassword(true)
                     .studentRef(student.getId())
                     .build();

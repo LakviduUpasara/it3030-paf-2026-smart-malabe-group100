@@ -47,6 +47,7 @@ function LoginPanel({ showHeading = true }) {
     resendEmailOtp,
     changeFirstLoginPassword,
     selectFirstLoginTwoFactorMethod,
+    skipFirstLoginTwoFactor,
     clearError,
     clearTwoFactor,
     logout,
@@ -445,9 +446,8 @@ function LoginPanel({ showHeading = true }) {
       ) : sessionPhase === "TWO_FACTOR_METHOD_SELECTION" ? (
         <div className="login-form auth-verification-form">
           <p className="supporting-text">
-            Choose your preferred second step. Email sends a code to your inbox. Authenticator shows a QR code to link the
-            app once; after that, sign-in uses the app. Until the app is linked, email codes are used if authenticator is
-            not set up yet.
+            2-step verification is optional. Email sends a code to your inbox. Authenticator shows a QR code once to link
+            the app; after that, sign-in uses the app. You can skip now and configure this later in System Settings.
           </p>
           <div className="auth-actions-row signup-form-actions flex-col gap-2 sm:flex-row">
             <Button
@@ -470,15 +470,35 @@ function LoginPanel({ showHeading = true }) {
             </Button>
           </div>
           {activeError ? <p className="alert alert-error">{activeError}</p> : null}
-          <Button
-            className="login-secondary-action mt-2"
-            disabled={isLoading}
-            onClick={handleBackToLogin}
-            type="button"
-            variant="secondary"
-          >
-            Back
-          </Button>
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <Button
+              className="login-secondary-action"
+              disabled={isLoading}
+              onClick={handleBackToLogin}
+              type="button"
+              variant="secondary"
+            >
+              Back
+            </Button>
+            <Button
+              className="login-secondary-action"
+              disabled={isLoading}
+              onClick={async () => {
+                setLocalError("");
+                clearError();
+                try {
+                  const response = await skipFirstLoginTwoFactor();
+                  handleAuthResponse(response);
+                } catch {
+                  /* error surfaced via context */
+                }
+              }}
+              type="button"
+              variant="secondary"
+            >
+              Skip for now
+            </Button>
+          </div>
         </div>
       ) : twoFactorChallenge ? (
         <form className="login-form auth-verification-form" onSubmit={handleVerifyTwoFactor}>
