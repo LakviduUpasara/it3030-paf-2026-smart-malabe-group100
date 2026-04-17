@@ -98,6 +98,50 @@ function isImageEvidence(mime, fileName) {
   return /\.(png|jpe?g|gif|webp|bmp)$/i.test(fileName || "");
 }
 
+/**
+ * Builds PDF-ready image data URLs plus non-image filenames. Uses cached previews when present;
+ * otherwise fetches each attachment so PDF export still works before thumbnails finish loading.
+ */
+async function buildEvidenceImagesForPdf(ticketId, attachments, previewById) {
+  const images = [];
+  const other = [];
+  for (const att of attachments || []) {
+    const name = att.fileName || "Attachment";
+    if (!att?.id) {
+      if (name) other.push(name);
+      continue;
+    }
+    const cached = previewById[att.id];
+    let preview = cached;
+    let fetchedFresh = false;
+    if (!preview?.url) {
+      try {
+        preview = await fetchAttachmentPreview(ticketId, att.id);
+        fetchedFresh = true;
+      } catch {
+        preview = null;
+      }
+    }
+    if (preview?.url) {
+      const mime = preview.mime || "";
+      if (isImageEvidence(mime, name)) {
+        try {
+          const dataUrl = await blobUrlToDataUrl(preview.url);
+          images.push({ dataUrl, caption: name });
+        } catch {
+          if (name) other.push(name);
+        } finally {
+          if (fetchedFresh && preview?.url) URL.revokeObjectURL(preview.url);
+        }
+        continue;
+      }
+      if (fetchedFresh && preview?.url) URL.revokeObjectURL(preview.url);
+    }
+    if (name) other.push(name);
+  }
+  return { images, other };
+}
+
 const MAX_EVIDENCE_IMAGES = 3;
 
 /** Merge new file picker choices into existing list; cap total pending files at maxSlots; skip duplicates. */
@@ -1068,30 +1112,16 @@ function MyTicketsPage() {
     setPdfExportBusy(true);
     setUpdateError("");
     try {
-      const userImages = [];
-      const userOther = [];
-      for (const att of detailTicket.attachments || []) {
-        const p = evidencePreviewById[att.id];
-        const name = att.fileName || "Attachment";
-        if (p?.url && isImageEvidence(p.mime, name)) {
-          const dataUrl = await blobUrlToDataUrl(p.url);
-          userImages.push({ dataUrl, caption: name });
-        } else if (name) {
-          userOther.push(name);
-        }
-      }
-      const techImages = [];
-      const techOther = [];
-      for (const att of detailTicket.technicianAttachments || []) {
-        const p = techEvidencePreviewById[att.id];
-        const name = att.fileName || "Attachment";
-        if (p?.url && isImageEvidence(p.mime, name)) {
-          const dataUrl = await blobUrlToDataUrl(p.url);
-          techImages.push({ dataUrl, caption: name });
-        } else if (name) {
-          techOther.push(name);
-        }
-      }
+      const { images: userImages, other: userOther } = await buildEvidenceImagesForPdf(
+        detailTicket.id,
+        detailTicket.attachments,
+        evidencePreviewById,
+      );
+      const { images: techImages, other: techOther } = await buildEvidenceImagesForPdf(
+        detailTicket.id,
+        detailTicket.technicianAttachments,
+        techEvidencePreviewById,
+      );
       await downloadResolvedTicketPdf({
         ticket: detailTicket,
         view: ticketDetailView,
