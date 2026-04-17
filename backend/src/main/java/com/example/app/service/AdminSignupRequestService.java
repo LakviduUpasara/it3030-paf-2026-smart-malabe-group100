@@ -13,5 +13,6 @@ public interface AdminSignupRequestService {
     SignupRequestSummaryResponse approveRequest(
             String requestId, SignupRequestDecisionRequest request, AuthenticatedUser reviewer);
 
-    SignupRequestSummaryResponse rejectRequest(String requestId, SignupRequestRejectRequest request);
+    SignupRequestSummaryResponse rejectRequest(
+            String requestId, SignupRequestRejectRequest request, AuthenticatedUser reviewer);
 }

@@ -64,11 +64,21 @@ export function createServiceError(error, fallbackMessage) {
       responseMessage = `${base}${parts.join("; ")}`.trim();
     }
   }
-  const message = responseMessage || error?.message || fallbackMessage;
+  const isNetworkError = !error?.response;
+  const networkHint =
+    error?.code === "ECONNREFUSED" || error?.code === "ECONNRESET"
+      ? " Cannot reach the API. Start the backend (port 18081) or check your proxy/VITE_API_BASE_URL."
+      : "";
+  const message =
+    responseMessage ||
+    (isNetworkError ? `${error?.message || "Network error"}${networkHint}` : null) ||
+    error?.message ||
+    fallbackMessage;
   const normalizedError = new Error(message);
 
-  normalizedError.status = error?.response?.status || 500;
-  normalizedError.isNetworkError = !error?.response;
+  // Do not pretend unreachable servers are HTTP 500 — axios has no response in that case.
+  normalizedError.status = error?.response?.status ?? (isNetworkError ? 0 : 500);
+  normalizedError.isNetworkError = isNetworkError;
 
   return normalizedError;
 }

@@ -1,29 +1,25 @@
 package com.example.app.dto.auth;
 
+import com.example.app.entity.enums.AuthProvider;
 import com.example.app.entity.enums.Role;
 import com.example.app.entity.enums.SignupRequestStatus;
-import com.example.app.entity.enums.AuthProvider;
 import java.time.LocalDateTime;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 
-@Data
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
-public class PendingApprovalResponse {
-
-    private String requestId;
-    private String applicantName;
-    private String email;
-    private AuthProvider provider;
-    private SignupRequestStatus status;
-    private Role requestedRole;
-    private Role assignedRole;
-    private String reviewerNote;
-    private LocalDateTime requestedAt;
-    private LocalDateTime reviewedAt;
-    private String message;
-}
+/**
+ * Pending signup request shown to the applicant (JSON API). Implemented as a record so the
+ * serialized shape is stable and there is no generated multi-arg constructor mismatch.
+ */
+public record PendingApprovalResponse(
+        String requestId,
+        String applicantName,
+        String email,
+        AuthProvider provider,
+        SignupRequestStatus status,
+        Role requestedRole,
+        Role assignedRole,
+        String reviewerNote,
+        String rejectionReason,
+        LocalDateTime requestedAt,
+        LocalDateTime reviewedAt,
+        String message
+) {}

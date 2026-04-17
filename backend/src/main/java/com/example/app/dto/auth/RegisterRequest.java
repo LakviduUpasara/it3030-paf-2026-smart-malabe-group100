@@ -8,6 +8,9 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
+/**
+ * Public registration: creates a {@link com.example.app.entity.SignupRequest} (pending) only — never a live user row.
+ */
 @Data
 public class RegisterRequest {
 

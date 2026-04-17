@@ -36,6 +36,10 @@ public class AuthController {
 
     private final AuthService authService;
 
+    /**
+     * Public sign-up: persists a pending {@link com.example.app.entity.SignupRequest} only (no {@code UserAccount}).
+     * Returns 202 ACCEPTED with {@code PENDING_APPROVAL}; the applicant role is assigned only after admin approval.
+     */
     @PostMapping("/register")
     public ResponseEntity<AuthFlowResponse> register(@Valid @RequestBody RegisterRequest request) {
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(authService.register(request));

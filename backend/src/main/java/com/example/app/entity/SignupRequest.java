@@ -61,7 +61,14 @@ public class SignupRequest {
 
     private Role assignedRole;
 
+    /** Internal reviewer note (approve or reject). */
     private String reviewerNote;
+
+    /** Applicant-facing rejection explanation; set only when status is REJECTED. */
+    private String rejectionReason;
+
+    /** Email of the admin/manager who last approved or rejected (audit). */
+    private String reviewedBy;
 
     @CreatedDate
     private LocalDateTime requestedAt;

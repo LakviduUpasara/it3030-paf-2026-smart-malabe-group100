@@ -55,6 +55,7 @@ public class AdminSignupRequestServiceImpl implements AdminSignupRequestService 
         }
 
         String username = allocateUsernameForEmail(signupRequest.getEmail());
+        // Applicant’s preferred 2FA from the pending request; OTP / authenticator enrollment runs at first sign-in only.
         UserAccount userAccount = UserAccount.builder()
                 .fullName(signupRequest.getFullName())
                 .email(signupRequest.getEmail())
@@ -73,19 +74,29 @@ public class AdminSignupRequestServiceImpl implements AdminSignupRequestService 
         signupRequest.setStatus(SignupRequestStatus.APPROVED);
         signupRequest.setAssignedRole(request.getAssignedRole());
         signupRequest.setReviewerNote(trimNullable(request.getReviewerNote()));
+        signupRequest.setRejectionReason(null);
+        signupRequest.setReviewedBy(reviewerEmail(reviewer));
         signupRequest.setReviewedAt(LocalDateTime.now());
 
         return toSummaryResponse(signupRequestRepository.save(signupRequest));
     }
 
     @Override
-    public SignupRequestSummaryResponse rejectRequest(String requestId, SignupRequestRejectRequest request) {
+    public SignupRequestSummaryResponse rejectRequest(
+            String requestId, SignupRequestRejectRequest request, AuthenticatedUser reviewer) {
         SignupRequest signupRequest = getPendingRequest(requestId);
         signupRequest.setStatus(SignupRequestStatus.REJECTED);
         signupRequest.setReviewerNote(trimNullable(request.getReviewerNote()));
+        signupRequest.setRejectionReason(trimNullable(request.getRejectionReason()));
+        signupRequest.setReviewedBy(reviewerEmail(reviewer));
         signupRequest.setReviewedAt(LocalDateTime.now());
+        // No UserAccount is created on rejection.
 
         return toSummaryResponse(signupRequestRepository.save(signupRequest));
+    }
+
+    private static String reviewerEmail(AuthenticatedUser reviewer) {
+        return reviewer == null || reviewer.getEmail() == null ? null : reviewer.getEmail().trim();
     }
 
     private SignupRequest getPendingRequest(String requestId) {
@@ -116,6 +127,8 @@ public class AdminSignupRequestServiceImpl implements AdminSignupRequestService 
                 .requestedRole(signupRequest.getRequestedRole())
                 .assignedRole(signupRequest.getAssignedRole())
                 .reviewerNote(signupRequest.getReviewerNote())
+                .rejectionReason(signupRequest.getRejectionReason())
+                .reviewedBy(signupRequest.getReviewedBy())
                 .requestedAt(signupRequest.getRequestedAt())
                 .reviewedAt(signupRequest.getReviewedAt())
                 .build();

@@ -132,8 +132,10 @@ function ManageSignupRequestsPage() {
     setError("");
 
     try {
+      const note = (notes[requestId] || "").trim();
       await rejectSignupRequest(requestId, {
-        reviewerNote: notes[requestId] || "",
+        rejectionReason: note,
+        reviewerNote: note,
       });
       removeRequest(requestId);
     } catch (requestError) {
@@ -147,7 +149,7 @@ function ManageSignupRequestsPage() {
     <>
       <AdminPageHeader
         actions={<span className="rounded-full border border-border bg-tint px-3 py-1 text-xs font-semibold text-heading">{requestCountLabel}</span>}
-        description="Review incoming sign-up requests, assign roles, and approve or reject campus access."
+        description="Pending access requests (no account exists until you approve). Assign the campus role on approval; 2FA enrollment happens at the user’s first sign-in."
         title="User requests"
       />
 
@@ -215,6 +217,16 @@ function ManageSignupRequestsPage() {
                     {request.requestedRole ? String(request.requestedRole).replaceAll("_", " ") : "—"}
                   </p>
                 </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-text/60">
+                    Preferred 2FA (stored for first sign-in)
+                  </p>
+                  <p className="mt-1 text-sm">
+                    {request.preferredTwoFactorMethod === "AUTHENTICATOR_APP"
+                      ? "Authenticator app"
+                      : "Email verification code"}
+                  </p>
+                </div>
               </div>
 
               <div className="mt-4 rounded-2xl border border-border bg-tint/50 p-4">
@@ -260,7 +272,7 @@ function ManageSignupRequestsPage() {
                   <textarea
                     className="min-h-[88px] rounded-2xl border border-border bg-card px-3 py-2 text-sm"
                     onChange={(event) => handleNoteChange(request.id, event.target.value)}
-                    placeholder="Add an approval note or rejection reason."
+                    placeholder="Approval note, or reason if rejecting (applicant sees rejection text when you reject)."
                     rows={3}
                     value={notes[request.id] || ""}
                   />

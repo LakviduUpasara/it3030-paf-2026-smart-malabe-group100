@@ -68,6 +68,9 @@ const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /** Roles applicants may request (platform roles are assigned only after review). */
 const REQUESTABLE_ROLES = ["USER", "STUDENT", "LECTURER", "LAB_ASSISTANT", "TECHNICIAN", "MANAGER", "ADMIN"];
 
+/** Persists Google sign-up token + step across refresh so submit still sends a valid session id. */
+const GOOGLE_SIGNUP_STORAGE_KEY = "paf_google_signup_draft";
+
 const initialForm = {
   fullName: "",
   email: "",
@@ -89,6 +92,17 @@ function SignupPage() {
   const [socialSignupToken, setSocialSignupToken] = useState("");
   const [localError, setLocalError] = useState("");
   const formRef = useRef(null);
+  const googleSessionExpiresAtRef = useRef(null);
+
+  const clearGoogleSignupDraft = () => {
+    googleSessionExpiresAtRef.current = null;
+    try {
+      sessionStorage.removeItem(GOOGLE_SIGNUP_STORAGE_KEY);
+    } catch {
+      // ignore
+    }
+  };
+
   const {
     isAuthenticated,
     pendingApproval,
@@ -124,6 +138,69 @@ function SignupPage() {
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [step]);
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(GOOGLE_SIGNUP_STORAGE_KEY);
+      if (!raw) {
+        return;
+      }
+      const meta = JSON.parse(raw);
+      if (!meta?.signupToken || !meta?.email) {
+        sessionStorage.removeItem(GOOGLE_SIGNUP_STORAGE_KEY);
+        return;
+      }
+      if (meta.expiresAt) {
+        const t = Date.parse(meta.expiresAt);
+        if (Number.isFinite(t) && t < Date.now()) {
+          sessionStorage.removeItem(GOOGLE_SIGNUP_STORAGE_KEY);
+          return;
+        }
+      }
+      googleSessionExpiresAtRef.current = meta.expiresAt ?? null;
+      setSocialSignupToken(meta.signupToken);
+      setProvider(AUTH_PROVIDERS.GOOGLE);
+      setFormState((prev) => ({
+        ...prev,
+        fullName: meta.fullName || "",
+        email: meta.email || "",
+        requestedRole: meta.requestedRole || "USER",
+        password: "",
+        confirmPassword: "",
+      }));
+      setRegistrationDraft(
+        buildInitialDraft(meta.requestedRole || "USER", meta.fullName || "", meta.email || ""),
+      );
+      setStep(typeof meta.step === "number" && meta.step >= 1 && meta.step <= 3 ? meta.step : 2);
+    } catch {
+      try {
+        sessionStorage.removeItem(GOOGLE_SIGNUP_STORAGE_KEY);
+      } catch {
+        // ignore
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (provider !== AUTH_PROVIDERS.GOOGLE || !socialSignupToken) {
+      return;
+    }
+    try {
+      sessionStorage.setItem(
+        GOOGLE_SIGNUP_STORAGE_KEY,
+        JSON.stringify({
+          signupToken: socialSignupToken,
+          email: formState.email,
+          fullName: formState.fullName,
+          step,
+          requestedRole: formState.requestedRole,
+          expiresAt: googleSessionExpiresAtRef.current,
+        }),
+      );
+    } catch {
+      // ignore
+    }
+  }, [provider, socialSignupToken, step, formState.email, formState.fullName, formState.requestedRole]);
 
   if (isAuthenticated) {
     return <Navigate replace to={getDefaultRouteForRole(user?.role)} />;
@@ -247,6 +324,7 @@ function SignupPage() {
   };
 
   const resetSignupFlow = () => {
+    clearGoogleSignupDraft();
     setFormState(initialForm);
     setProvider(AUTH_PROVIDERS.LOCAL);
     setStep(1);
@@ -266,6 +344,7 @@ function SignupPage() {
     clearError();
     try {
       const googleSession = await prepareGoogleSignup(credential);
+      googleSessionExpiresAtRef.current = googleSession.expiresAt ?? null;
       setProvider(AUTH_PROVIDERS.GOOGLE);
       setSocialSignupToken(googleSession.signupToken);
       setFormState((current) => ({
@@ -281,6 +360,7 @@ function SignupPage() {
       setStep(2);
     } catch (signupError) {
       if (signupError?.status === 409) {
+        clearGoogleSignupDraft();
         setProvider(AUTH_PROVIDERS.LOCAL);
         setStep(1);
         setSocialSignupToken("");
@@ -292,6 +372,7 @@ function SignupPage() {
 
   const handleSocialAccountSelect = (selectedAccount) => {
     const selectedProvider = chooserProvider || provider || AUTH_PROVIDERS.GOOGLE;
+    clearGoogleSignupDraft();
     setProvider(selectedProvider);
     setSocialSignupToken("");
     setFormState((current) => ({
@@ -362,6 +443,7 @@ function SignupPage() {
         applicationProfileJson: primitives.applicationProfileJson,
       });
       if (response?.authStatus === "PENDING_APPROVAL") {
+        clearGoogleSignupDraft();
         navigate("/approval-pending", { replace: true });
       }
     } catch (submitError) {

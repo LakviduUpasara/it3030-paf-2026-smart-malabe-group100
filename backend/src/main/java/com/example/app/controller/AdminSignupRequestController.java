@@ -41,8 +41,9 @@ public class AdminSignupRequestController {
     @PostMapping("/{requestId}/reject")
     public ResponseEntity<SignupRequestSummaryResponse> rejectRequest(
             @PathVariable String requestId,
-            @Valid @RequestBody SignupRequestRejectRequest request
+            @Valid @RequestBody SignupRequestRejectRequest request,
+            @AuthenticationPrincipal AuthenticatedUser reviewer
     ) {
-        return ResponseEntity.ok(adminSignupRequestService.rejectRequest(requestId, request));
+        return ResponseEntity.ok(adminSignupRequestService.rejectRequest(requestId, request, reviewer));
     }
 }

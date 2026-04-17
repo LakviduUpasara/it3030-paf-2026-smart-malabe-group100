@@ -119,12 +119,11 @@ public class AuthServiceImpl implements AuthService {
             throw new ApiException(HttpStatus.CONFLICT, "An approved account already exists for this email.");
         }
 
+        /*
+         * Sign-up never creates a UserAccount — only a SignupRequest row (pending access).
+         * requestedRole is the applicant's preference; the real Role is assigned only when an admin approves.
+         */
         Role requestedRole = request.getRequestedRole() == null ? Role.USER : request.getRequestedRole();
-        if (requestedRole == Role.LOST_ITEM_ADMIN) {
-            throw new ApiException(
-                    HttpStatus.BAD_REQUEST,
-                    "That role cannot be requested on sign up. Choose another campus role; an administrator may assign specialised access after review.");
-        }
 
         SignupRequest signupRequest = signupRequestRepository.findByEmailIgnoreCase(normalizedEmail)
                 .orElseGet(() -> SignupRequest.builder().id(UUID.randomUUID().toString()).build());
@@ -152,6 +151,8 @@ public class AuthServiceImpl implements AuthService {
         signupRequest.setRequestedRole(requestedRole);
         signupRequest.setAssignedRole(null);
         signupRequest.setReviewerNote(null);
+        signupRequest.setRejectionReason(null);
+        signupRequest.setReviewedBy(null);
         signupRequest.setReviewedAt(null);
         signupRequest.setRequestedAt(LocalDateTime.now());
 
@@ -159,7 +160,8 @@ public class AuthServiceImpl implements AuthService {
         if (authProvider == AuthProvider.GOOGLE) {
             googleSignupSessionRepository.deleteById(request.getSocialSignupToken());
         }
-        return pendingResponse(savedRequest, "Your sign up request has been sent to the campus administrator for approval.");
+        return pendingResponse(
+                savedRequest, "Your access request has been submitted for administrator review.");
     }
 
     @Override
@@ -259,6 +261,7 @@ public class AuthServiceImpl implements AuthService {
                 .email(signupSession.getEmail())
                 .pictureUrl(signupSession.getPictureUrl())
                 .provider(AuthProvider.GOOGLE)
+                .expiresAt(signupSession.getExpiresAt())
                 .build();
     }
 
@@ -707,19 +710,20 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private PendingApprovalResponse toPendingApprovalResponse(SignupRequest signupRequest, String message) {
-        return PendingApprovalResponse.builder()
-                .requestId(signupRequest.getId())
-                .applicantName(signupRequest.getFullName())
-                .email(signupRequest.getEmail())
-                .provider(signupRequest.getAuthProvider() == null ? AuthProvider.LOCAL : signupRequest.getAuthProvider())
-                .status(signupRequest.getStatus())
-                .requestedRole(signupRequest.getRequestedRole())
-                .assignedRole(signupRequest.getAssignedRole())
-                .reviewerNote(signupRequest.getReviewerNote())
-                .requestedAt(signupRequest.getRequestedAt())
-                .reviewedAt(signupRequest.getReviewedAt())
-                .message(message)
-                .build();
+        return new PendingApprovalResponse(
+                signupRequest.getId(),
+                signupRequest.getFullName(),
+                signupRequest.getEmail(),
+                signupRequest.getAuthProvider() == null ? AuthProvider.LOCAL : signupRequest.getAuthProvider(),
+                signupRequest.getStatus(),
+                signupRequest.getRequestedRole(),
+                signupRequest.getAssignedRole(),
+                signupRequest.getReviewerNote(),
+                signupRequest.getRejectionReason(),
+                signupRequest.getRequestedAt(),
+                signupRequest.getReviewedAt(),
+                message
+        );
     }
 
     private TwoFactorChallengeResponse toTwoFactorResponse(
@@ -753,9 +757,12 @@ public class AuthServiceImpl implements AuthService {
 
     private String getSignupRequestMessage(SignupRequest signupRequest) {
         return switch (signupRequest.getStatus()) {
-            case PENDING -> "Your sign up request is still waiting for administrator approval.";
+            case PENDING -> "Your access request is still waiting for administrator review.";
             case APPROVED -> "Your sign up request has been approved. Please sign in using your approved account.";
-            case REJECTED -> "Your sign up request was rejected. Review the administrator note and submit a new request if needed.";
+            case REJECTED -> "Your access request was rejected."
+                    + (signupRequest.getRejectionReason() != null && !signupRequest.getRejectionReason().isBlank()
+                            ? " Reason: " + signupRequest.getRejectionReason().trim()
+                            : " You may submit a new request if appropriate.");
         };
     }
 

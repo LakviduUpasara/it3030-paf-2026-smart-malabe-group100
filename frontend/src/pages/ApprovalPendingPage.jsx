@@ -253,7 +253,16 @@ function ApprovalPendingPage() {
               </div>
             ) : null}
 
-            {pendingApproval.reviewerNote ? (
+            {pendingApproval.status === "REJECTED" && (pendingApproval.rejectionReason || pendingApproval.reviewerNote) ? (
+              <div className="auth-help-panel">
+                <strong>{pendingApproval.rejectionReason ? "Rejection reason" : "Administrator note"}</strong>
+                <p className="supporting-text">
+                  {pendingApproval.rejectionReason || pendingApproval.reviewerNote}
+                </p>
+              </div>
+            ) : null}
+
+            {pendingApproval.status !== "REJECTED" && pendingApproval.reviewerNote ? (
               <div className="auth-help-panel">
                 <strong>Administrator note</strong>
                 <p className="supporting-text">{pendingApproval.reviewerNote}</p>
