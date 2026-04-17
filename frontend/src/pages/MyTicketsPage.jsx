@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Button from "../components/Button";
@@ -74,6 +74,21 @@ function normalizeTicketStatus(status) {
     .trim()
     .toUpperCase()
     .replace(/\s+/g, "_");
+}
+
+/** Student view: IN_PROGRESS reads as "Assigned" once a technician is allocated. */
+function formatStudentTicketStatusLabel(status) {
+  if (normalizeTicketStatus(status) === "IN_PROGRESS") return "Assigned";
+  return formatTicketStatusLabel(status);
+}
+
+function formatAssigneeDisplay(ticket) {
+  if (!ticket) return "Unassigned";
+  const name = ticket.assignedTechnicianUsername && String(ticket.assignedTechnicianUsername).trim();
+  if (name) return name;
+  const id = ticket.assignedTechnicianUserId && String(ticket.assignedTechnicianUserId).trim();
+  if (id) return id;
+  return "Unassigned";
 }
 
 function isImageEvidence(mime, fileName) {
@@ -346,6 +361,39 @@ function MyTicketsPage() {
     };
   }, [watchCategoryId]);
 
+  /** Match sticky toolbar + fill layout to the real navbar height (avoids gap under the nav bar). */
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+
+    function measureAndApply() {
+      const nav = document.querySelector("header.navbar");
+      if (!nav) return;
+      const h = nav.getBoundingClientRect().height;
+      if (h > 0) {
+        root.style.setProperty("--navbar-measured-height", `${Math.ceil(h)}px`);
+      }
+    }
+
+    measureAndApply();
+    const nav = document.querySelector("header.navbar");
+    const ro =
+      nav && typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => measureAndApply()) : null;
+    if (nav && ro) {
+      ro.observe(nav);
+    }
+    window.addEventListener("resize", measureAndApply);
+    const id = window.requestAnimationFrame(measureAndApply);
+    const t = window.setTimeout(measureAndApply, 0);
+
+    return () => {
+      window.clearTimeout(t);
+      window.cancelAnimationFrame(id);
+      ro?.disconnect();
+      window.removeEventListener("resize", measureAndApply);
+      root.style.removeProperty("--navbar-measured-height");
+    };
+  }, []);
+
   useEffect(() => {
     if (!isFormOpen) return;
     resetCreateForm(createTicketDefaultValues);
@@ -354,6 +402,17 @@ function MyTicketsPage() {
     setSuggestion(null);
     setError("");
   }, [isFormOpen, resetCreateForm]);
+
+  useEffect(() => {
+    if (!isFormOpen && !detailTicket) {
+      return undefined;
+    }
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isFormOpen, detailTicket]);
 
   useEffect(() => {
     if (detailSubView !== "edit" || !editFormData.categoryId) {
@@ -1077,14 +1136,14 @@ function MyTicketsPage() {
                         <h3 className="my-ticket-card-title">{ticket.title || "Untitled Ticket"}</h3>
                         <p className="my-ticket-card-line my-ticket-card-line--meta">{locationLine}</p>
                         <p className="my-ticket-card-line my-ticket-card-line--sub">
-                          Priority: {parsed.priority || "Normal"} | Assignee: Unassigned
+                          Priority: {parsed.priority || "Normal"} | Assignee: {formatAssigneeDisplay(ticket)}
                         </p>
                       </div>
                       <div className="my-ticket-card-status">
                         <span
                           className={`my-ticket-card-badge status-badge ${listStatusToken}`}
                         >
-                          {formatTicketStatusLabel(ticket.status)}
+                          {formatStudentTicketStatusLabel(ticket.status)}
                         </span>
                       </div>
                       <div className="my-ticket-card-actions">
@@ -1161,7 +1220,7 @@ function MyTicketsPage() {
                       <span
                         className={`my-ticket-card-badge status-badge ${ticketDetailView.statusToken}`}
                       >
-                        {formatTicketStatusLabel(detailTicket.status)}
+                        {formatStudentTicketStatusLabel(detailTicket.status)}
                       </span>
                     </div>
                   </div>
@@ -1192,6 +1251,19 @@ function MyTicketsPage() {
                             : ""}
                         </div>
                       </div>
+                      <div className="ticket-detail-row">
+                        <div className="ticket-detail-label">Assigned technician</div>
+                        <div className="ticket-detail-value">{formatAssigneeDisplay(detailTicket)}</div>
+                      </div>
+                      {normalizeTicketStatus(detailTicket.status) === "RESOLVED" ? (
+                        <div className="ticket-detail-row ticket-detail-row--block">
+                          <div className="ticket-detail-label">Resolution</div>
+                          <div className="ticket-detail-value">
+                            Marked resolved by maintenance. If something is still wrong, open a new ticket or
+                            contact support.
+                          </div>
+                        </div>
+                      ) : null}
                       {detailTicket.createdAt ? (
                         <div className="ticket-detail-row">
                           <div className="ticket-detail-label">Submitted</div>
@@ -1264,10 +1336,16 @@ function MyTicketsPage() {
                     Update the information on this ticket, or withdraw it if you no longer need help.
                   </p>
                   <div className="ticket-manage-flow-actions">
-                    <Button onClick={openEditMode} type="button" variant="primary">
+                    <Button
+                      className="ticket-manage-update-btn"
+                      onClick={openEditMode}
+                      type="button"
+                      variant="secondary"
+                    >
                       Update details
                     </Button>
                     <Button
+                      className="ticket-manage-withdraw-btn"
                       onClick={() => {
                         setUpdateError("");
                         setWithdrawReason("");
