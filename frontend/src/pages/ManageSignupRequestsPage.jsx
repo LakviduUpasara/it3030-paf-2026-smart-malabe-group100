@@ -180,9 +180,10 @@ function ManageSignupRequestsPage() {
             >
               <div className="border-b border-border pb-4">
                 <h2 className="text-lg font-semibold text-heading">{request.fullName}</h2>
-                <p className="mt-1 text-sm text-text/70">
-                  {request.email} · {request.department}
-                </p>
+                <p className="mt-1 text-sm text-text/70">{request.email}</p>
+                {request.department && request.department !== "—" ? (
+                  <p className="mt-1 text-xs text-text/55">{request.department}</p>
+                ) : null}
               </div>
 
               <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -194,10 +195,12 @@ function ManageSignupRequestsPage() {
                   <p className="text-xs font-semibold uppercase tracking-[0.08em] text-text/60">Phone</p>
                   <p className="mt-1 text-sm">{request.phoneNumber}</p>
                 </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-text/60">Requested 2FA</p>
-                  <p className="mt-1 text-sm">{request.preferredTwoFactorMethod}</p>
-                </div>
+                {request.supplementaryProfile ? (
+                  <div className="sm:col-span-2">
+                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-text/60">Role profile notes</p>
+                    <p className="mt-1 text-sm text-text/80">{request.supplementaryProfile}</p>
+                  </div>
+                ) : null}
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.08em] text-text/60">Provider</p>
                   <p className="mt-1 text-sm">{request.authProvider || "LOCAL"}</p>
@@ -218,6 +221,23 @@ function ManageSignupRequestsPage() {
                 <p className="text-xs font-semibold uppercase tracking-[0.08em] text-text/60">Reason for access</p>
                 <p className="mt-2 text-sm text-text/80">{request.reasonForAccess}</p>
               </div>
+
+              {request.applicationProfileJson ? (
+                <details className="mt-4 rounded-2xl border border-border bg-card/60 p-4">
+                  <summary className="cursor-pointer text-sm font-semibold text-heading">
+                    Full registration form (same structure as admin console)
+                  </summary>
+                  <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-xl bg-tint/50 p-3 text-left text-xs text-text/80">
+                    {(() => {
+                      try {
+                        return JSON.stringify(JSON.parse(request.applicationProfileJson), null, 2);
+                      } catch {
+                        return request.applicationProfileJson;
+                      }
+                    })()}
+                  </pre>
+                </details>
+              ) : null}
 
               <div className="mt-4 grid gap-4 md:grid-cols-2">
                 <label className="flex flex-col gap-1">

@@ -4,6 +4,7 @@ import { AdminShellProvider } from "../../context/AdminShellContext";
 import AdminRouteReset from "./AdminRouteReset";
 import AdminSidebar from "./AdminSidebar";
 import AdminTopBar from "./AdminTopBar";
+import TwoFactorSetupReminder from "../TwoFactorSetupReminder";
 
 function AdminConsoleLayout() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -18,6 +19,9 @@ function AdminConsoleLayout() {
           <AdminTopBar onMenuClick={() => setMobileNavOpen(true)} />
           <main className="min-h-0 flex-1 overflow-y-auto bg-bg pt-5 pb-10">
             <div className="mx-auto w-full max-w-6xl px-5 sm:px-8 lg:px-10">
+              <div className="mb-4 w-full">
+                <TwoFactorSetupReminder />
+              </div>
               <div className="space-y-6 lg:space-y-8">
                 <Outlet />
               </div>

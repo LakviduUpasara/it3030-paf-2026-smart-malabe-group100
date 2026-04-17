@@ -22,5 +22,9 @@ public class AuthenticatedUserResponse {
     private AccountStatus status;
     private AuthProvider provider;
     private TwoFactorMethod preferredTwoFactorMethod;
+
+    /** True when the user chose the authenticator app but has not confirmed it yet (sign-in falls back to email OTP). */
+    private Boolean pendingAuthenticatorSetup;
+
     private Boolean mustChangePassword;
 }

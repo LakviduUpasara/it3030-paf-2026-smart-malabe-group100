@@ -1,6 +1,7 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  important: "#admin-root",
+  // Must match a wrapper that includes auth routes (/signup, /login). Admin-only #admin-root hid all Tailwind on public pages.
+  important: "#root",
   content: ["./index.html", "./src/**/*.{js,jsx,ts,tsx}"],
   theme: {
     extend: {

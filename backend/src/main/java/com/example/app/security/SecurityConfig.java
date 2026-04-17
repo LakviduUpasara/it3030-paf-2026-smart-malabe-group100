@@ -28,6 +28,17 @@ public class SecurityConfig {
                         // CORS preflight must not require auth (browser sends OPTIONS without Bearer token).
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/v1/health/**", "/api/v1/auth/**").permitAll()
+                        // Public sign-up: load the same faculty/degree/intake/module metadata as the admin console forms.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/faculties", "/api/v1/faculties/**")
+                                .permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/degree-programs", "/api/v1/degree-programs/**")
+                                .permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/catalog/modules", "/api/v1/catalog/modules/**")
+                                .permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/intakes/dropdown")
+                                .permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/intakes/*/subgroups")
+                                .permitAll()
                         .requestMatchers("/api/v1/admin/signup-requests/**")
                                 .hasAnyRole("ADMIN", "LOST_ITEM_ADMIN", "MANAGER")
                         // Platform user directory (/admins) must be matched before /api/v1/admin/** so paths are never

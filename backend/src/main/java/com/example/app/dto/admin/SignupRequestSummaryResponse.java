@@ -23,6 +23,8 @@ public class SignupRequestSummaryResponse {
     private String campusId;
     private String phoneNumber;
     private String department;
+    private String supplementaryProfile;
+    private String applicationProfileJson;
     private String reasonForAccess;
     private TwoFactorMethod preferredTwoFactorMethod;
     private SignupRequestStatus status;

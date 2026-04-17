@@ -5,7 +5,6 @@ import com.example.app.entity.enums.Role;
 import com.example.app.entity.enums.TwoFactorMethod;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
@@ -28,8 +27,13 @@ public class RegisterRequest {
     @NotBlank(message = "Phone number is required.")
     private String phoneNumber;
 
-    @NotBlank(message = "Department is required.")
+    /** Optional; shown to reviewers when the applicant adds faculty/area context. */
+    @Size(max = 2000, message = "Profile notes are too long.")
     private String department;
+
+    /** Optional role-specific details (faculty scope, workshop, programme, etc.). */
+    @Size(max = 2000, message = "Additional profile notes are too long.")
+    private String supplementaryProfile;
 
     @NotBlank(message = "Reason for access is required.")
     @Size(max = 1000, message = "Reason for access is too long.")
@@ -42,6 +46,10 @@ public class RegisterRequest {
 
     private String socialSignupToken;
 
-    @NotNull(message = "Select a preferred 2-step verification method.")
+    /** Optional in JSON; {@link com.example.app.config.RegisterRequestBodyAdvice} defaults before validation. */
     private TwoFactorMethod preferredTwoFactorMethod;
+
+    /** Full registration draft (student/staff/console shapes) for reviewer tooling. */
+    @Size(max = 65535, message = "Application profile payload is too large.")
+    private String applicationProfileJson;
 }

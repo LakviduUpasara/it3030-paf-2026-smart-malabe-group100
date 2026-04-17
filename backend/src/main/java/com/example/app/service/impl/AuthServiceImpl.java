@@ -90,9 +90,10 @@ public class AuthServiceImpl implements AuthService {
         String normalizedEmail;
         String normalizedFullName;
         String providerSubject = null;
-        TwoFactorMethod preferredTwoFactorMethod = request.getPreferredTwoFactorMethod() == null
-                ? TwoFactorMethod.AUTHENTICATOR_APP
-                : request.getPreferredTwoFactorMethod();
+        TwoFactorMethod preferredTwoFactorMethod = request.getPreferredTwoFactorMethod();
+        if (preferredTwoFactorMethod == null) {
+            preferredTwoFactorMethod = TwoFactorMethod.EMAIL_OTP;
+        }
 
         if (authProvider == AuthProvider.GOOGLE) {
             GoogleSignupSession signupSession = resolveGoogleSignupSession(request.getSocialSignupToken());
@@ -119,10 +120,10 @@ public class AuthServiceImpl implements AuthService {
         }
 
         Role requestedRole = request.getRequestedRole() == null ? Role.USER : request.getRequestedRole();
-        if (requestedRole == Role.ADMIN || requestedRole == Role.LOST_ITEM_ADMIN) {
+        if (requestedRole == Role.LOST_ITEM_ADMIN) {
             throw new ApiException(
                     HttpStatus.BAD_REQUEST,
-                    "Those roles cannot be requested on sign up. Submit a request for a campus role; an administrator may assign elevated access after review.");
+                    "That role cannot be requested on sign up. Choose another campus role; an administrator may assign specialised access after review.");
         }
 
         SignupRequest signupRequest = signupRequestRepository.findByEmailIgnoreCase(normalizedEmail)
@@ -140,8 +141,11 @@ public class AuthServiceImpl implements AuthService {
                 : null);
         signupRequest.setCampusId(request.getCampusId().trim());
         signupRequest.setPhoneNumber(request.getPhoneNumber().trim());
-        signupRequest.setDepartment(request.getDepartment().trim());
+        signupRequest.setDepartment(blankToEmDash(request.getDepartment()));
+        String extra = request.getSupplementaryProfile() == null ? "" : request.getSupplementaryProfile().trim();
+        signupRequest.setSupplementaryProfile(extra.isEmpty() ? null : extra);
         signupRequest.setReasonForAccess(request.getReasonForAccess().trim());
+        signupRequest.setApplicationProfileJson(trimOrNull(request.getApplicationProfileJson()));
         signupRequest.setAuthProvider(authProvider);
         signupRequest.setPreferredTwoFactorMethod(preferredTwoFactorMethod);
         signupRequest.setStatus(SignupRequestStatus.PENDING);
@@ -686,6 +690,9 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private AuthenticatedUserResponse toAuthenticatedUserResponse(UserAccount userAccount) {
+        boolean pendingAuthApp =
+                userAccount.getPreferredTwoFactorMethod() == TwoFactorMethod.AUTHENTICATOR_APP
+                        && !userAccount.isAuthenticatorConfirmed();
         return AuthenticatedUserResponse.builder()
                 .id(userAccount.getId())
                 .name(userAccount.getFullName())
@@ -694,6 +701,7 @@ public class AuthServiceImpl implements AuthService {
                 .status(userAccount.getStatus())
                 .provider(userAccount.getProvider())
                 .preferredTwoFactorMethod(userAccount.getPreferredTwoFactorMethod())
+                .pendingAuthenticatorSetup(pendingAuthApp)
                 .mustChangePassword(userAccount.isMustChangePassword())
                 .build();
     }
@@ -771,6 +779,22 @@ public class AuthServiceImpl implements AuthService {
 
     private String normalizeEmail(String email) {
         return email == null ? "" : email.trim().toLowerCase();
+    }
+
+    private static String blankToEmDash(String value) {
+        if (value == null) {
+            return "—";
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? "—" : trimmed;
+    }
+
+    private static String trimOrNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String t = value.trim();
+        return t.isEmpty() ? null : t;
     }
 
     private GoogleSignupSession resolveGoogleSignupSession(String signupToken) {

@@ -1,6 +1,7 @@
 import { BrowserRouter, useLocation } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import Navbar from "./components/Navbar";
+import TwoFactorSetupReminder from "./components/TwoFactorSetupReminder";
 import { useAuth } from "./hooks/useAuth";
 import AppRoutes from "./routes/AppRoutes";
 
@@ -36,6 +37,7 @@ function AppLayout() {
     <div className={shellClass}>
       <div className="app-background" />
       <Navbar />
+      <TwoFactorSetupReminder />
       <main className={mainClass}>
         <AppRoutes />
       </main>

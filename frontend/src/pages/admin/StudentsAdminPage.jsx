@@ -3,30 +3,10 @@ import { Pencil, Plus, Trash2 } from "lucide-react";
 import Button from "../../components/Button";
 import AdminPageHeader from "../../components/admin/AdminPageHeader";
 import { useAdminShell } from "../../context/AdminShellContext";
-import * as facultyService from "../../services/facultyService";
-import * as degreeService from "../../services/lmsDegreeProgramService";
+import StudentRegistrationFormBody from "../../components/registration/StudentRegistrationFormBody";
+import { emptyStudentForm } from "../../components/registration/studentConstants";
+import { useStudentRegistrationCatalog } from "../../hooks/useStudentRegistrationCatalog";
 import * as registrationService from "../../services/registrationService";
-
-const PROFILE_STATUSES = ["ACTIVE", "INACTIVE"];
-const STREAMS = ["WEEKDAY", "WEEKEND"];
-const ENROLL_STATUSES = ["ACTIVE", "INACTIVE"];
-
-function emptyStudentForm() {
-  return {
-    firstName: "",
-    lastName: "",
-    nicNumber: "",
-    phone: "",
-    optionalEmail: "",
-    status: "ACTIVE",
-    facultyId: "",
-    degreeProgramId: "",
-    intakeId: "",
-    stream: "WEEKDAY",
-    subgroup: "",
-    enrollmentStatus: "ACTIVE",
-  };
-}
 
 function StudentsAdminPage() {
   const { setActiveWindow } = useAdminShell();
@@ -34,13 +14,9 @@ function StudentsAdminPage() {
   const [editingId, setEditingId] = useState(null);
   const [editingStudentIdLabel, setEditingStudentIdLabel] = useState("");
   const [deletingId, setDeletingId] = useState("");
-  const [faculties, setFaculties] = useState([]);
-  const [degrees, setDegrees] = useState([]);
-  const [intakes, setIntakes] = useState([]);
-  const [subgroupOptions, setSubgroupOptions] = useState([]);
-  const [loadingSubgroups, setLoadingSubgroups] = useState(false);
-
   const [form, setForm] = useState(() => emptyStudentForm());
+  const { faculties, degrees, intakes, subgroupOptions, loadingSubgroups } =
+    useStudentRegistrationCatalog(form);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
   const [formSuccess, setFormSuccess] = useState("");
@@ -55,78 +31,6 @@ function StudentsAdminPage() {
   const [pageSize] = useState(20);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
-
-  useEffect(() => {
-    facultyService.listFaculties().then(setFaculties).catch(() => setFaculties([]));
-  }, []);
-
-  const loadDegrees = useCallback(async (facultyCode) => {
-    if (!facultyCode) {
-      setDegrees([]);
-      return;
-    }
-    try {
-      const data = await degreeService.listDegreePrograms({
-        faculty: facultyCode,
-        page: 1,
-        pageSize: 200,
-      });
-      setDegrees(data.items || []);
-    } catch {
-      setDegrees([]);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (form.facultyId) {
-      loadDegrees(form.facultyId);
-    } else {
-      setDegrees([]);
-    }
-  }, [form.facultyId, loadDegrees]);
-
-  useEffect(() => {
-    const loadInt = async () => {
-      if (!form.facultyId || !form.degreeProgramId) {
-        setIntakes([]);
-        return;
-      }
-      try {
-        const data = await registrationService.listIntakes({
-          facultyCode: form.facultyId,
-          degreeCode: form.degreeProgramId,
-        });
-        setIntakes(Array.isArray(data) ? data : []);
-      } catch {
-        setIntakes([]);
-      }
-    };
-    loadInt();
-  }, [form.facultyId, form.degreeProgramId]);
-
-  useEffect(() => {
-    const run = async () => {
-      if (!form.intakeId || !form.facultyId || !form.degreeProgramId || !form.stream) {
-        setSubgroupOptions([]);
-        return;
-      }
-      setLoadingSubgroups(true);
-      try {
-        const data = await registrationService.listIntakeSubgroups(form.intakeId, {
-          facultyId: form.facultyId,
-          degreeProgramId: form.degreeProgramId,
-          stream: form.stream,
-          status: "ACTIVE",
-        });
-        setSubgroupOptions(data.items || []);
-      } catch {
-        setSubgroupOptions([]);
-      } finally {
-        setLoadingSubgroups(false);
-      }
-    };
-    run();
-  }, [form.intakeId, form.facultyId, form.degreeProgramId, form.stream]);
 
   const loadList = useCallback(async () => {
     setLoading(true);
@@ -293,184 +197,15 @@ function StudentsAdminPage() {
             </p>
           ) : null}
 
-          <div className="mt-4 flex flex-col gap-3">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="flex flex-col gap-1">
-                <span className="text-xs font-semibold text-text/70">First name *</span>
-                <input
-                  className="h-11 rounded-2xl border border-border bg-card px-3 text-sm"
-                  value={form.firstName}
-                  onChange={(e) => setForm((f) => ({ ...f, firstName: e.target.value }))}
-                />
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-xs font-semibold text-text/70">Last name *</span>
-                <input
-                  className="h-11 rounded-2xl border border-border bg-card px-3 text-sm"
-                  value={form.lastName}
-                  onChange={(e) => setForm((f) => ({ ...f, lastName: e.target.value }))}
-                />
-              </label>
-            </div>
-            <label className="flex flex-col gap-1">
-              <span className="text-xs font-semibold text-text/70">NIC number *</span>
-              <input
-                className="h-11 rounded-2xl border border-border bg-card px-3 text-sm"
-                value={form.nicNumber}
-                onChange={(e) => setForm((f) => ({ ...f, nicNumber: e.target.value }))}
-              />
-            </label>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="flex flex-col gap-1">
-                <span className="text-xs font-semibold text-text/70">Phone</span>
-                <input
-                  className="h-11 rounded-2xl border border-border bg-card px-3 text-sm"
-                  value={form.phone}
-                  onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
-                />
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-xs font-semibold text-text/70">Optional email</span>
-                <input
-                  className="h-11 rounded-2xl border border-border bg-card px-3 text-sm"
-                  type="email"
-                  value={form.optionalEmail}
-                  onChange={(e) => setForm((f) => ({ ...f, optionalEmail: e.target.value }))}
-                />
-              </label>
-            </div>
-            <label className="flex flex-col gap-1">
-              <span className="text-xs font-semibold text-text/70">Profile status</span>
-              <select
-                className="h-11 rounded-2xl border border-border bg-card px-3 text-sm"
-                value={form.status}
-                onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
-              >
-                {PROFILE_STATUSES.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <hr className="my-2 border-border" />
-
-            <label className="flex flex-col gap-1">
-              <span className="text-xs font-semibold text-text/70">Faculty *</span>
-              <select
-                className="h-11 rounded-2xl border border-border bg-card px-3 text-sm"
-                value={form.facultyId}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    facultyId: e.target.value,
-                    degreeProgramId: "",
-                    intakeId: "",
-                    subgroup: "",
-                  }))
-                }
-              >
-                <option value="">Select faculty</option>
-                {faculties.map((x) => (
-                  <option key={x.code} value={x.code}>
-                    {x.code} — {x.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="flex flex-col gap-1">
-              <span className="text-xs font-semibold text-text/70">Degree program *</span>
-              <select
-                className="h-11 rounded-2xl border border-border bg-card px-3 text-sm"
-                value={form.degreeProgramId}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    degreeProgramId: e.target.value,
-                    intakeId: "",
-                    subgroup: "",
-                  }))
-                }
-                disabled={!form.facultyId}
-              >
-                <option value="">Select degree</option>
-                {degrees.map((d) => (
-                  <option key={d.code} value={d.code}>
-                    {d.code} — {d.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="flex flex-col gap-1">
-              <span className="text-xs font-semibold text-text/70">Intake *</span>
-              <select
-                className="h-11 rounded-2xl border border-border bg-card px-3 text-sm"
-                value={form.intakeId}
-                onChange={(e) => setForm((f) => ({ ...f, intakeId: e.target.value, subgroup: "" }))}
-                disabled={!form.degreeProgramId}
-              >
-                <option value="">Select intake</option>
-                {intakes.map((i) => (
-                  <option key={i.id} value={i.id}>
-                    {i.name || i.label || i.id}
-                    {i.studentIdPrefix ? ` (${i.studentIdPrefix})` : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="flex flex-col gap-1">
-              <span className="text-xs font-semibold text-text/70">Stream *</span>
-              <select
-                className="h-11 rounded-2xl border border-border bg-card px-3 text-sm"
-                value={form.stream}
-                onChange={(e) => setForm((f) => ({ ...f, stream: e.target.value, subgroup: "" }))}
-              >
-                {STREAMS.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="flex flex-col gap-1">
-              <span className="text-xs font-semibold text-text/70">
-                Subgroup (optional — pick existing cohort label)
-              </span>
-              <select
-                className="h-11 rounded-2xl border border-border bg-card px-3 text-sm"
-                value={form.subgroup}
-                onChange={(e) => setForm((f) => ({ ...f, subgroup: e.target.value }))}
-                disabled={!form.intakeId || loadingSubgroups}
-              >
-                <option value="">— None —</option>
-                {subgroupOptions.map((sg) => (
-                  <option key={sg.code} value={sg.code}>
-                    {sg.code} ({sg.count})
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="flex flex-col gap-1">
-              <span className="text-xs font-semibold text-text/70">Enrollment status</span>
-              <select
-                className="h-11 rounded-2xl border border-border bg-card px-3 text-sm"
-                value={form.enrollmentStatus}
-                onChange={(e) => setForm((f) => ({ ...f, enrollmentStatus: e.target.value }))}
-              >
-                {ENROLL_STATUSES.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+          <StudentRegistrationFormBody
+            degrees={degrees}
+            faculties={faculties}
+            form={form}
+            intakes={intakes}
+            loadingSubgroups={loadingSubgroups}
+            setForm={setForm}
+            subgroupOptions={subgroupOptions}
+          />
 
           {formError ? (
             <div className="mt-4 rounded-2xl border border-border bg-tint p-3 text-sm" role="alert">

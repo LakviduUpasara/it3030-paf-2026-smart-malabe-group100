@@ -108,6 +108,8 @@ public class AdminSignupRequestServiceImpl implements AdminSignupRequestService 
                 .campusId(signupRequest.getCampusId())
                 .phoneNumber(signupRequest.getPhoneNumber())
                 .department(signupRequest.getDepartment())
+                .supplementaryProfile(signupRequest.getSupplementaryProfile())
+                .applicationProfileJson(signupRequest.getApplicationProfileJson())
                 .reasonForAccess(signupRequest.getReasonForAccess())
                 .preferredTwoFactorMethod(signupRequest.getPreferredTwoFactorMethod())
                 .status(signupRequest.getStatus())

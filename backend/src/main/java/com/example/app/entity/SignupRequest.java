@@ -42,7 +42,13 @@ public class SignupRequest {
 
     private String department;
 
+    /** Extra applicant notes aligned with requested campus role (faculties, workshop, programme, etc.). */
+    private String supplementaryProfile;
+
     private String reasonForAccess;
+
+    /** JSON snapshot of the applicant’s registration form (aligned with admin console fields). */
+    private String applicationProfileJson;
 
     private AuthProvider authProvider;
 

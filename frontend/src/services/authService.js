@@ -49,10 +49,12 @@ export async function registerAccount(payload) {
   validateEmail(normalizedEmail, "Enter a valid email address.");
 
   try {
+    const twoFa = payload.preferredTwoFactorMethod || "EMAIL_OTP";
     const response = await api.post("/auth/register", {
       ...payload,
       fullName: normalizedName,
       email: normalizedEmail,
+      preferredTwoFactorMethod: twoFa === "AUTHENTICATOR_APP" ? "AUTHENTICATOR_APP" : "EMAIL_OTP",
     });
     return response.data;
   } catch (error) {
