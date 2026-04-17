@@ -38,11 +38,21 @@ public class BookingServiceImpl implements BookingService {
     @Override
     @Transactional
     public BookingResponse createBooking(BookingRequest request) {
+        System.out.println("=== CREATE BOOKING START ===");
+        System.out.println("Resource ID: " + request.getResourceId());
+        System.out.println("User ID: " + request.getUserId());
+        System.out.println("Start Time: " + request.getStartTime());
+        System.out.println("End Time: " + request.getEndTime());
+        System.out.println("Purpose: " + request.getPurpose());
+        
         logger.info("Creating booking: resourceId={}, userId={}, startTime={}, endTime={}", 
                 request.getResourceId(), request.getUserId(), request.getStartTime(), request.getEndTime());
         
         validateBookingRequest(request.getStartTime(), request.getEndTime());
+        System.out.println("[STEP 1] ✓ Validation passed");
+        
         rejectConflict(request.getResourceId(), request.getStartTime(), request.getEndTime());
+        System.out.println("[STEP 2] ✓ Conflict check passed");
 
         Booking booking = new Booking();
         booking.setResourceId(request.getResourceId());
@@ -53,6 +63,8 @@ public class BookingServiceImpl implements BookingService {
         booking.setStatus(BookingStatus.PENDING);
 
         Booking saved = bookingRepository.save(booking);
+        System.out.println("[STEP 3] ✓ Booking saved with ID: " + saved.getId());
+        System.out.println("=== CREATE BOOKING SUCCESS ===");
         logger.info("Booking created with ID: {}", saved.getId());
         return mapToResponse(saved);
     }
@@ -194,25 +206,34 @@ public class BookingServiceImpl implements BookingService {
     }
 
     private void validateBookingRequest(LocalDateTime startTime, LocalDateTime endTime) {
+        System.out.println("  [VALIDATION] startTime: " + startTime + ", endTime: " + endTime);
         if (startTime == null || endTime == null) {
             logger.warn("Booking validation failed: null times provided");
+            System.out.println("  [VALIDATION] ✗ FAILED: null times");
             throw new IllegalArgumentException("startTime and endTime are required.");
         }
         if (!startTime.isBefore(endTime)) {
             logger.warn("Booking validation failed: startTime {} is not before endTime {}", startTime, endTime);
+            System.out.println("  [VALIDATION] ✗ FAILED: start is not before end");
             throw new IllegalArgumentException("startTime must be before endTime.");
         }
-        if (startTime.isBefore(LocalDateTime.now()) || endTime.isBefore(LocalDateTime.now())) {
+        LocalDateTime now = LocalDateTime.now();
+        System.out.println("  [VALIDATION] Now: " + now);
+        if (startTime.isBefore(now) || endTime.isBefore(now)) {
             logger.warn("Booking validation failed: times are in the past");
+            System.out.println("  [VALIDATION] ✗ FAILED: times in past. Start before now? " + startTime.isBefore(now) + ", End before now? " + endTime.isBefore(now));
             throw new IllegalArgumentException("Bookings cannot be created in the past.");
         }
+        System.out.println("  [VALIDATION] ✓ PASSED");
     }
 
     private void rejectConflict(Long resourceId, LocalDateTime startTime, LocalDateTime endTime) {
+        System.out.println("  [CONFLICT CHECK] Checking resource " + resourceId + " from " + startTime + " to " + endTime);
         boolean conflictExists = bookingRepository.existsApprovedBookingConflict(resourceId,
                 BookingStatus.APPROVED,
                 startTime,
                 endTime);
+        System.out.println("  [CONFLICT CHECK] Result: " + (conflictExists ? "CONFLICT EXISTS" : "NO CONFLICT"));
         if (conflictExists) {
             logger.warn("Booking conflict detected for resourceId={}, startTime={}, endTime={}", resourceId, startTime, endTime);
             throw new BookingConflictException("The requested time slot overlaps with an existing approved booking for this resource.");
