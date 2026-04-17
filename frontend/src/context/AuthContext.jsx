@@ -69,7 +69,9 @@ export function AuthProvider({ children }) {
       return response;
     }
 
-    switch (response.authStatus) {
+    const authStatus = authService.normalizeAuthStatus(response.authStatus);
+
+    switch (authStatus) {
       case "AUTHENTICATED":
         setUser(response.user);
         setSessionToken(response.token);

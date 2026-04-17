@@ -211,6 +211,66 @@ export function buildMockAuthenticatedUser({
   };
 }
 
+/** Offline fallback: same shape as backend `AuthFlowResponse` for `AUTHENTICATED`. */
+export function buildMockAuthFlowAuthenticated({
+  name,
+  fullName,
+  email,
+  provider = "credentials",
+} = {}) {
+  const user = buildMockAuthenticatedUser({
+    name: fullName || name,
+    email,
+    provider,
+  });
+  const safeId = user.email.replace(/[^a-z0-9]+/gi, "-");
+  return {
+    authStatus: "AUTHENTICATED",
+    user: {
+      id: `mock-${safeId}`,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      provider: user.provider,
+      status: "ACTIVE",
+    },
+    token: "mock-offline-session-token",
+  };
+}
+
+/** Offline fallback when registration API is unavailable (e.g. 404). */
+export function buildMockPendingRegistrationFlow({
+  fullName,
+  name,
+  email,
+  provider = "LOCAL",
+} = {}) {
+  const normalizedEmail = (email || getDefaultEmailForRole()).trim().toLowerCase();
+  const role = inferRoleFromEmail(normalizedEmail);
+  const applicantName = (fullName || name)?.trim() || getDisplayNameForRole(role, normalizedEmail);
+  let mappedProvider = "LOCAL";
+  if (provider === "GOOGLE" || provider === "google") {
+    mappedProvider = "GOOGLE";
+  } else if (provider === "APPLE" || provider === "apple") {
+    mappedProvider = "APPLE";
+  }
+  return {
+    authStatus: "PENDING_APPROVAL",
+    pendingApproval: {
+      requestId: `mock-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+      applicantName,
+      email: normalizedEmail,
+      provider: mappedProvider,
+      status: "PENDING",
+      assignedRole: null,
+      reviewerNote: null,
+      requestedAt: new Date().toISOString(),
+      reviewedAt: null,
+      message: "Offline mock: your request is pending approval.",
+    },
+  };
+}
+
 export function buildMockGoogleUser(role) {
   return buildMockAuthenticatedUser({
     email: getDefaultEmailForRole(role),

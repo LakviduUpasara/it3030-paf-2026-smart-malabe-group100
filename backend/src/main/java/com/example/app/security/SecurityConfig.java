@@ -29,7 +29,8 @@ public class SecurityConfig {
                         .anyRequest().permitAll())
                 .headers(headers -> headers
                         .frameOptions(frameOptions -> frameOptions.disable()))
-                .httpBasic(Customizer.withDefaults());
+                .httpBasic(Customizer.withDefaults())
+                .addFilterBefore(sessionAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

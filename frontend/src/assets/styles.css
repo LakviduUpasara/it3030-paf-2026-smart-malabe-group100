@@ -782,7 +782,8 @@ a {
   align-items: center;
   gap: clamp(2rem, 4vw, 5rem);
   min-height: calc(100vh - 78px);
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: visible;
   padding: clamp(2rem, 5vw, 4rem) clamp(1.5rem, 5vw, 5rem);
   isolation: isolate;
 }
@@ -1159,7 +1160,8 @@ a {
   position: relative;
   min-height: 100vh;
   padding: 1.5rem;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: visible;
 }
 
 .login-stage {

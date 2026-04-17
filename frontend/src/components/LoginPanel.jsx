@@ -7,6 +7,7 @@ import Button from "./Button";
 import GoogleIdentityButton from "./GoogleIdentityButton";
 import LoadingSpinner from "./LoadingSpinner";
 import { useAuth } from "../hooks/useAuth";
+import { normalizeAuthStatus } from "../services/authService";
 import { getDefaultRouteForRole, normalizeRole, ROLES } from "../utils/roleUtils";
 
 const DEMO_LOCAL_ADMIN_EMAIL = "admin@smartcampus.edu";
@@ -115,12 +116,14 @@ function LoginPanel({ showHeading = true }) {
       return;
     }
 
-    if (response.authStatus === "AUTHENTICATED" && response.user) {
+    const status = normalizeAuthStatus(response.authStatus);
+
+    if (status === "AUTHENTICATED" && response.user) {
       redirectToWorkspace(response.user);
       return;
     }
 
-    if (response.authStatus === "PENDING_APPROVAL") {
+    if (status === "PENDING_APPROVAL") {
       navigate("/approval-pending", { replace: true });
     }
   };

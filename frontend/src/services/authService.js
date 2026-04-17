@@ -1,5 +1,8 @@
 import api, { createServiceError } from "./api";
-import { buildMockAuthenticatedUser } from "../utils/mockData";
+import {
+  buildMockAuthFlowAuthenticated,
+  buildMockPendingRegistrationFlow,
+} from "../utils/mockData";
 
 function normalizeEmail(email) {
   return email.trim().toLowerCase();
@@ -17,33 +20,18 @@ function validateEmail(email, fallbackMessage) {
   }
 }
 
-/**
- * Flattens backend AuthFlowResponse into the shape stored in AuthContext (email/role at top level + token).
- */
-export function mapAuthFlowToAuthUser(data) {
-  if (!data || typeof data !== "object") {
-    return data;
+/** Backend may send enum as string or `{ name: "AUTHENTICATED" }` depending on serializers. */
+export function normalizeAuthStatus(raw) {
+  if (raw == null) {
+    return undefined;
   }
-
-  if (!data.authStatus) {
-    return data;
+  if (typeof raw === "string") {
+    return raw.trim();
   }
-
-  if (data.authStatus === "AUTHENTICATED" && data.user && data.token) {
-    const u = data.user;
-    return {
-      id: u.id,
-      name: u.name,
-      email: u.email,
-      role: u.role,
-      provider: u.provider,
-      status: u.status,
-      token: data.token,
-    };
+  if (typeof raw === "object" && raw !== null && typeof raw.name === "string") {
+    return raw.name.trim();
   }
-
-  const message = data.message || "Sign-in could not be completed.";
-  throw new Error(message);
+  return String(raw);
 }
 
 export async function loginWithCredentials({ email, password }) {
@@ -51,7 +39,7 @@ export async function loginWithCredentials({ email, password }) {
 
   try {
     const response = await api.post("/auth/login", { email: normalizedEmail, password });
-    return mapAuthFlowToAuthUser(response.data);
+    return response.data;
   } catch (error) {
     if (!error?.response || error.response.status === 404) {
       if (!normalizedEmail || !password?.trim()) {
@@ -60,7 +48,7 @@ export async function loginWithCredentials({ email, password }) {
 
       validateEmail(normalizedEmail, "Enter a valid email address.");
 
-      return buildMockAuthenticatedUser({
+      return buildMockAuthFlowAuthenticated({
         email: normalizedEmail,
         provider: "credentials",
       });
@@ -69,9 +57,10 @@ export async function loginWithCredentials({ email, password }) {
   }
 }
 
-export async function registerAccount({ name, email, password }) {
-  const normalizedEmail = normalizeEmail(email || "");
-  const normalizedName = name?.trim();
+export async function registerAccount(payload) {
+  const normalizedEmail = normalizeEmail(payload?.email || "");
+  const normalizedName = (payload?.fullName || payload?.name || "").trim();
+  const password = payload?.password;
 
   try {
     const response = await api.post("/auth/register", {
@@ -79,7 +68,7 @@ export async function registerAccount({ name, email, password }) {
       email: normalizedEmail,
       password,
     });
-    return mapAuthFlowToAuthUser(response.data);
+    return response.data;
   } catch (error) {
     if (!error?.response || error.response.status === 404) {
       if (!normalizedName || !normalizedEmail || !password?.trim()) {
@@ -88,10 +77,10 @@ export async function registerAccount({ name, email, password }) {
 
       validateEmail(normalizedEmail, "Enter a valid email address.");
 
-      return buildMockAuthenticatedUser({
-        name: normalizedName,
+      return buildMockPendingRegistrationFlow({
+        fullName: normalizedName,
         email: normalizedEmail,
-        provider: "credentials",
+        provider: payload?.authProvider || "LOCAL",
       });
     }
     throw createServiceError(error, "Registration failed.");
@@ -103,7 +92,7 @@ async function loginWithProvider(provider, email) {
 
   try {
     const response = await api.post(`/auth/${provider}`, { email: normalizedEmail });
-    return mapAuthFlowToAuthUser(response.data);
+    return response.data;
   } catch (error) {
     if (!error?.response || error.response.status === 404) {
       validateEmail(
@@ -111,12 +100,27 @@ async function loginWithProvider(provider, email) {
         `Enter a valid email address before using ${provider}.`,
       );
 
-      return buildMockAuthenticatedUser({
+      return buildMockAuthFlowAuthenticated({
         email: normalizedEmail,
         provider,
       });
     }
     throw createServiceError(error, `${provider} sign-in failed.`);
+  }
+}
+
+export async function prepareGoogleSignup(credential) {
+  if (!credential?.trim()) {
+    throw new Error("Google sign-in did not return a valid credential.");
+  }
+
+  try {
+    const response = await api.post("/auth/google/signup-session", {
+      credential: credential.trim(),
+    });
+    return response.data;
+  } catch (error) {
+    throw createServiceError(error, "Unable to start Google sign up.");
   }
 }
 
@@ -225,8 +229,14 @@ export async function logout() {
 
 export async function fetchHealthStatus() {
   try {
-    const response = await api.get("/health");
-    return response.data;
+    // Health lives at `/api/health`; auth base is `/api/v1`, so go up one segment.
+    const response = await api.get("../health");
+    const body = response.data;
+    const data = body?.data != null ? body.data : body;
+    return {
+      ...data,
+      developerMode: data?.developerMode ?? body?.developerMode,
+    };
   } catch (error) {
     throw createServiceError(error, "Unable to reach the campus API.");
   }

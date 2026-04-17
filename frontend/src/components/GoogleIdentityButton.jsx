@@ -4,6 +4,40 @@ const GOOGLE_SCRIPT_URL = "https://accounts.google.com/gsi/client";
 
 let googleScriptPromise;
 
+/**
+ * GIS must call `initialize` at most once per client_id. Re-initializing on every
+ * prop change (e.g. disabled while logging in) can freeze or break the page.
+ */
+const gsi = {
+  initializedClientId: null,
+  dispatch: {
+    onCredential: null,
+    onError: null,
+  },
+};
+
+function ensureGsiInitialized(clientId) {
+  if (!window.google?.accounts?.id || !clientId) {
+    return;
+  }
+
+  if (gsi.initializedClientId === clientId) {
+    return;
+  }
+
+  gsi.initializedClientId = clientId;
+  window.google.accounts.id.initialize({
+    client_id: clientId,
+    callback: (response) => {
+      if (!response?.credential) {
+        gsi.dispatch.onError?.("Google did not return a valid credential.");
+        return;
+      }
+      gsi.dispatch.onCredential?.(response.credential);
+    },
+  });
+}
+
 function loadGoogleScript() {
   if (window.google?.accounts?.id) {
     return Promise.resolve(window.google);
@@ -53,12 +87,21 @@ function GoogleIdentityButton({
   useEffect(() => {
     onCredentialRef.current = onCredential;
     onErrorRef.current = onError;
+    gsi.dispatch.onCredential = (credential) => onCredentialRef.current?.(credential);
+    gsi.dispatch.onError = (message) => onErrorRef.current?.(message);
   }, [onCredential, onError]);
 
   useEffect(() => {
     let isActive = true;
 
-    if (!clientId || disabled) {
+    if (!clientId) {
+      return undefined;
+    }
+
+    if (disabled) {
+      if (containerRef.current) {
+        containerRef.current.innerHTML = "";
+      }
       return undefined;
     }
 
@@ -69,17 +112,7 @@ function GoogleIdentityButton({
         }
 
         setStatusMessage("");
-        window.google.accounts.id.initialize({
-          client_id: clientId,
-          callback: (response) => {
-            if (!response?.credential) {
-              onErrorRef.current?.("Google did not return a valid credential.");
-              return;
-            }
-
-            onCredentialRef.current?.(response.credential);
-          },
-        });
+        ensureGsiInitialized(clientId);
 
         const parentWidth = containerRef.current.parentElement?.clientWidth || 360;
         const buttonWidth = Math.max(minWidth, Math.min(parentWidth, maxWidth));

@@ -1,5 +1,6 @@
 package com.example.app.controller;
 
+import com.example.app.config.AppProperties;
 import com.example.app.dto.ApiResponse;
 import java.util.HashMap;
 import java.util.Map;
@@ -13,18 +14,22 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/api/health")
+@RequiredArgsConstructor
 public class HealthController {
+
+    private final AppProperties appProperties;
 
     /**
      * Get system health status.
      */
     @GetMapping
-    public ApiResponse<Map<String, String>> health() {
-        Map<String, String> healthData = new HashMap<>();
+    public ApiResponse<Map<String, Object>> health() {
+        Map<String, Object> healthData = new HashMap<>();
         healthData.put("status", "UP");
         healthData.put("service", "Smart Campus Backend");
         healthData.put("version", "1.0.0");
-        
+        healthData.put("developerMode", appProperties.isDeveloperMode());
+
         return ApiResponse.success("Service is healthy", healthData);
     }
 }

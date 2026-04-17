@@ -8,13 +8,20 @@
   box-sizing: border-box;
 }
 
-html, body, #root {
+/* Allow document scrolling on marketing + auth routes (landing, login, signup). */
+html {
+  min-height: 100%;
+}
+
+body,
+#root {
   width: 100%;
-  height: 100%;
-  overflow: hidden;
+  min-height: 100%;
 }
 
 body {
+  min-height: 100vh;
+  overflow-x: hidden;
   font-family: 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
