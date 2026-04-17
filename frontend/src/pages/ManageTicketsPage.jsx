@@ -516,10 +516,22 @@ function ManageTicketsPage() {
                       </div>
                       {detailTicket.attachments && detailTicket.attachments.length > 0 ? (
                         <div className="ticket-detail-row ticket-detail-row--block">
-                          <div className="ticket-detail-label">Attachments</div>
+                          <div className="ticket-detail-label">Requester attachments</div>
                           <div className="ticket-detail-value">
                             <ul className="admin-ticket-attachment-list">
                               {detailTicket.attachments.map((a) => (
+                                <li key={a.id || a.fileName}>{a.fileName || "File"}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+                      ) : null}
+                      {detailTicket.technicianAttachments && detailTicket.technicianAttachments.length > 0 ? (
+                        <div className="ticket-detail-row ticket-detail-row--block">
+                          <div className="ticket-detail-label">Technician evidence</div>
+                          <div className="ticket-detail-value">
+                            <ul className="admin-ticket-attachment-list">
+                              {detailTicket.technicianAttachments.map((a) => (
                                 <li key={a.id || a.fileName}>{a.fileName || "File"}</li>
                               ))}
                             </ul>

@@ -19,6 +19,7 @@ import { getCategories, getSubCategories } from "../services/categoryService";
 import { formatDateTime, toToken } from "../utils/formatters";
 import { getTicketThumbnailForCategory } from "../utils/ticketCategoryImage";
 import { META_MARKER, parseTicketDescription } from "../utils/ticketDescription";
+import { normalizeTicketFromApi } from "../utils/ticketNormalize";
 import {
   WITHDRAWAL_REASON_OPTIONS,
   formatWithdrawalReasonForDisplay,
@@ -113,27 +114,6 @@ function mergeEvidenceFiles(prev, incoming, maxSlots = MAX_EVIDENCE_IMAGES) {
   return merged.slice(0, cap);
 }
 
-/** API may expose attachment id as `id` or `_id` (Mongo); ensure stable shape for the UI. */
-function normalizeAttachmentFromApi(att) {
-  if (att == null || typeof att !== "object") return null;
-  const rawId = att.id ?? att._id;
-  return {
-    ...att,
-    id: rawId != null && rawId !== "" ? String(rawId) : null,
-    fileName: att.fileName ?? att.file_name ?? "",
-  };
-}
-
-function normalizeTicketFromApi(ticket) {
-  if (!ticket) return ticket;
-  const raw = ticket.attachments;
-  const list = Array.isArray(raw) ? raw : [];
-  return {
-    ...ticket,
-    attachments: list.map(normalizeAttachmentFromApi).filter(Boolean),
-  };
-}
-
 function EvidenceAttachmentThumbnails({
   attachments,
   evidencePreviewById,
@@ -211,6 +191,7 @@ function MyTicketsPage() {
   const [updateError, setUpdateError] = useState("");
   const [updateBusy, setUpdateBusy] = useState(false);
   const [evidencePreviewById, setEvidencePreviewById] = useState({});
+  const [techEvidencePreviewById, setTechEvidencePreviewById] = useState({});
   const [editEvidenceFiles, setEditEvidenceFiles] = useState([]);
   /** Attachment ids to DELETE on Save changes only (not persisted until then). */
   const [pendingRemovedAttachmentIds, setPendingRemovedAttachmentIds] = useState([]);
@@ -699,6 +680,31 @@ function MyTicketsPage() {
     return detailTicket.attachments.map((a) => a?.id).join("|");
   }, [detailTicket?.attachments]);
 
+  const technicianEvidenceAttachmentKey = useMemo(() => {
+    if (!detailTicket?.technicianAttachments?.length) return "";
+    return detailTicket.technicianAttachments.map((a) => a?.id).join("|");
+  }, [detailTicket?.technicianAttachments]);
+
+  const detailEvidenceSidebar = useMemo(() => {
+    if (!detailTicket) {
+      return {
+        hasUserEvidence: false,
+        hasTechnicianEvidence: false,
+        hideEmptyUserEvidenceWhenTechnicianPosted: false,
+      };
+    }
+    const hasUserEvidence =
+      Array.isArray(detailTicket.attachments) && detailTicket.attachments.length > 0;
+    const hasTechnicianEvidence =
+      Array.isArray(detailTicket.technicianAttachments) &&
+      detailTicket.technicianAttachments.length > 0;
+    return {
+      hasUserEvidence,
+      hasTechnicianEvidence,
+      hideEmptyUserEvidenceWhenTechnicianPosted: hasTechnicianEvidence && !hasUserEvidence,
+    };
+  }, [detailTicket]);
+
   const visibleEditAttachments = useMemo(() => {
     if (detailSubView !== "edit" || !detailTicket) return [];
     const list = Array.isArray(detailTicket.attachments) ? detailTicket.attachments : [];
@@ -768,10 +774,64 @@ function MyTicketsPage() {
   }, [detailTicket?.id, evidenceAttachmentKey, detailSubView]);
 
   useEffect(() => {
+    const showEvidence =
+      detailSubView === "details" || detailSubView === "edit";
+    if (!detailTicket?.id || !showEvidence) {
+      return undefined;
+    }
+    const atts = Array.isArray(detailTicket.technicianAttachments)
+      ? detailTicket.technicianAttachments
+      : [];
+    if (atts.length === 0) {
+      setTechEvidencePreviewById((prev) => {
+        Object.values(prev).forEach((entry) => {
+          if (entry?.url) URL.revokeObjectURL(entry.url);
+        });
+        return {};
+      });
+      return undefined;
+    }
+
+    let cancelled = false;
+    async function loadTechEvidence() {
+      const next = {};
+      for (const att of atts) {
+        if (!att?.id) continue;
+        try {
+          const preview = await fetchAttachmentPreview(detailTicket.id, att.id);
+          if (!cancelled) {
+            next[att.id] = { ...preview, fileName: att.fileName || "" };
+          }
+        } catch {
+          /* skip */
+        }
+      }
+      if (!cancelled) {
+        setTechEvidencePreviewById((prev) => {
+          Object.values(prev).forEach((entry) => {
+            if (entry?.url) URL.revokeObjectURL(entry.url);
+          });
+          return next;
+        });
+      }
+    }
+    loadTechEvidence();
+    return () => {
+      cancelled = true;
+    };
+  }, [detailTicket?.id, technicianEvidenceAttachmentKey, detailSubView]);
+
+  useEffect(() => {
     if (detailSubView === "details" || detailSubView === "edit") {
       return;
     }
     setEvidencePreviewById((prev) => {
+      Object.values(prev).forEach((entry) => {
+        if (entry?.url) URL.revokeObjectURL(entry.url);
+      });
+      return {};
+    });
+    setTechEvidencePreviewById((prev) => {
       Object.values(prev).forEach((entry) => {
         if (entry?.url) URL.revokeObjectURL(entry.url);
       });
@@ -787,6 +847,12 @@ function MyTicketsPage() {
 
   const closeDetailModal = () => {
     setEvidencePreviewById((prev) => {
+      Object.values(prev).forEach((entry) => {
+        if (entry?.url) URL.revokeObjectURL(entry.url);
+      });
+      return {};
+    });
+    setTechEvidencePreviewById((prev) => {
       Object.values(prev).forEach((entry) => {
         if (entry?.url) URL.revokeObjectURL(entry.url);
       });
@@ -1283,6 +1349,25 @@ function MyTicketsPage() {
                           {ticketDetailView.parsed.content || "No description provided."}
                         </div>
                       </div>
+                      {Array.isArray(detailTicket.updates) && detailTicket.updates.length > 0 ? (
+                        <div className="ticket-detail-row ticket-detail-row--block">
+                          <div className="ticket-detail-label">Technician updates</div>
+                          <div className="ticket-detail-value">
+                            <ul className="ticket-detail-updates-list">
+                              {detailTicket.updates.map((u) => (
+                                <li className="ticket-detail-update-item" key={u.id || u.message}>
+                                  <div className="ticket-detail-update-meta">
+                                    {[u.updatedBy, u.timestamp ? formatDateTime(u.timestamp) : null]
+                                      .filter(Boolean)
+                                      .join(" · ")}
+                                  </div>
+                                  <p className="ticket-detail-update-message">{u.message}</p>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+                      ) : null}
                       {ticketDetailView.suggestions.length > 0 ? (
                         <div className="ticket-detail-row ticket-detail-row--block">
                           <div className="ticket-detail-label">Suggestions</div>
@@ -1290,24 +1375,58 @@ function MyTicketsPage() {
                         </div>
                       ) : null}
                     </div>
-                    <aside className="ticket-detail-modal-evidence" aria-label="Evidence">
-                      <div className="ticket-detail-label">Evidence</div>
-                      <div className="ticket-detail-evidence-panel">
-                        {Array.isArray(detailTicket.attachments) && detailTicket.attachments.length > 0 ? (
-                          <EvidenceAttachmentThumbnails
-                            attachments={detailTicket.attachments}
-                            evidencePreviewById={evidencePreviewById}
-                          />
-                        ) : (
-                          <div className="ticket-detail-evidence-empty">
-                            <img alt="" className="ticket-detail-evidence-placeholder-img" src={maintenanceIllustration} />
-                            <p className="ticket-detail-evidence-placeholder-text">No photo evidence yet</p>
-                            <p className="ticket-detail-evidence-placeholder-hint">
-                              Use Update → Edit details to add up to 3 images.
-                            </p>
+                    <aside
+                      className="ticket-detail-modal-evidence"
+                      aria-label={
+                        detailEvidenceSidebar.hideEmptyUserEvidenceWhenTechnicianPosted
+                          ? "Technician evidence"
+                          : "Evidence"
+                      }
+                    >
+                      {detailEvidenceSidebar.hideEmptyUserEvidenceWhenTechnicianPosted ? null : (
+                        <>
+                          <div className="ticket-detail-label">Your evidence</div>
+                          <div className="ticket-detail-evidence-panel">
+                            {detailEvidenceSidebar.hasUserEvidence ? (
+                              <EvidenceAttachmentThumbnails
+                                attachments={detailTicket.attachments}
+                                evidencePreviewById={evidencePreviewById}
+                              />
+                            ) : (
+                              <div className="ticket-detail-evidence-empty">
+                                <img
+                                  alt=""
+                                  className="ticket-detail-evidence-placeholder-img"
+                                  src={maintenanceIllustration}
+                                />
+                                <p className="ticket-detail-evidence-placeholder-text">No photo evidence yet</p>
+                                <p className="ticket-detail-evidence-placeholder-hint">
+                                  Use Update → Edit details to add up to 3 images.
+                                </p>
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
+                        </>
+                      )}
+                      {detailEvidenceSidebar.hasTechnicianEvidence ? (
+                        <>
+                          <div
+                            className={
+                              detailEvidenceSidebar.hideEmptyUserEvidenceWhenTechnicianPosted
+                                ? "ticket-detail-label"
+                                : "ticket-detail-label ticket-detail-label--technician-evidence"
+                            }
+                          >
+                            Technician evidence
+                          </div>
+                          <div className="ticket-detail-evidence-panel">
+                            <EvidenceAttachmentThumbnails
+                              attachments={detailTicket.technicianAttachments}
+                              evidencePreviewById={techEvidencePreviewById}
+                            />
+                          </div>
+                        </>
+                      ) : null}
                     </aside>
                   </div>
                   <div className="modal-actions ticket-detail-modal-actions">

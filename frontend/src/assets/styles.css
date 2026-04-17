@@ -4122,6 +4122,72 @@ a {
   color: var(--muted);
 }
 
+.technician-updates-list {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.technician-update-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.65rem 0.85rem;
+  background: var(--surface);
+}
+
+.technician-update-meta {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+}
+
+.technician-update-body {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.technician-update-actions {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.ticket-detail-updates-list {
+  list-style: none;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.ticket-detail-update-item {
+  border-left: 3px solid rgba(15, 124, 130, 0.35);
+  padding-left: 0.65rem;
+}
+
+.ticket-detail-update-meta {
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin-bottom: 0.25rem;
+}
+
+.ticket-detail-update-message {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .technician-ticket-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -4318,13 +4384,65 @@ a {
 .technician-table-actions {
   display: inline-flex;
   flex-wrap: wrap;
-  gap: 5rem;
+  gap: 0.5rem;
   align-items: center;
   justify-content: flex-end;
 }
 
 .technician-see-details-button {
   white-space: nowrap;
+}
+
+.ticket-detail-label--technician-evidence {
+  margin-top: 1rem;
+}
+
+.technician-tech-evidence-list {
+  margin-top: 0.35rem;
+}
+
+.technician-tech-evidence-actions {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  justify-content: flex-end;
+  max-width: calc(100% - 0.5rem);
+}
+
+.technician-tech-evidence-replace {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.22rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.technician-tech-evidence-replace:hover {
+  background: var(--surface-strong);
+}
+
+.technician-tech-evidence-replace-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.technician-tech-evidence-replace-text {
+  pointer-events: none;
 }
 
 .technician-details-panel {

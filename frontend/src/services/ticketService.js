@@ -73,8 +73,27 @@ export const updateStatus = (id, status) =>
 
 export const addUpdate = (id, data) =>
   getOrThrow(
-    () => api.post(`/tickets/${id}/updates`, data),
+    () => api.post(`/tickets/${encodeURIComponent(String(id))}/updates`, data),
     "Unable to add update.",
+  );
+
+export const patchTicketUpdate = (ticketId, updateId, data) =>
+  getOrThrow(
+    () =>
+      api.patch(
+        `/tickets/${encodeURIComponent(String(ticketId))}/updates/${encodeURIComponent(String(updateId))}`,
+        data,
+      ),
+    "Unable to save update.",
+  );
+
+export const deleteTicketUpdate = (ticketId, updateId) =>
+  getOrThrow(
+    () =>
+      api.delete(
+        `/tickets/${encodeURIComponent(String(ticketId))}/updates/${encodeURIComponent(String(updateId))}`,
+      ),
+    "Unable to delete update.",
   );
 
 export const uploadFile = (id, file) => {
@@ -95,3 +114,35 @@ export const deleteAttachment = (ticketId, attachmentId) =>
       ),
     "Unable to delete attachment.",
   );
+
+/** Assigned technician evidence (max 3); separate from requester `attachments`. */
+export const uploadTechnicianEvidence = (ticketId, file) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  return getOrThrow(
+    () => api.post(`/tickets/${encodeURIComponent(String(ticketId))}/technician-evidence`, formData),
+    "Unable to upload technician evidence.",
+  );
+};
+
+export const deleteTechnicianEvidence = (ticketId, attachmentId) =>
+  getOrThrow(
+    () =>
+      api.delete(
+        `/tickets/${encodeURIComponent(String(ticketId))}/technician-evidence/${encodeURIComponent(String(attachmentId))}`,
+      ),
+    "Unable to delete technician evidence.",
+  );
+
+export const replaceTechnicianEvidence = (ticketId, attachmentId, file) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  return getOrThrow(
+    () =>
+      api.put(
+        `/tickets/${encodeURIComponent(String(ticketId))}/technician-evidence/${encodeURIComponent(String(attachmentId))}`,
+        formData,
+      ),
+    "Unable to replace technician evidence.",
+  );
+};
