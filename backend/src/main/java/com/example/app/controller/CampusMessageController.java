@@ -1,4 +1,4 @@
-/*package com.example.app.controller;
+package com.example.app.controller;
 
 import com.example.app.dto.ApiResponse;
 import com.example.app.dto.CampusMessageRequest;

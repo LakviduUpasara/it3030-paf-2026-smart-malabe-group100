@@ -1,11 +1,10 @@
-/*package com.example.app.service;
+package com.example.app.service;
 
 import com.example.app.dto.CampusMessageRequest;
 import com.example.app.dto.CampusMessageResponse;
 import com.example.app.entity.CampusMessage;
 import com.example.app.repository.CampusMessageRepository;
 import java.util.List;
-import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -54,4 +53,3 @@ public class CampusMessageServiceImpl implements CampusMessageService {
     }
 }
 
-    */

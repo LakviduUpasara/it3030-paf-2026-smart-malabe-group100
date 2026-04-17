@@ -31,10 +31,6 @@ public class BookingServiceImpl implements BookingService {
 
     private final BookingRepository bookingRepository;
 
-    public BookingServiceImpl(BookingRepository bookingRepository) {
-        this.bookingRepository = bookingRepository;
-    }
-
     @Override
     @Transactional
     public BookingResponse createBooking(BookingRequest request) {
