@@ -122,6 +122,7 @@ export function getNavigationItems(role) {
     return [
       ...commonItems,
       { label: "Technician Desk", path: "/technician" },
+      { label: "Resolved", path: "/technician/resolved" },
       { label: "Notifications", path: "/notifications" },
     ];
   }

@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import Button from "../components/Button";
 import Card from "../components/Card";
 import LoadingSpinner from "../components/LoadingSpinner";
@@ -17,22 +19,21 @@ import { getCategories, getSubCategories } from "../services/categoryService";
 import { formatDateTime, toToken } from "../utils/formatters";
 import { getTicketThumbnailForCategory } from "../utils/ticketCategoryImage";
 import { META_MARKER, parseTicketDescription } from "../utils/ticketDescription";
+import { normalizeTicketFromApi } from "../utils/ticketNormalize";
 import {
   WITHDRAWAL_REASON_OPTIONS,
   formatWithdrawalReasonForDisplay,
 } from "../utils/withdrawalReason";
+import { blobUrlToDataUrl, downloadResolvedTicketPdf } from "../utils/ticketPdfExport";
 import maintenanceIllustration from "../assets/maintenance1.png";
+import {
+  createTicketDefaultValues,
+  DESCRIPTION_MAX_LENGTH,
+  ticketCreateFormSchema,
+  TITLE_MAX_LENGTH,
+} from "../utils/ticketCreateValidation";
 
-const initialForm = {
-  title: "",
-  location: "",
-  categoryId: "",
-  subCategoryId: "",
-  priority: "Normal",
-  description: "",
-  preferredContactMethod: "Phone",
-  preferredContactDetails: "",
-};
+const initialForm = createTicketDefaultValues;
 
 function composeTicketDescription(formData) {
   const base = formData.description.trim();
@@ -77,9 +78,68 @@ function normalizeTicketStatus(status) {
     .replace(/\s+/g, "_");
 }
 
+/** Student view: IN_PROGRESS reads as "Assigned" once a technician is allocated. */
+function formatStudentTicketStatusLabel(status) {
+  if (normalizeTicketStatus(status) === "IN_PROGRESS") return "Assigned";
+  return formatTicketStatusLabel(status);
+}
+
+function formatAssigneeDisplay(ticket) {
+  if (!ticket) return "Unassigned";
+  const name = ticket.assignedTechnicianUsername && String(ticket.assignedTechnicianUsername).trim();
+  if (name) return name;
+  const id = ticket.assignedTechnicianUserId && String(ticket.assignedTechnicianUserId).trim();
+  if (id) return id;
+  return "Unassigned";
+}
+
 function isImageEvidence(mime, fileName) {
   if (mime && String(mime).startsWith("image/")) return true;
   return /\.(png|jpe?g|gif|webp|bmp)$/i.test(fileName || "");
+}
+
+/**
+ * Builds PDF-ready image data URLs plus non-image filenames. Uses cached previews when present;
+ * otherwise fetches each attachment so PDF export still works before thumbnails finish loading.
+ */
+async function buildEvidenceImagesForPdf(ticketId, attachments, previewById) {
+  const images = [];
+  const other = [];
+  for (const att of attachments || []) {
+    const name = att.fileName || "Attachment";
+    if (!att?.id) {
+      if (name) other.push(name);
+      continue;
+    }
+    const cached = previewById[att.id];
+    let preview = cached;
+    let fetchedFresh = false;
+    if (!preview?.url) {
+      try {
+        preview = await fetchAttachmentPreview(ticketId, att.id);
+        fetchedFresh = true;
+      } catch {
+        preview = null;
+      }
+    }
+    if (preview?.url) {
+      const mime = preview.mime || "";
+      if (isImageEvidence(mime, name)) {
+        try {
+          const dataUrl = await blobUrlToDataUrl(preview.url);
+          images.push({ dataUrl, caption: name });
+        } catch {
+          if (name) other.push(name);
+        } finally {
+          if (fetchedFresh && preview?.url) URL.revokeObjectURL(preview.url);
+        }
+        continue;
+      }
+      if (fetchedFresh && preview?.url) URL.revokeObjectURL(preview.url);
+    }
+    if (name) other.push(name);
+  }
+  return { images, other };
 }
 
 const MAX_EVIDENCE_IMAGES = 3;
@@ -97,27 +157,6 @@ function mergeEvidenceFiles(prev, incoming, maxSlots = MAX_EVIDENCE_IMAGES) {
     merged.push(f);
   }
   return merged.slice(0, cap);
-}
-
-/** API may expose attachment id as `id` or `_id` (Mongo); ensure stable shape for the UI. */
-function normalizeAttachmentFromApi(att) {
-  if (att == null || typeof att !== "object") return null;
-  const rawId = att.id ?? att._id;
-  return {
-    ...att,
-    id: rawId != null && rawId !== "" ? String(rawId) : null,
-    fileName: att.fileName ?? att.file_name ?? "",
-  };
-}
-
-function normalizeTicketFromApi(ticket) {
-  if (!ticket) return ticket;
-  const raw = ticket.attachments;
-  const list = Array.isArray(raw) ? raw : [];
-  return {
-    ...ticket,
-    attachments: list.map(normalizeAttachmentFromApi).filter(Boolean),
-  };
 }
 
 function EvidenceAttachmentThumbnails({
@@ -174,7 +213,6 @@ function EvidenceAttachmentThumbnails({
 function MyTicketsPage() {
   const [tickets, setTickets] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [formData, setFormData] = useState(initialForm);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -197,7 +235,9 @@ function MyTicketsPage() {
   const [editSubCategories, setEditSubCategories] = useState([]);
   const [updateError, setUpdateError] = useState("");
   const [updateBusy, setUpdateBusy] = useState(false);
+  const [pdfExportBusy, setPdfExportBusy] = useState(false);
   const [evidencePreviewById, setEvidencePreviewById] = useState({});
+  const [techEvidencePreviewById, setTechEvidencePreviewById] = useState({});
   const [editEvidenceFiles, setEditEvidenceFiles] = useState([]);
   /** Attachment ids to DELETE on Save changes only (not persisted until then). */
   const [pendingRemovedAttachmentIds, setPendingRemovedAttachmentIds] = useState([]);
@@ -208,6 +248,28 @@ function MyTicketsPage() {
   const [filterPriority, setFilterPriority] = useState("");
   const [withdrawReason, setWithdrawReason] = useState("");
   const [withdrawOtherReason, setWithdrawOtherReason] = useState("");
+
+  const {
+    register: registerCreate,
+    handleSubmit: submitCreateTicket,
+    watch: watchCreate,
+    setValue: setCreateValue,
+    getValues: getCreateValues,
+    reset: resetCreateForm,
+    formState: { errors: createErrors },
+  } = useForm({
+    resolver: zodResolver(ticketCreateFormSchema),
+    defaultValues: createTicketDefaultValues,
+    mode: "all",
+    shouldFocusError: true,
+  });
+
+  const watchCategoryId = watchCreate("categoryId");
+  const watchedCreateTitle = watchCreate("title");
+  const watchedCreateDescription = watchCreate("description");
+  const watchedContactMethod = watchCreate("preferredContactMethod");
+  const createFormValuesWatched = watchCreate();
+  const isCreateFormSchemaOk = ticketCreateFormSchema.safeParse(createFormValuesWatched).success;
 
   useEffect(() => {
     let active = true;
@@ -300,7 +362,7 @@ function MyTicketsPage() {
 
   useEffect(() => {
     let active = true;
-    const categoryId = formData.categoryId;
+    const categoryId = watchCategoryId;
     if (!categoryId) {
       setSubCategories([]);
       return () => {
@@ -324,7 +386,60 @@ function MyTicketsPage() {
     return () => {
       active = false;
     };
-  }, [formData.categoryId]);
+  }, [watchCategoryId]);
+
+  /** Match sticky toolbar + fill layout to the real navbar height (avoids gap under the nav bar). */
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+
+    function measureAndApply() {
+      const nav = document.querySelector("header.navbar");
+      if (!nav) return;
+      const h = nav.getBoundingClientRect().height;
+      if (h > 0) {
+        root.style.setProperty("--navbar-measured-height", `${Math.ceil(h)}px`);
+      }
+    }
+
+    measureAndApply();
+    const nav = document.querySelector("header.navbar");
+    const ro =
+      nav && typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => measureAndApply()) : null;
+    if (nav && ro) {
+      ro.observe(nav);
+    }
+    window.addEventListener("resize", measureAndApply);
+    const id = window.requestAnimationFrame(measureAndApply);
+    const t = window.setTimeout(measureAndApply, 0);
+
+    return () => {
+      window.clearTimeout(t);
+      window.cancelAnimationFrame(id);
+      ro?.disconnect();
+      window.removeEventListener("resize", measureAndApply);
+      root.style.removeProperty("--navbar-measured-height");
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isFormOpen) return;
+    resetCreateForm(createTicketDefaultValues);
+    setCategorySearch("");
+    setAttachments([]);
+    setSuggestion(null);
+    setError("");
+  }, [isFormOpen, resetCreateForm]);
+
+  useEffect(() => {
+    if (!isFormOpen && !detailTicket) {
+      return undefined;
+    }
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isFormOpen, detailTicket]);
 
   useEffect(() => {
     if (detailSubView !== "edit" || !editFormData.categoryId) {
@@ -350,40 +465,25 @@ function MyTicketsPage() {
     };
   }, [detailSubView, editFormData.categoryId]);
 
-  const handleChange = (event) => {
-    const { name, value } = event.target;
-    setFormData((previous) => ({
-      ...previous,
-      [name]: value,
-      ...(name === "categoryId" ? { subCategoryId: "" } : {}),
-    }));
-  };
-
   const handleCategorySearchChange = (event) => {
     const value = event.target.value;
     setCategorySearch(value);
     setIsCategoryDropdownOpen(true);
     setActiveCategoryIndex(-1);
-    setFormData((previous) => ({
-      ...previous,
-      categoryId: "",
-      subCategoryId: "",
-    }));
+    setCreateValue("categoryId", "", { shouldValidate: true, shouldDirty: true, shouldTouch: true });
+    setCreateValue("subCategoryId", "", { shouldValidate: true, shouldDirty: true, shouldTouch: true });
   };
 
   const handleSelectCategory = (category) => {
     setCategorySearch(category.name || "");
     setIsCategoryDropdownOpen(false);
     setActiveCategoryIndex(-1);
-    setFormData((previous) => ({
-      ...previous,
-      categoryId: category.id,
-      subCategoryId: "",
-    }));
+    setCreateValue("categoryId", category.id, { shouldValidate: true, shouldDirty: true, shouldTouch: true });
+    setCreateValue("subCategoryId", "", { shouldValidate: true, shouldDirty: true, shouldTouch: true });
   };
 
   const handleDescriptionSuggestion = async () => {
-    const content = formData.description.trim();
+    const content = getCreateValues("description").trim();
     if (content.length < 5) {
       return;
     }
@@ -402,12 +502,15 @@ function MyTicketsPage() {
     setCategorySearch(suggestion.categoryName || "");
     setIsCategoryDropdownOpen(false);
     setActiveCategoryIndex(-1);
-    setFormData((previous) => ({
-      ...previous,
-      categoryId: suggestion.categoryId,
-      subCategoryId: suggestion.subCategoryId || "",
-    }));
+    setCreateValue("categoryId", suggestion.categoryId, { shouldValidate: true, shouldDirty: true, shouldTouch: true });
+    setCreateValue("subCategoryId", suggestion.subCategoryId || "", {
+      shouldValidate: true,
+      shouldDirty: true,
+      shouldTouch: true,
+    });
   };
+
+  const descriptionRegister = registerCreate("description");
 
   const handleAttachmentChange = (event) => {
     const fileList = Array.from(event.target.files || []);
@@ -432,46 +535,21 @@ function MyTicketsPage() {
     event.target.value = "";
   };
 
-  const handleSubmit = async (event) => {
-    event.preventDefault();
+  const onCreateTicketSubmit = async (values) => {
     setIsSubmitting(true);
     setError("");
     setSuccessMessage("");
 
     try {
-      if (!formData.title.trim()) {
-        throw new Error("Title is required.");
-      }
-      if (!formData.description.trim()) {
-        throw new Error("Description is required.");
-      }
-      if (!formData.categoryId) {
-        throw new Error("Please select a category from the list.");
-      }
-      if (!formData.subCategoryId) {
-        throw new Error("Subcategory is required.");
-      }
-      if (!formData.location.trim()) {
-        throw new Error("Resource / Location is required.");
-      }
-      if (!formData.priority) {
-        throw new Error("Priority is required.");
-      }
-      if (!formData.preferredContactMethod) {
-        throw new Error("Preferred contact method is required.");
-      }
-      if (!formData.preferredContactDetails.trim()) {
-        throw new Error("Preferred contact details are required.");
-      }
       if (attachments.length > MAX_EVIDENCE_IMAGES) {
         throw new Error(`You can upload up to ${MAX_EVIDENCE_IMAGES} images per ticket.`);
       }
 
       const res = await createTicket({
-        title: formData.title.trim(),
-        description: composeTicketDescription(formData),
-        categoryId: formData.categoryId,
-        subCategoryId: formData.subCategoryId,
+        title: values.title.trim(),
+        description: composeTicketDescription(values),
+        categoryId: values.categoryId,
+        subCategoryId: values.subCategoryId,
         suggestions:
           suggestion?.matched && suggestion?.subCategoryName
             ? [suggestion.subCategoryName]
@@ -506,7 +584,8 @@ function MyTicketsPage() {
           : "";
       setSuccessMessage(`Ticket submitted successfully${idPart}${attachmentPart}.`);
       setTickets((previous) => [ticketForList, ...previous]);
-      setFormData(initialForm);
+      resetCreateForm(createTicketDefaultValues);
+      setCategorySearch("");
       setAttachments([]);
       setSuggestion(null);
       setIsFormOpen(false);
@@ -647,6 +726,31 @@ function MyTicketsPage() {
     return detailTicket.attachments.map((a) => a?.id).join("|");
   }, [detailTicket?.attachments]);
 
+  const technicianEvidenceAttachmentKey = useMemo(() => {
+    if (!detailTicket?.technicianAttachments?.length) return "";
+    return detailTicket.technicianAttachments.map((a) => a?.id).join("|");
+  }, [detailTicket?.technicianAttachments]);
+
+  const detailEvidenceSidebar = useMemo(() => {
+    if (!detailTicket) {
+      return {
+        hasUserEvidence: false,
+        hasTechnicianEvidence: false,
+        hideEmptyUserEvidenceWhenTechnicianPosted: false,
+      };
+    }
+    const hasUserEvidence =
+      Array.isArray(detailTicket.attachments) && detailTicket.attachments.length > 0;
+    const hasTechnicianEvidence =
+      Array.isArray(detailTicket.technicianAttachments) &&
+      detailTicket.technicianAttachments.length > 0;
+    return {
+      hasUserEvidence,
+      hasTechnicianEvidence,
+      hideEmptyUserEvidenceWhenTechnicianPosted: hasTechnicianEvidence && !hasUserEvidence,
+    };
+  }, [detailTicket]);
+
   const visibleEditAttachments = useMemo(() => {
     if (detailSubView !== "edit" || !detailTicket) return [];
     const list = Array.isArray(detailTicket.attachments) ? detailTicket.attachments : [];
@@ -716,10 +820,64 @@ function MyTicketsPage() {
   }, [detailTicket?.id, evidenceAttachmentKey, detailSubView]);
 
   useEffect(() => {
+    const showEvidence =
+      detailSubView === "details" || detailSubView === "edit";
+    if (!detailTicket?.id || !showEvidence) {
+      return undefined;
+    }
+    const atts = Array.isArray(detailTicket.technicianAttachments)
+      ? detailTicket.technicianAttachments
+      : [];
+    if (atts.length === 0) {
+      setTechEvidencePreviewById((prev) => {
+        Object.values(prev).forEach((entry) => {
+          if (entry?.url) URL.revokeObjectURL(entry.url);
+        });
+        return {};
+      });
+      return undefined;
+    }
+
+    let cancelled = false;
+    async function loadTechEvidence() {
+      const next = {};
+      for (const att of atts) {
+        if (!att?.id) continue;
+        try {
+          const preview = await fetchAttachmentPreview(detailTicket.id, att.id);
+          if (!cancelled) {
+            next[att.id] = { ...preview, fileName: att.fileName || "" };
+          }
+        } catch {
+          /* skip */
+        }
+      }
+      if (!cancelled) {
+        setTechEvidencePreviewById((prev) => {
+          Object.values(prev).forEach((entry) => {
+            if (entry?.url) URL.revokeObjectURL(entry.url);
+          });
+          return next;
+        });
+      }
+    }
+    loadTechEvidence();
+    return () => {
+      cancelled = true;
+    };
+  }, [detailTicket?.id, technicianEvidenceAttachmentKey, detailSubView]);
+
+  useEffect(() => {
     if (detailSubView === "details" || detailSubView === "edit") {
       return;
     }
     setEvidencePreviewById((prev) => {
+      Object.values(prev).forEach((entry) => {
+        if (entry?.url) URL.revokeObjectURL(entry.url);
+      });
+      return {};
+    });
+    setTechEvidencePreviewById((prev) => {
       Object.values(prev).forEach((entry) => {
         if (entry?.url) URL.revokeObjectURL(entry.url);
       });
@@ -735,6 +893,12 @@ function MyTicketsPage() {
 
   const closeDetailModal = () => {
     setEvidencePreviewById((prev) => {
+      Object.values(prev).forEach((entry) => {
+        if (entry?.url) URL.revokeObjectURL(entry.url);
+      });
+      return {};
+    });
+    setTechEvidencePreviewById((prev) => {
       Object.values(prev).forEach((entry) => {
         if (entry?.url) URL.revokeObjectURL(entry.url);
       });
@@ -941,6 +1105,40 @@ function MyTicketsPage() {
     }
   };
 
+  const handleDownloadResolvedTicketPdf = async () => {
+    if (!detailTicket?.id || normalizeTicketStatus(detailTicket.status) !== "RESOLVED" || !ticketDetailView) {
+      return;
+    }
+    setPdfExportBusy(true);
+    setUpdateError("");
+    try {
+      const { images: userImages, other: userOther } = await buildEvidenceImagesForPdf(
+        detailTicket.id,
+        detailTicket.attachments,
+        evidencePreviewById,
+      );
+      const { images: techImages, other: techOther } = await buildEvidenceImagesForPdf(
+        detailTicket.id,
+        detailTicket.technicianAttachments,
+        techEvidencePreviewById,
+      );
+      await downloadResolvedTicketPdf({
+        ticket: detailTicket,
+        view: ticketDetailView,
+        statusLabel: formatStudentTicketStatusLabel(detailTicket.status),
+        assigneeLabel: formatAssigneeDisplay(detailTicket),
+        userEvidence: userImages,
+        technicianEvidence: techImages,
+        userEvidenceOtherFiles: userOther,
+        technicianEvidenceOtherFiles: techOther,
+      });
+    } catch (err) {
+      setUpdateError(err.message || "Could not generate PDF.");
+    } finally {
+      setPdfExportBusy(false);
+    }
+  };
+
   const detailModalTitle =
     detailSubView === "manage"
       ? "Update ticket"
@@ -1084,14 +1282,14 @@ function MyTicketsPage() {
                         <h3 className="my-ticket-card-title">{ticket.title || "Untitled Ticket"}</h3>
                         <p className="my-ticket-card-line my-ticket-card-line--meta">{locationLine}</p>
                         <p className="my-ticket-card-line my-ticket-card-line--sub">
-                          Priority: {parsed.priority || "Normal"} | Assignee: Unassigned
+                          Priority: {parsed.priority || "Normal"} | Assignee: {formatAssigneeDisplay(ticket)}
                         </p>
                       </div>
                       <div className="my-ticket-card-status">
                         <span
                           className={`my-ticket-card-badge status-badge ${listStatusToken}`}
                         >
-                          {formatTicketStatusLabel(ticket.status)}
+                          {formatStudentTicketStatusLabel(ticket.status)}
                         </span>
                       </div>
                       <div className="my-ticket-card-actions">
@@ -1168,7 +1366,7 @@ function MyTicketsPage() {
                       <span
                         className={`my-ticket-card-badge status-badge ${ticketDetailView.statusToken}`}
                       >
-                        {formatTicketStatusLabel(detailTicket.status)}
+                        {formatStudentTicketStatusLabel(detailTicket.status)}
                       </span>
                     </div>
                   </div>
@@ -1199,6 +1397,19 @@ function MyTicketsPage() {
                             : ""}
                         </div>
                       </div>
+                      <div className="ticket-detail-row">
+                        <div className="ticket-detail-label">Assigned technician</div>
+                        <div className="ticket-detail-value">{formatAssigneeDisplay(detailTicket)}</div>
+                      </div>
+                      {normalizeTicketStatus(detailTicket.status) === "RESOLVED" ? (
+                        <div className="ticket-detail-row ticket-detail-row--block">
+                          <div className="ticket-detail-label">Resolution</div>
+                          <div className="ticket-detail-value">
+                            Marked resolved by maintenance. If something is still wrong, open a new ticket or
+                            contact support.
+                          </div>
+                        </div>
+                      ) : null}
                       {detailTicket.createdAt ? (
                         <div className="ticket-detail-row">
                           <div className="ticket-detail-label">Submitted</div>
@@ -1218,6 +1429,25 @@ function MyTicketsPage() {
                           {ticketDetailView.parsed.content || "No description provided."}
                         </div>
                       </div>
+                      {Array.isArray(detailTicket.updates) && detailTicket.updates.length > 0 ? (
+                        <div className="ticket-detail-row ticket-detail-row--block">
+                          <div className="ticket-detail-label">Technician updates</div>
+                          <div className="ticket-detail-value">
+                            <ul className="ticket-detail-updates-list">
+                              {detailTicket.updates.map((u) => (
+                                <li className="ticket-detail-update-item" key={u.id || u.message}>
+                                  <div className="ticket-detail-update-meta">
+                                    {[u.updatedBy, u.timestamp ? formatDateTime(u.timestamp) : null]
+                                      .filter(Boolean)
+                                      .join(" · ")}
+                                  </div>
+                                  <p className="ticket-detail-update-message">{u.message}</p>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+                      ) : null}
                       {ticketDetailView.suggestions.length > 0 ? (
                         <div className="ticket-detail-row ticket-detail-row--block">
                           <div className="ticket-detail-label">Suggestions</div>
@@ -1225,30 +1455,74 @@ function MyTicketsPage() {
                         </div>
                       ) : null}
                     </div>
-                    <aside className="ticket-detail-modal-evidence" aria-label="Evidence">
-                      <div className="ticket-detail-label">Evidence</div>
-                      <div className="ticket-detail-evidence-panel">
-                        {Array.isArray(detailTicket.attachments) && detailTicket.attachments.length > 0 ? (
-                          <EvidenceAttachmentThumbnails
-                            attachments={detailTicket.attachments}
-                            evidencePreviewById={evidencePreviewById}
-                          />
-                        ) : (
-                          <div className="ticket-detail-evidence-empty">
-                            <img alt="" className="ticket-detail-evidence-placeholder-img" src={maintenanceIllustration} />
-                            <p className="ticket-detail-evidence-placeholder-text">No photo evidence yet</p>
-                            <p className="ticket-detail-evidence-placeholder-hint">
-                              Use Update → Edit details to add up to 3 images.
-                            </p>
+                    <aside
+                      className="ticket-detail-modal-evidence"
+                      aria-label={
+                        detailEvidenceSidebar.hideEmptyUserEvidenceWhenTechnicianPosted
+                          ? "Technician evidence"
+                          : "Evidence"
+                      }
+                    >
+                      {detailEvidenceSidebar.hideEmptyUserEvidenceWhenTechnicianPosted ? null : (
+                        <>
+                          <div className="ticket-detail-label">Your evidence</div>
+                          <div className="ticket-detail-evidence-panel">
+                            {detailEvidenceSidebar.hasUserEvidence ? (
+                              <EvidenceAttachmentThumbnails
+                                attachments={detailTicket.attachments}
+                                evidencePreviewById={evidencePreviewById}
+                              />
+                            ) : (
+                              <div className="ticket-detail-evidence-empty">
+                                <img
+                                  alt=""
+                                  className="ticket-detail-evidence-placeholder-img"
+                                  src={maintenanceIllustration}
+                                />
+                                <p className="ticket-detail-evidence-placeholder-text">No photo evidence yet</p>
+                                <p className="ticket-detail-evidence-placeholder-hint">
+                                  Use Update → Edit details to add up to 3 images.
+                                </p>
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
+                        </>
+                      )}
+                      {detailEvidenceSidebar.hasTechnicianEvidence ? (
+                        <>
+                          <div
+                            className={
+                              detailEvidenceSidebar.hideEmptyUserEvidenceWhenTechnicianPosted
+                                ? "ticket-detail-label"
+                                : "ticket-detail-label ticket-detail-label--technician-evidence"
+                            }
+                          >
+                            Technician evidence
+                          </div>
+                          <div className="ticket-detail-evidence-panel">
+                            <EvidenceAttachmentThumbnails
+                              attachments={detailTicket.technicianAttachments}
+                              evidencePreviewById={techEvidencePreviewById}
+                            />
+                          </div>
+                        </>
+                      ) : null}
                     </aside>
                   </div>
                   <div className="modal-actions ticket-detail-modal-actions">
                     <Button onClick={closeDetailModal} type="button" variant="secondary">
                       Close
                     </Button>
+                    {normalizeTicketStatus(detailTicket.status) === "RESOLVED" ? (
+                      <Button
+                        disabled={pdfExportBusy || updateBusy}
+                        onClick={handleDownloadResolvedTicketPdf}
+                        type="button"
+                        variant="secondary"
+                      >
+                        {pdfExportBusy ? "Preparing PDF…" : "Download PDF"}
+                      </Button>
+                    ) : null}
                     {isTicketEditable(detailTicket.status) ? (
                       <Button
                         onClick={() => {
@@ -1271,10 +1545,16 @@ function MyTicketsPage() {
                     Update the information on this ticket, or withdraw it if you no longer need help.
                   </p>
                   <div className="ticket-manage-flow-actions">
-                    <Button onClick={openEditMode} type="button" variant="primary">
+                    <Button
+                      className="ticket-manage-update-btn"
+                      onClick={openEditMode}
+                      type="button"
+                      variant="secondary"
+                    >
                       Update details
                     </Button>
                     <Button
+                      className="ticket-manage-withdraw-btn"
                       onClick={() => {
                         setUpdateError("");
                         setWithdrawReason("");
@@ -1587,40 +1867,61 @@ function MyTicketsPage() {
             <div className="modal-content">
               <form
                 className="form-grid my-tickets-create-form my-tickets-create-form-modal"
-                onSubmit={handleSubmit}
+                noValidate
+                onSubmit={submitCreateTicket(onCreateTicketSubmit)}
               >
-                <label className="field field-full">
+                <input type="hidden" {...registerCreate("categoryId")} />
+
+                <label className={`field field-full${createErrors.title ? " field--invalid" : ""}`}>
                   <span>
                     Title <span className="required-mark">*</span>
                   </span>
                   <input
-                    name="title"
-                    onChange={handleChange}
-                    placeholder="Short summary of the issue"
-                    required
                     type="text"
-                    value={formData.title}
+                    placeholder="Short summary of the issue"
+                    maxLength={TITLE_MAX_LENGTH}
+                    aria-invalid={createErrors.title ? "true" : "false"}
+                    {...registerCreate("title")}
                   />
+                  {createErrors.title?.message ? (
+                    <p className="field-error" role="alert">
+                      {createErrors.title.message}
+                    </p>
+                  ) : null}
+                  <p className="field-char-count" aria-live="polite">
+                    {(watchedCreateTitle || "").length} / {TITLE_MAX_LENGTH}
+                  </p>
                 </label>
 
-                <label className="field field-full">
+                <label className={`field field-full${createErrors.description ? " field--invalid" : ""}`}>
                   <span>
                     Description <span className="required-mark">*</span>
                   </span>
                   <textarea
-                    name="description"
-                    onChange={handleChange}
-                    onBlur={handleDescriptionSuggestion}
                     placeholder="What happened, where, and any relevant details"
-                    required
-                    rows="5"
-                    value={formData.description}
+                    rows={5}
+                    maxLength={DESCRIPTION_MAX_LENGTH}
+                    aria-invalid={createErrors.description ? "true" : "false"}
+                    {...descriptionRegister}
+                    onBlur={(e) => {
+                      descriptionRegister.onBlur(e);
+                      void handleDescriptionSuggestion();
+                    }}
                   />
+                  {createErrors.description?.message ? (
+                    <p className="field-error" role="alert">
+                      {createErrors.description.message}
+                    </p>
+                  ) : null}
+                  <p className="field-char-count" aria-live="polite">
+                    {(watchedCreateDescription || "").length} / {DESCRIPTION_MAX_LENGTH}
+                  </p>
                 </label>
                 {suggestion?.matched ? (
                   <div className="field field-full ticket-suggestion-box">
                     <p>
-                      Suggested: {suggestion.categoryName} {suggestion.subCategoryName ? `-> ${suggestion.subCategoryName}` : ""}
+                      Suggested: {suggestion.categoryName}{" "}
+                      {suggestion.subCategoryName ? `-> ${suggestion.subCategoryName}` : ""}
                     </p>
                     <Button onClick={applySuggestion} type="button" variant="secondary">
                       Apply Suggestion
@@ -1628,7 +1929,9 @@ function MyTicketsPage() {
                   </div>
                 ) : null}
 
-                <label className="field ticket-category-field">
+                <label
+                  className={`field ticket-category-field${createErrors.categoryId ? " field--invalid" : ""}`}
+                >
                   <span>
                     Category <span className="required-mark">*</span>
                   </span>
@@ -1675,30 +1978,32 @@ function MyTicketsPage() {
                       </div>
                     ) : null}
                   </div>
-                  {!formData.categoryId ? (
+                  {createErrors.categoryId?.message ? (
+                    <p className="field-error" role="alert">
+                      {createErrors.categoryId.message}
+                    </p>
+                  ) : !watchCategoryId ? (
                     <small className="supporting-text">Select a category from suggestions.</small>
                   ) : null}
-                  {formData.categoryId ? (
+                  {watchCategoryId ? (
                     <small className="supporting-text">
-                      Color: {categoryById[formData.categoryId]?.color || "N/A"} | Icon:{" "}
-                      {categoryById[formData.categoryId]?.icon || "N/A"}
+                      Color: {categoryById[watchCategoryId]?.color || "N/A"} | Icon:{" "}
+                      {categoryById[watchCategoryId]?.icon || "N/A"}
                     </small>
                   ) : null}
                 </label>
 
-                <label className="field">
+                <label className={`field${createErrors.subCategoryId ? " field--invalid" : ""}`}>
                   <span>
                     Subcategory <span className="required-mark">*</span>
                   </span>
                   <select
-                    name="subCategoryId"
-                    onChange={handleChange}
-                    required
-                    value={formData.subCategoryId}
-                    disabled={!formData.categoryId}
+                    disabled={!watchCategoryId}
+                    aria-invalid={createErrors.subCategoryId ? "true" : "false"}
+                    {...registerCreate("subCategoryId")}
                   >
                     <option value="">
-                      {formData.categoryId ? "Select Subcategory" : "Select category first"}
+                      {watchCategoryId ? "Select Subcategory" : "Select category first"}
                     </option>
                     {subCategories.map((subCategory) => (
                       <option key={subCategory.id} value={subCategory.id}>
@@ -1706,20 +2011,28 @@ function MyTicketsPage() {
                       </option>
                     ))}
                   </select>
+                  {createErrors.subCategoryId?.message ? (
+                    <p className="field-error" role="alert">
+                      {createErrors.subCategoryId.message}
+                    </p>
+                  ) : null}
                 </label>
 
-                <label className="field">
+                <label className={`field${createErrors.location ? " field--invalid" : ""}`}>
                   <span>
                     Resource / Location <span className="required-mark">*</span>
                   </span>
                   <input
-                    name="location"
-                    onChange={handleChange}
-                    placeholder="e.g. Lecture Hall A, Library 2nd Floor"
-                    required
                     type="text"
-                    value={formData.location}
+                    placeholder="e.g. Lecture Hall A, Library 2nd Floor"
+                    aria-invalid={createErrors.location ? "true" : "false"}
+                    {...registerCreate("location")}
                   />
+                  {createErrors.location?.message ? (
+                    <p className="field-error" role="alert">
+                      {createErrors.location.message}
+                    </p>
+                  ) : null}
                 </label>
 
                 <label className="field field-full">
@@ -1739,7 +2052,7 @@ function MyTicketsPage() {
                   <span>
                     Priority <span className="required-mark">*</span>
                   </span>
-                  <select name="priority" onChange={handleChange} value={formData.priority}>
+                  <select {...registerCreate("priority")}>
                     <option value="Low">Low</option>
                     <option value="Normal">Normal</option>
                     <option value="High">High</option>
@@ -1751,33 +2064,41 @@ function MyTicketsPage() {
                   <span>
                     Preferred Contact Method <span className="required-mark">*</span>
                   </span>
-                  <select
-                    name="preferredContactMethod"
-                    onChange={handleChange}
-                    value={formData.preferredContactMethod}
-                  >
+                  <select {...registerCreate("preferredContactMethod")}>
                     <option value="Phone">Phone</option>
                     <option value="Email">Email</option>
                     <option value="WhatsApp">WhatsApp</option>
                   </select>
                 </label>
 
-                <label className="field field-full">
+                <label className={`field field-full${createErrors.preferredContactDetails ? " field--invalid" : ""}`}>
                   <span>
                     Preferred Contact Details <span className="required-mark">*</span>
                   </span>
                   <input
-                    name="preferredContactDetails"
-                    onChange={handleChange}
-                    placeholder="Phone number, email, or WhatsApp number"
-                    required
                     type="text"
-                    value={formData.preferredContactDetails}
+                    placeholder={
+                      watchedContactMethod === "Email"
+                        ? "name@example.com"
+                        : "10-digit mobile number"
+                    }
+                    autoComplete={watchedContactMethod === "Email" ? "email" : "tel"}
+                    aria-invalid={createErrors.preferredContactDetails ? "true" : "false"}
+                    {...registerCreate("preferredContactDetails")}
                   />
+                  {createErrors.preferredContactDetails?.message ? (
+                    <p className="field-error" role="alert">
+                      {createErrors.preferredContactDetails.message}
+                    </p>
+                  ) : null}
                 </label>
 
                 <div className="field-full">
-                  <Button disabled={isSubmitting} type="submit" variant="primary">
+                  <Button
+                    disabled={isSubmitting || !isCreateFormSchemaOk}
+                    type="submit"
+                    variant="primary"
+                  >
                     {isSubmitting ? "Submitting..." : "Submit Ticket"}
                   </Button>
                 </div>

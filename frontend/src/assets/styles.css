@@ -399,6 +399,8 @@ a {
   max-width: none;
   width: 100%;
   box-sizing: border-box;
+  /* Flush with navbar; horizontal + bottom padding stay on .page-shell */
+  padding-top: 0;
 }
 
 /* Admin tickets: flush left so fixed sidebar can sit in the viewport corner */
@@ -2397,6 +2399,18 @@ a {
   gap: 0.5rem;
 }
 
+.admin-ticket-assign-locked {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.5rem 0.8rem;
+  border-radius: 999px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+}
+
 .modal-panel--admin-ticket-detail {
   max-width: 560px;
 }
@@ -2646,10 +2660,14 @@ a {
 
 .my-tickets-sticky-toolbar {
   position: sticky;
-  top: var(--navbar-sticky-offset);
+  /* Use measured height so sticky sits flush under the real navbar (6rem fallback was too tall). */
+  top: var(--navbar-measured-height, var(--navbar-sticky-offset));
   z-index: 15;
-  margin-bottom: 1rem;
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+  padding-top: 0;
   padding-bottom: 0.35rem;
+  flex-shrink: 0;
   background: var(--bg);
   box-shadow: 0 10px 28px rgba(15, 40, 67, 0.07);
 }
@@ -2680,7 +2698,7 @@ a {
   background: rgba(255, 255, 255, 0.97);
 }
 
-/* Ticket list scrolls here; header + filters stay fixed in the layout column */
+/* Stacked layout; the page scrolls (outer scrollbar), not a nested list panel. */
 .my-tickets-page {
   display: flex;
   flex-direction: column;
@@ -2688,54 +2706,15 @@ a {
 }
 
 .my-tickets-page--fill-viewport {
-  min-height: calc(100dvh - var(--navbar-sticky-offset) - var(--page-shell-padding-bottom, 3rem));
-}
-
-.my-tickets-page--fill-viewport .my-tickets-content-card {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.my-tickets-page--fill-viewport .my-tickets-content-card .card-body {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  overflow: hidden;
-}
-
-.my-tickets-page--fill-viewport .my-tickets-content-card .card-body > .alert {
-  flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 .my-tickets-list-scroll {
-  flex: 1 1 auto;
-  min-height: 12rem;
-  overflow-y: auto;
-  overflow-x: hidden;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
+  overflow: visible;
   border-radius: 12px;
   border: 1px solid rgba(15, 40, 67, 0.08);
   background: #eef1f6;
-  scrollbar-color: rgba(15, 40, 67, 0.28) transparent;
-  scrollbar-width: thin;
-}
-
-.my-tickets-list-scroll::-webkit-scrollbar {
-  width: 8px;
-}
-
-.my-tickets-list-scroll::-webkit-scrollbar-thumb {
-  background: rgba(15, 40, 67, 0.28);
-  border-radius: 999px;
-}
-
-.my-tickets-list-scroll::-webkit-scrollbar-track {
-  background: transparent;
+  padding: 0.35rem 0;
 }
 
 .my-tickets-list-scroll .my-tickets-list-stack {
@@ -2746,8 +2725,10 @@ a {
   width: 100vw;
   margin-left: calc(50% - 50vw);
   margin-right: calc(50% - 50vw);
+  margin-top: 0;
   margin-bottom: 1rem;
-  padding: 1rem clamp(0.9rem, 3vw, 2.25rem);
+  /* No top padding — hero sits directly under the navbar */
+  padding: 0 clamp(0.9rem, 3vw, 2.25rem) 1rem;
   background: transparent;
 }
 
@@ -2760,6 +2741,10 @@ a {
 
 .my-tickets-content-card .card-body {
   padding-top: 1.05rem;
+}
+
+.my-tickets-content-card .card-body > .alert {
+  margin-bottom: 0.55rem;
 }
 
 .my-tickets-hero-main {
@@ -3064,13 +3049,62 @@ a {
 
 .ticket-manage-flow {
   display: grid;
-  gap: 1rem;
+  gap: 1.25rem;
+}
+
+.ticket-manage-flow > .supporting-text {
+  text-align: center;
+  max-width: 38rem;
+  margin-left: auto;
+  margin-right: auto;
+  line-height: 1.55;
 }
 
 .ticket-manage-flow-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: 0.85rem;
+  justify-content: center;
+  align-items: center;
+}
+
+.ticket-manage-flow-actions .button {
+  min-width: min(11.5rem, 100%);
+  justify-content: center;
+}
+
+.ticket-manage-flow-actions .ticket-manage-update-btn.button-secondary {
+  background: rgba(27, 87, 172, 0.12);
+  color: #164a92;
+  border: 1px solid rgba(27, 87, 172, 0.32);
+}
+
+.ticket-manage-flow-actions .ticket-manage-update-btn.button-secondary:hover:not(:disabled) {
+  background: rgba(27, 87, 172, 0.18);
+  border-color: rgba(22, 74, 146, 0.42);
+  color: #123a75;
+}
+
+.ticket-manage-flow-actions .ticket-manage-withdraw-btn.button-secondary {
+  background: rgba(185, 28, 28, 0.1);
+  color: #991b1b;
+  border: 1px solid rgba(185, 28, 28, 0.28);
+}
+
+.ticket-manage-flow-actions .ticket-manage-withdraw-btn.button-secondary:hover:not(:disabled) {
+  background: rgba(185, 28, 28, 0.16);
+  border-color: rgba(153, 27, 27, 0.38);
+  color: #7f1d1d;
+}
+
+.ticket-manage-flow > .modal-actions:not(.ticket-detail-modal-actions) {
+  justify-content: flex-start;
+  margin-top: 0.15rem;
+}
+
+.ticket-manage-flow > .modal-actions:not(.ticket-detail-modal-actions) .button-ghost:hover:not(:disabled) {
+  background: #e8ecf2;
+  border-color: rgba(15, 40, 67, 0.14);
 }
 
 .ticket-detail-modal {
@@ -3301,6 +3335,15 @@ a {
   font-size: 0.875rem;
 }
 
+.ticket-detail-assign-locked {
+  flex-shrink: 0;
+  padding: 0.45rem 0.95rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
 .ticket-detail-description {
   white-space: pre-wrap;
   word-break: break-word;
@@ -3510,6 +3553,28 @@ a {
   grid-column: 1 / -1;
 }
 
+.field--invalid.field input:not(.login-input),
+.field--invalid.field select,
+.field--invalid.field textarea,
+.field--invalid.field .ticket-category-search {
+  border-color: #c0392b;
+  box-shadow: 0 0 0 1px rgba(192, 57, 43, 0.2);
+}
+
+.field-error {
+  color: #c0392b;
+  font-size: 0.85rem;
+  margin: 0;
+  line-height: 1.45;
+}
+
+.field-char-count {
+  font-size: 0.82rem;
+  color: var(--muted);
+  font-weight: 500;
+  margin: 0;
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -3518,6 +3583,8 @@ a {
   place-items: center;
   padding: 1rem;
   z-index: 40;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .modal-panel {
@@ -3562,7 +3629,10 @@ a {
 }
 
 .modal-content {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .modal-header h3 {
@@ -3597,14 +3667,6 @@ a {
 
 /* Responsive adjustments */
 @media (max-width: 960px) {
-  .my-tickets-sticky-toolbar {
-    top: var(--navbar-sticky-offset-mobile);
-  }
-
-  .my-tickets-page--fill-viewport {
-    min-height: calc(100dvh - var(--navbar-sticky-offset-mobile) - var(--page-shell-padding-bottom, 3rem));
-  }
-
   .navbar.navbar--admin-tickets {
     display: flex;
     flex-direction: column;
@@ -3723,6 +3785,12 @@ a {
 
   .page-shell.page-shell--admin-tickets {
     padding: 0 0 var(--page-shell-padding-bottom);
+  }
+
+  .page-shell.page-shell--tickets-wide {
+    padding-top: 0;
+    padding-left: 0.9rem;
+    padding-right: 0.9rem;
   }
 
   .landing-page {
@@ -3920,6 +3988,15 @@ a {
   gap: 1.25rem;
 }
 
+/* Shared with My Tickets filter styles (my-tickets-filters) */
+.technician-page-card .technician-filters {
+  margin-bottom: 0;
+}
+
+.technician-filter-empty {
+  margin: 0;
+}
+
 .technician-ticket-stack {
   display: flex;
   flex-direction: column;
@@ -4041,6 +4118,10 @@ a {
   color: var(--muted);
 }
 
+.technician-ticket-resolved-reopen {
+  margin-top: 0.75rem;
+}
+
 .technician-ticket-section {
   padding: 1rem 1.25rem 1.15rem;
   border-top: 1px solid var(--border);
@@ -4062,11 +4143,81 @@ a {
   color: var(--muted);
 }
 
+.technician-updates-list {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.technician-update-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.65rem 0.85rem;
+  background: var(--surface);
+}
+
+.technician-update-meta {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+}
+
+.technician-update-body {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.technician-update-actions {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.ticket-detail-updates-list {
+  list-style: none;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.ticket-detail-update-item {
+  border-left: 3px solid rgba(15, 124, 130, 0.35);
+  padding-left: 0.65rem;
+}
+
+.ticket-detail-update-meta {
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin-bottom: 0.25rem;
+}
+
+.ticket-detail-update-message {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .technician-ticket-toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
   gap: 1rem;
+}
+
+.technician-ticket-toolbar--single {
+  align-items: center;
 }
 
 .technician-ticket-toolbar-buttons {
@@ -4253,7 +4404,8 @@ a {
 
 .technician-table-actions {
   display: inline-flex;
-  gap: 0.4rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
   align-items: center;
   justify-content: flex-end;
 }
@@ -4262,20 +4414,87 @@ a {
   white-space: nowrap;
 }
 
+.ticket-detail-label--technician-evidence {
+  margin-top: 1rem;
+}
+
+.technician-tech-evidence-list {
+  margin-top: 0.35rem;
+}
+
+.technician-tech-evidence-actions {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  justify-content: flex-end;
+  max-width: calc(100% - 0.5rem);
+}
+
+.technician-tech-evidence-replace {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.22rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.technician-tech-evidence-replace:hover {
+  background: var(--surface-strong);
+}
+
+.technician-tech-evidence-replace-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.technician-tech-evidence-replace-text {
+  pointer-events: none;
+}
+
 .technician-details-panel {
   margin-top: 1.5rem;
 }
 
-.technician-select--sm {
-  min-height: 2.1rem;
-  font-size: 0.9rem;
+.technician-modal-detail-body {
+  padding-top: 0.75rem;
 }
 
-@media (max-width: 768px) {
-  .technician-table th:nth-child(2),
-  .technician-table td:nth-child(2) {
-    display: none;
-  }
+.technician-modal-detail-body .technician-ticket-panel {
+  margin: 0;
+  max-width: none;
+}
+
+.technician-evidence-block {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(15, 40, 67, 0.1);
+}
+
+.technician-evidence-heading {
+  margin-bottom: 0.35rem;
+}
+
+.technician-evidence-hint {
+  margin-bottom: 0.65rem;
+}
+
+.technician-evidence-list {
+  margin: 0;
 }
 
 @media (max-width: 640px) {

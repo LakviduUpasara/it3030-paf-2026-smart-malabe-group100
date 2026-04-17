@@ -2,6 +2,7 @@ package com.example.app.service;
 
 import com.example.app.dto.AssignTicketRequest;
 import com.example.app.dto.AttachmentResponse;
+import com.example.app.dto.TicketUpdateResponse;
 import com.example.app.dto.TicketAttachmentDownload;
 import com.example.app.dto.TicketRequest;
 import com.example.app.dto.TicketResponse;
@@ -38,6 +39,7 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -51,6 +53,7 @@ import java.util.stream.Stream;
 public class TicketServiceImpl implements TicketService {
 
     private static final int MAX_ATTACHMENTS_PER_TICKET = 3;
+    private static final int MAX_TECHNICIAN_EVIDENCE = 3;
 
     private static final Set<String> ALLOWED_WITHDRAWAL_REASONS = Set.of(
             "RESOLVED_MYSELF", "NO_LONGER_NEEDED", "DUPLICATE", "ELSEWHERE", "OTHER");
@@ -165,20 +168,83 @@ public class TicketServiceImpl implements TicketService {
     }
 
     @Override
-    public void addUpdateToTicket(String id, UpdateRequest request) {
+    public TicketResponse addUpdateToTicket(String id, UpdateRequest request) {
 
         Ticket ticket = ticketRepo.findById(id)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Ticket not found"));
-        assertCanViewTicket(ticket);
+        assertTechnicianCanModifyTicketContent(ticket);
+
+        ensureMutableUpdatesList(ticket);
+        AuthenticatedUser author = requireAuthenticatedUser();
+
+        String body = request.getMessage() != null ? request.getMessage().trim() : "";
+        if (body.isEmpty()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Message is required.");
+        }
 
         TicketUpdate update = new TicketUpdate();
         update.setId(UUID.randomUUID().toString());
-        update.setMessage(request.getMessage());
-        update.setUpdatedBy(request.getUpdatedBy());
+        update.setMessage(body);
+        update.setUpdatedBy(displayNameForAuthenticatedUser(author));
         update.setTimestamp(LocalDateTime.now());
 
         ticket.getUpdates().add(update);
         ticketRepo.save(ticket);
+        Ticket reloaded = ticketRepo.findById(id)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Ticket not found"));
+        return mapToResponse(reloaded);
+    }
+
+    @Override
+    public TicketResponse patchTicketUpdate(String ticketId, String updateId, UpdateRequest request) {
+        Ticket ticket = ticketRepo.findById(ticketId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Ticket not found"));
+        assertTechnicianCanModifyTicketContent(ticket);
+
+        ensureMutableUpdatesList(ticket);
+        List<TicketUpdate> list = ticket.getUpdates();
+        TicketUpdate found = null;
+        for (TicketUpdate u : list) {
+            if (updateId != null && updateId.equals(u.getId())) {
+                found = u;
+                break;
+            }
+        }
+        if (found == null) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "Update not found");
+        }
+        String body = request.getMessage() != null ? request.getMessage().trim() : "";
+        if (body.isEmpty()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Message is required.");
+        }
+        found.setMessage(body);
+        ticketRepo.save(ticket);
+        Ticket reloaded = ticketRepo.findById(ticketId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Ticket not found"));
+        return mapToResponse(reloaded);
+    }
+
+    @Override
+    public TicketResponse deleteTicketUpdate(String ticketId, String updateId) {
+        Ticket ticket = ticketRepo.findById(ticketId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Ticket not found"));
+        assertTechnicianCanModifyTicketContent(ticket);
+
+        ensureMutableUpdatesList(ticket);
+        List<TicketUpdate> list = ticket.getUpdates();
+        if (list == null || list.isEmpty()) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "Update not found");
+        }
+        List<TicketUpdate> replacement = new ArrayList<>(list);
+        boolean removed = replacement.removeIf(u -> updateId != null && updateId.equals(u.getId()));
+        if (!removed) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "Update not found");
+        }
+        ticket.setUpdates(replacement);
+        ticketRepo.save(ticket);
+        Ticket reloaded = ticketRepo.findById(ticketId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Ticket not found"));
+        return mapToResponse(reloaded);
     }
 
     @Override
@@ -252,61 +318,117 @@ public class TicketServiceImpl implements TicketService {
     }
 
     @Override
-    public void uploadAttachment(String id, MultipartFile file) {
+    public TicketResponse uploadAttachment(String id, MultipartFile file) {
 
         Ticket ticket = ticketRepo.findById(id)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Ticket not found"));
-        assertCanViewTicket(ticket);
+        assertCanModifyRequesterAttachments(ticket);
+
+        ensureMutableAttachmentList(ticket);
+        if (ticket.getAttachments().size() >= MAX_ATTACHMENTS_PER_TICKET) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "A ticket can have at most 3 requester attachments.");
+        }
+
+        Attachment attachment = persistUploadedFile(file);
+        ticket.getAttachments().add(attachment);
+        Ticket saved = ticketRepo.save(ticket);
+        return mapToResponse(saved);
+    }
+
+    @Override
+    public TicketResponse uploadTechnicianEvidence(String ticketId, MultipartFile file) {
+        Ticket ticket = ticketRepo.findById(ticketId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Ticket not found"));
+        assertTechnicianCanModifyTicketContent(ticket);
+
+        ensureMutableTechnicianAttachmentList(ticket);
+        if (ticket.getTechnicianAttachments().size() >= MAX_TECHNICIAN_EVIDENCE) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "You can upload at most 3 technician evidence files.");
+        }
+
+        Attachment attachment = persistUploadedFile(file);
+        ticket.getTechnicianAttachments().add(attachment);
+        ticketRepo.save(ticket);
+        Ticket reloaded = ticketRepo.findById(ticketId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Ticket not found"));
+        return mapToResponse(reloaded);
+    }
+
+    @Override
+    public TicketResponse deleteTechnicianEvidence(String ticketId, String attachmentId) {
+        Ticket ticket = ticketRepo.findById(ticketId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Ticket not found"));
+        assertTechnicianCanModifyTicketContent(ticket);
+
+        ensureMutableTechnicianAttachmentList(ticket);
+        List<Attachment> list = ticket.getTechnicianAttachments();
+        if (list == null || list.isEmpty()) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "Evidence not found");
+        }
+
+        Attachment found = findInAttachmentList(list, attachmentId);
+        if (found == null) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "Evidence not found");
+        }
+
+        List<Attachment> replacement = new ArrayList<>(list);
+        replacement.removeIf(a -> attachmentId != null && attachmentId.equals(a.getId()));
+        ticket.setTechnicianAttachments(replacement);
+
+        if (found.getFilePath() != null) {
+            try {
+                Files.deleteIfExists(Paths.get(found.getFilePath()));
+            } catch (IOException ignored) {
+                // still persist removal
+            }
+        }
+
+        ticketRepo.save(ticket);
+        Ticket reloaded = ticketRepo.findById(ticketId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Ticket not found"));
+        return mapToResponse(reloaded);
+    }
+
+    @Override
+    public TicketResponse replaceTechnicianEvidence(String ticketId, String attachmentId, MultipartFile file) {
+        Ticket ticket = ticketRepo.findById(ticketId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Ticket not found"));
+        assertTechnicianCanModifyTicketContent(ticket);
 
         if (file == null || file.isEmpty()) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Attachment file is required.");
         }
 
-        // Always use a mutable list — Mongo mapping may return an unmodifiable list.
-        ensureMutableAttachmentList(ticket);
-        if (ticket.getAttachments().size() >= MAX_ATTACHMENTS_PER_TICKET) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "A ticket can have at most 3 attachments.");
+        ensureMutableTechnicianAttachmentList(ticket);
+        Attachment found = findInAttachmentList(ticket.getTechnicianAttachments(), attachmentId);
+        if (found == null) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "Evidence not found");
         }
 
-        try {
-            String originalName = file.getOriginalFilename();
-            String safeFileName = originalName == null ? "attachment" : Paths.get(originalName).getFileName().toString();
-            String extension = "";
-            int extensionIndex = safeFileName.lastIndexOf('.');
-            if (extensionIndex >= 0) {
-                extension = safeFileName.substring(extensionIndex);
-                safeFileName = safeFileName.substring(0, extensionIndex);
+        String oldPath = found.getFilePath();
+        Attachment newMeta = persistUploadedFile(file);
+        found.setFileName(newMeta.getFileName());
+        found.setFilePath(newMeta.getFilePath());
+
+        if (oldPath != null && !oldPath.equals(found.getFilePath())) {
+            try {
+                Files.deleteIfExists(Paths.get(oldPath));
+            } catch (IOException ignored) {
+                // ignore
             }
-            safeFileName = safeFileName.replaceAll("[^a-zA-Z0-9._-]", "_");
-            if (safeFileName.isBlank()) {
-                safeFileName = "attachment";
-            }
-
-            Path uploadDir = Paths.get("uploads").toAbsolutePath().normalize();
-            Files.createDirectories(uploadDir);
-
-            String storedFileName = UUID.randomUUID() + "-" + safeFileName + extension;
-            Path destination = uploadDir.resolve(storedFileName);
-            Files.copy(file.getInputStream(), destination, StandardCopyOption.REPLACE_EXISTING);
-
-            Attachment attachment = new Attachment();
-            attachment.setId(UUID.randomUUID().toString());
-            attachment.setFileName(originalName != null && !originalName.isBlank() ? originalName : storedFileName);
-            attachment.setFilePath(destination.toString());
-
-            ticket.getAttachments().add(attachment);
-            ticketRepo.save(ticket);
-
-        } catch (IOException e) {
-            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "File upload failed.");
         }
+
+        ticketRepo.save(ticket);
+        Ticket reloaded = ticketRepo.findById(ticketId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Ticket not found"));
+        return mapToResponse(reloaded);
     }
 
     @Override
     public TicketResponse deleteAttachment(String ticketId, String attachmentId) {
         Ticket ticket = ticketRepo.findById(ticketId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Ticket not found"));
-        assertCanModifyAttachments(ticket);
+        assertCanModifyRequesterAttachments(ticket);
 
         List<Attachment> list = ticket.getAttachments();
         if (list == null || list.isEmpty()) {
@@ -345,14 +467,10 @@ public class TicketServiceImpl implements TicketService {
         Ticket ticket = ticketRepo.findById(ticketId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Ticket not found"));
         assertCanViewTicket(ticket);
-        List<Attachment> list = ticket.getAttachments();
-        if (list == null || list.isEmpty()) {
+        Attachment att = findAttachmentInTicket(ticket, attachmentId);
+        if (att == null) {
             throw new ApiException(HttpStatus.NOT_FOUND, "Attachment not found");
         }
-        Attachment att = list.stream()
-                .filter(a -> attachmentId != null && attachmentId.equals(a.getId()))
-                .findFirst()
-                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Attachment not found"));
         Path path = Paths.get(att.getFilePath());
         if (!Files.exists(path)) {
             throw new ApiException(HttpStatus.NOT_FOUND, "Attachment file is missing.");
@@ -378,6 +496,60 @@ public class TicketServiceImpl implements TicketService {
         return user;
     }
 
+    private void ensureMutableUpdatesList(Ticket ticket) {
+        List<TicketUpdate> current = ticket.getUpdates();
+        if (current == null) {
+            ticket.setUpdates(new ArrayList<>());
+        } else {
+            ticket.setUpdates(new ArrayList<>(current));
+        }
+    }
+
+    /**
+     * Notes / technician updates: only the assigned technician may add, edit, or remove while the ticket
+     * is still mutable (not resolved or withdrawn).
+     */
+    private void assertTechnicianCanModifyTicketContent(Ticket ticket) {
+        assertCanViewTicket(ticket);
+        assertTicketOwnerMutable(ticket);
+        AuthenticatedUser user = requireAuthenticatedUser();
+        if (user.getRole() != Role.TECHNICIAN) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only the assigned technician can manage ticket updates.");
+        }
+        String assignedId = ticket.getAssignedTechnicianUserId();
+        if (assignedId == null || !assignedId.equals(user.getUserId())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only the assigned technician can manage ticket updates.");
+        }
+    }
+
+    private String displayNameForAuthenticatedUser(AuthenticatedUser user) {
+        if (user.getEmail() != null && !user.getEmail().isBlank()) {
+            return user.getEmail().trim();
+        }
+        if (user.getFullName() != null && !user.getFullName().isBlank()) {
+            return user.getFullName().trim();
+        }
+        return "Technician";
+    }
+
+    private List<TicketUpdateResponse> mapUpdates(Ticket ticket) {
+        if (ticket.getUpdates() == null || ticket.getUpdates().isEmpty()) {
+            return new ArrayList<>();
+        }
+        return ticket.getUpdates().stream()
+                .sorted(Comparator.comparing(TicketUpdate::getTimestamp, Comparator.nullsLast(Comparator.naturalOrder()))
+                        .reversed())
+                .map(u -> {
+                    TicketUpdateResponse r = new TicketUpdateResponse();
+                    r.setId(u.getId());
+                    r.setMessage(u.getMessage());
+                    r.setUpdatedBy(u.getUpdatedBy());
+                    r.setTimestamp(u.getTimestamp());
+                    return r;
+                })
+                .collect(Collectors.toList());
+    }
+
     /** Spring Data MongoDB may map embedded lists as unmodifiable; mutations must use a new ArrayList. */
     private void ensureMutableAttachmentList(Ticket ticket) {
         List<Attachment> current = ticket.getAttachments();
@@ -385,16 +557,6 @@ public class TicketServiceImpl implements TicketService {
             ticket.setAttachments(new ArrayList<>());
         } else {
             ticket.setAttachments(new ArrayList<>(current));
-        }
-    }
-
-    /** Submitter may modify attachments on their ticket; staff may modify attachments on any ticket they can view. */
-    private void assertCanModifyAttachments(Ticket ticket) {
-        assertCanViewTicket(ticket);
-        assertTicketOwnerMutable(ticket);
-        AuthenticatedUser user = requireAuthenticatedUser();
-        if (user.getRole() == Role.USER) {
-            assertTicketSubmitter(ticket);
         }
     }
 
@@ -463,6 +625,8 @@ public class TicketServiceImpl implements TicketService {
         res.setWithdrawalReasonCode(ticket.getWithdrawalReasonCode());
         res.setWithdrawalReasonNote(ticket.getWithdrawalReasonNote());
         res.setAttachments(mapAttachments(ticket));
+        res.setTechnicianAttachments(mapTechnicianAttachments(ticket));
+        res.setUpdates(mapUpdates(ticket));
 
         return res;
     }
@@ -499,6 +663,94 @@ public class TicketServiceImpl implements TicketService {
             r.setFileName(a.getFileName());
             return r;
         }).collect(Collectors.toList());
+    }
+
+    private List<AttachmentResponse> mapTechnicianAttachments(Ticket ticket) {
+        if (ticket.getTechnicianAttachments() == null || ticket.getTechnicianAttachments().isEmpty()) {
+            return new ArrayList<>();
+        }
+        return ticket.getTechnicianAttachments().stream().map(a -> {
+            AttachmentResponse r = new AttachmentResponse();
+            r.setId(a.getId());
+            r.setFileName(a.getFileName());
+            return r;
+        }).collect(Collectors.toList());
+    }
+
+    private Attachment findAttachmentInTicket(Ticket ticket, String attachmentId) {
+        if (attachmentId == null) {
+            return null;
+        }
+        Attachment a = findInAttachmentList(ticket.getAttachments(), attachmentId);
+        if (a != null) {
+            return a;
+        }
+        return findInAttachmentList(ticket.getTechnicianAttachments(), attachmentId);
+    }
+
+    private static Attachment findInAttachmentList(List<Attachment> list, String attachmentId) {
+        if (list == null || list.isEmpty()) {
+            return null;
+        }
+        return list.stream()
+                .filter(x -> attachmentId != null && attachmentId.equals(x.getId()))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private Attachment persistUploadedFile(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Attachment file is required.");
+        }
+        try {
+            String originalName = file.getOriginalFilename();
+            String safeFileName = originalName == null ? "attachment" : Paths.get(originalName).getFileName().toString();
+            String extension = "";
+            int extensionIndex = safeFileName.lastIndexOf('.');
+            if (extensionIndex >= 0) {
+                extension = safeFileName.substring(extensionIndex);
+                safeFileName = safeFileName.substring(0, extensionIndex);
+            }
+            safeFileName = safeFileName.replaceAll("[^a-zA-Z0-9._-]", "_");
+            if (safeFileName.isBlank()) {
+                safeFileName = "attachment";
+            }
+
+            Path uploadDir = Paths.get("uploads").toAbsolutePath().normalize();
+            Files.createDirectories(uploadDir);
+
+            String storedFileName = UUID.randomUUID() + "-" + safeFileName + extension;
+            Path destination = uploadDir.resolve(storedFileName);
+            Files.copy(file.getInputStream(), destination, StandardCopyOption.REPLACE_EXISTING);
+
+            Attachment attachment = new Attachment();
+            attachment.setId(UUID.randomUUID().toString());
+            attachment.setFileName(originalName != null && !originalName.isBlank() ? originalName : storedFileName);
+            attachment.setFilePath(destination.toString());
+            return attachment;
+        } catch (IOException e) {
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "File upload failed.");
+        }
+    }
+
+    private void ensureMutableTechnicianAttachmentList(Ticket ticket) {
+        List<Attachment> current = ticket.getTechnicianAttachments();
+        if (current == null) {
+            ticket.setTechnicianAttachments(new ArrayList<>());
+        } else {
+            ticket.setTechnicianAttachments(new ArrayList<>(current));
+        }
+    }
+
+    /** Requester attachments: submitter only, or admin (support). */
+    private void assertCanModifyRequesterAttachments(Ticket ticket) {
+        assertCanViewTicket(ticket);
+        assertTicketOwnerMutable(ticket);
+        AuthenticatedUser user = requireAuthenticatedUser();
+        if (user.getRole() == Role.ADMIN) {
+            return;
+        }
+        assertTicketSubmitter(ticket);
     }
 
     private void validateCategoryCombination(String categoryId, String subCategoryId) {
