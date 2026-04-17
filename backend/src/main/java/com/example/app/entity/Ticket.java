@@ -29,7 +29,10 @@ public class Ticket {
     private String assignedTechnicianUserId;
 
     private List<TicketUpdate> updates = new ArrayList<>();
+    /** Photos/files submitted by the requester with the ticket (max 3). */
     private List<Attachment> attachments = new ArrayList<>();
+    /** Evidence uploaded by the assigned technician (max 3); stored separately from requester attachments. */
+    private List<Attachment> technicianAttachments = new ArrayList<>();
 
     /** Set when status becomes WITHDRAWN (e.g. RESOLVED_MYSELF, OTHER). */
     private String withdrawalReasonCode;
@@ -130,6 +133,14 @@ public class Ticket {
 
     public void setAttachments(List<Attachment> attachments) {
         this.attachments = attachments != null ? attachments : new ArrayList<>();
+    }
+
+    public List<Attachment> getTechnicianAttachments() {
+        return technicianAttachments;
+    }
+
+    public void setTechnicianAttachments(List<Attachment> technicianAttachments) {
+        this.technicianAttachments = technicianAttachments != null ? technicianAttachments : new ArrayList<>();
     }
 
     public String getWithdrawalReasonCode() {

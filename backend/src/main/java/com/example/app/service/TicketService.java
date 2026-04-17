@@ -24,16 +24,28 @@ public interface TicketService {
     // Update ticket status
     void updateTicketStatus(String id, String status);
 
-    // Add technician update
-    void addUpdateToTicket(String id, UpdateRequest request);
+    /** Assigned technician posts a public update (visible to the requester). */
+    TicketResponse addUpdateToTicket(String id, UpdateRequest request);
 
-    // Upload attachment
-    void uploadAttachment(String id, MultipartFile file);
+    TicketResponse patchTicketUpdate(String ticketId, String updateId, UpdateRequest request);
 
-    /** Remove an attachment (submitter or staff; ticket must still be mutable). */
+    TicketResponse deleteTicketUpdate(String ticketId, String updateId);
+
+    /** Upload requester evidence (submitter only; max 3). */
+    TicketResponse uploadAttachment(String id, MultipartFile file);
+
+    /** Remove requester attachment (submitter or admin; ticket must still be mutable). */
     TicketResponse deleteAttachment(String ticketId, String attachmentId);
 
-    /** Binary file for an attachment (viewer must be allowed to see the ticket). */
+    /** Assigned technician uploads evidence (max 3); stored separately from requester attachments. */
+    TicketResponse uploadTechnicianEvidence(String ticketId, MultipartFile file);
+
+    TicketResponse deleteTechnicianEvidence(String ticketId, String attachmentId);
+
+    /** Replace one technician evidence file (same id, new file on disk). */
+    TicketResponse replaceTechnicianEvidence(String ticketId, String attachmentId, MultipartFile file);
+
+    /** Binary file for requester or technician attachment (viewer must be allowed to see the ticket). */
     TicketAttachmentDownload getAttachmentDownload(String ticketId, String attachmentId);
 
     /** Submitter may update title, description, category, and subcategory while ticket is open or in progress. */

@@ -71,26 +71,56 @@ public class TicketController {
         return ResponseEntity.ok("Status updated");
     }
 
-    // ✅ ADD TECHNICIAN UPDATE
+    // ✅ ADD TECHNICIAN UPDATE (assigned technician only)
     @PostMapping("/{id}/updates")
-    public ResponseEntity<String> addUpdate(@PathVariable String id,
-                                           @RequestBody UpdateRequest request) {
-        service.addUpdateToTicket(id, request);
-        return ResponseEntity.ok("Update added");
+    public ResponseEntity<TicketResponse> addUpdate(@PathVariable String id,
+                                                    @Valid @RequestBody UpdateRequest request) {
+        return ResponseEntity.ok(service.addUpdateToTicket(id, request));
+    }
+
+    @PatchMapping("/{ticketId}/updates/{updateId}")
+    public ResponseEntity<TicketResponse> patchTicketUpdate(@PathVariable String ticketId,
+                                                            @PathVariable String updateId,
+                                                            @Valid @RequestBody UpdateRequest request) {
+        return ResponseEntity.ok(service.patchTicketUpdate(ticketId, updateId, request));
+    }
+
+    @DeleteMapping("/{ticketId}/updates/{updateId}")
+    public ResponseEntity<TicketResponse> deleteTicketUpdate(@PathVariable String ticketId,
+                                                             @PathVariable String updateId) {
+        return ResponseEntity.ok(service.deleteTicketUpdate(ticketId, updateId));
     }
 
     // ✅ UPLOAD ATTACHMENT
     @PostMapping("/{id}/attachments")
-    public ResponseEntity<String> uploadAttachment(@PathVariable String id,
-                                                   @RequestParam("file") MultipartFile file) {
-        service.uploadAttachment(id, file);
-        return ResponseEntity.ok("File uploaded successfully");
+    public ResponseEntity<TicketResponse> uploadAttachment(@PathVariable String id,
+                                                           @RequestParam("file") MultipartFile file) {
+        return ResponseEntity.ok(service.uploadAttachment(id, file));
     }
 
     @DeleteMapping("/{ticketId}/attachments/{attachmentId}")
     public ResponseEntity<TicketResponse> deleteAttachment(@PathVariable String ticketId,
                                                            @PathVariable String attachmentId) {
         return ResponseEntity.ok(service.deleteAttachment(ticketId, attachmentId));
+    }
+
+    @PostMapping("/{id}/technician-evidence")
+    public ResponseEntity<TicketResponse> uploadTechnicianEvidence(@PathVariable String id,
+                                                                   @RequestParam("file") MultipartFile file) {
+        return ResponseEntity.ok(service.uploadTechnicianEvidence(id, file));
+    }
+
+    @DeleteMapping("/{ticketId}/technician-evidence/{attachmentId}")
+    public ResponseEntity<TicketResponse> deleteTechnicianEvidence(@PathVariable String ticketId,
+                                                                   @PathVariable String attachmentId) {
+        return ResponseEntity.ok(service.deleteTechnicianEvidence(ticketId, attachmentId));
+    }
+
+    @PutMapping("/{ticketId}/technician-evidence/{attachmentId}")
+    public ResponseEntity<TicketResponse> replaceTechnicianEvidence(@PathVariable String ticketId,
+                                                                    @PathVariable String attachmentId,
+                                                                    @RequestParam("file") MultipartFile file) {
+        return ResponseEntity.ok(service.replaceTechnicianEvidence(ticketId, attachmentId, file));
     }
 
     @GetMapping("/{ticketId}/attachments/{attachmentId}")
