@@ -69,7 +69,7 @@ function ApproveBookingsPage() {
     <Card title="Approve or Reject Bookings" subtitle="Review pending booking requests">
       {error ? <p className="alert alert-error">{error}</p> : null}
       <div className="list-stack">
-        {bookings.map((booking) => (
+        {bookings.sort((a, b) => a.id - b.id).map((booking) => (
           <article className="list-row align-start" key={booking.id}>
             <div>
               <strong>{booking.facility}</strong>

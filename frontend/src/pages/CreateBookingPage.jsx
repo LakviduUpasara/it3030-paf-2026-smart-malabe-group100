@@ -1,130 +1,328 @@
-import { useState } from "react";
-import Button from "../components/Button";
-import Card from "../components/Card";
-import Modal from "../components/Modal";
-import { createBooking } from "../services/bookingService";
+import React, { useEffect, useState } from 'react';
+import Notification from '../components/Notification';
+import { bookingAPI } from '../services/api';
 
-const initialForm = {
-  facility: "Innovation Lab 2",
-  date: "",
-  time: "09:00 - 11:00",
-  purpose: "",
-};
+const CreateBookingPage = () => {
+  const resources = [
+    { id: 1, name: 'Lab A', type: 'Computer Lab' },
+    { id: 2, name: 'Lab B', type: 'Computer Lab' },
+    { id: 3, name: 'Meeting Room 1', type: 'Room' },
+    { id: 4, name: 'Projector 1', type: 'Equipment' },
+  ];
 
-function CreateBookingPage() {
-  const [formData, setFormData] = useState(initialForm);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
+  const [formData, setFormData] = useState({
+    resourceId: '',
+    userId: '',
+    startTime: '',
+    endTime: '',
+    purpose: '',
+  });
 
-  const handleChange = (event) => {
-    const { name, value } = event.target;
-    setFormData((previousState) => ({
-      ...previousState,
-      [name]: value,
-    }));
+  const [prefilledFromAvailability, setPrefilledFromAvailability] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [notification, setNotification] = useState(null);
+
+  const emptyFormState = {
+    resourceId: '',
+    userId: '',
+    startTime: '',
+    endTime: '',
+    purpose: '',
   };
 
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-    setIsSubmitting(true);
-    setError("");
-    setSuccessMessage("");
+  useEffect(() => {
+    const savedBookingData = sessionStorage.getItem('bookingData');
+
+    if (!savedBookingData) {
+      return;
+    }
 
     try {
-      const booking = await createBooking(formData);
-      setSuccessMessage(
-        `Booking ${booking.id} submitted for ${booking.facility}. Status: ${booking.status}.`,
+      const parsedBookingData = JSON.parse(savedBookingData);
+
+      setFormData((prev) => ({
+        ...prev,
+        resourceId: parsedBookingData.resourceId ? String(parsedBookingData.resourceId) : '',
+        startTime: toDateTimeInputValue(parsedBookingData.startTime),
+        endTime: toDateTimeInputValue(parsedBookingData.endTime),
+      }));
+
+      setPrefilledFromAvailability(
+        Boolean(parsedBookingData.lockResourceSelection) || Boolean(parsedBookingData.resourceId),
       );
-      setFormData(initialForm);
-      setIsModalOpen(false);
-    } catch (submitError) {
-      setError(submitError.message);
+    } catch (error) {
+      console.error('Failed to parse booking data from session storage:', error);
+    }
+  }, []);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const parseLocalDateTime = (value) => {
+    if (!value) return null;
+    const [date, time] = value.split('T');
+    const [y, m, d] = date.split('-').map(Number);
+    const [h, min] = time.split(':').map(Number);
+    return new Date(y, m - 1, d, h, min, 0);
+  };
+
+  const toDateTimeInputValue = (value) => {
+    if (!value) return '';
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
+
+  const formatDateTimeLocal = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      if (!formData.resourceId) {
+        setNotification({
+          type: 'warning',
+          message: 'Please select a resource.',
+        });
+        return;
+      }
+
+      const now = new Date();
+      const minTime = new Date(now.getTime() + 5 * 60 * 1000);
+
+      const selectedStart = parseLocalDateTime(formData.startTime);
+      const selectedEnd = parseLocalDateTime(formData.endTime);
+
+      const safeStart = selectedStart < minTime ? minTime : selectedStart;
+      const safeEnd = selectedEnd < safeStart ? new Date(safeStart.getTime() + 60 * 60 * 1000) : selectedEnd;
+
+      const payload = {
+        resourceId: Number(formData.resourceId),
+        userId: Number(formData.userId),
+        startTime: formatDateTimeLocal(safeStart),
+        endTime: formatDateTimeLocal(safeEnd),
+        purpose: formData.purpose,
+      };
+
+      console.log('═══════════════════════════════════');
+      console.log('BOOKING CREATION DEBUG INFO');
+      console.log('═══════════════════════════════════');
+      console.log('NOW:', now.toISOString(), '|', now.toString());
+      console.log('MIN TIME (NOW + 5 min):', minTime.toISOString(), '|', minTime.toString());
+      console.log('Selected Start:', selectedStart?.toISOString());
+      console.log('Safe Start:', safeStart.toISOString());
+      console.log('Selected End:', selectedEnd?.toISOString());
+      console.log('Safe End:', safeEnd.toISOString());
+      console.log('TIME CHECK: Safe Start > Now?', safeStart > now);
+      console.log('═══════════════════════════════════');
+      console.log('FINAL PAYLOAD (Local Time):');
+      console.log(JSON.stringify(payload, null, 2));
+      console.log('═══════════════════════════════════');
+      console.log('ISO Payload:');
+      console.log(JSON.stringify(payload, null, 2));
+      console.log('═══════════════════════════════════');
+      console.log('Payload Format Check:');
+      console.log('  startTime format:', payload.startTime, '✓ (UTC format: YYYY-MM-DDTHH:mm:ss)');
+      console.log('  endTime format:', payload.endTime, '✓ (UTC format: YYYY-MM-DDTHH:mm:ss)');
+      console.log('═══════════════════════════════════');
+
+      await bookingAPI.createBooking(payload);
+
+      setNotification({ type: 'success', message: 'Booking created successfully!' });
+      setFormData(emptyFormState);
+      setPrefilledFromAvailability(false);
+      sessionStorage.removeItem('bookingData');
+
+      setTimeout(() => {
+        window.location.href = '/bookings';
+      }, 2000);
+    } catch (error) {
+      console.error('═══════════════════════════════════');
+      console.error('BOOKING CREATION FAILED');
+      console.error('═══════════════════════════════════');
+      console.error('FULL ERROR:', error.response?.data);
+      console.error('Error Status:', error.response?.status);
+      console.error('Error Message:', error.message);
+      console.error('═══════════════════════════════════');
+
+      setNotification({
+        type: 'error',
+        message:
+          error.response?.data?.message ||
+          JSON.stringify(error.response?.data) ||
+          error.message ||
+          'Failed to create booking',
+      });
     } finally {
-      setIsSubmitting(false);
+      setLoading(false);
     }
   };
 
+  const handleCancel = () => {
+    setFormData(emptyFormState);
+    setPrefilledFromAvailability(false);
+    setNotification(null);
+    sessionStorage.removeItem('bookingData');
+    window.history.back();
+  };
+
+  const getGroupLabel = (type) => {
+    const labels = {
+      'Computer Lab': 'Labs',
+      Room: 'Rooms',
+      Equipment: 'Equipment',
+    };
+
+    return labels[type] || type;
+  };
+
+  const groupedResources = resources.reduce((acc, resource) => {
+    if (!acc[resource.type]) {
+      acc[resource.type] = [];
+    }
+
+    acc[resource.type].push(resource);
+    return acc;
+  }, {});
+
   return (
-    <div className="page-stack">
-      <Card
-        actions={
-          <Button onClick={() => setIsModalOpen(true)} variant="primary">
-            Open Booking Form
-          </Button>
-        }
-        subtitle="Create a new facility or asset reservation"
-        title="Create Booking"
-      >
-        <p className="supporting-text">
-          Use the booking form modal to request rooms, labs, or portable assets for
-          campus activities.
-        </p>
-        {successMessage ? <p className="alert alert-success">{successMessage}</p> : null}
-        {error ? <p className="alert alert-error">{error}</p> : null}
-      </Card>
+    <div className="min-h-screen bg-gray-50 py-12 px-4">
+      <div className="bg-white rounded-xl shadow-md p-8 max-w-2xl mx-auto">
+        <h1 className="text-3xl font-bold mb-8 text-gray-900 text-center">Create Booking</h1>
 
-      <Modal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title="New Booking Request"
-      >
-        <form className="form-grid" onSubmit={handleSubmit}>
-          <label className="field">
-            <span>Facility</span>
-            <select name="facility" onChange={handleChange} value={formData.facility}>
-              <option>Innovation Lab 2</option>
-              <option>Main Auditorium</option>
-              <option>Seminar Room C</option>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Resource */}
+          <div>
+            <label className="text-gray-600 text-sm font-medium mb-1 block">Resource</label>
+            <select
+              name="resourceId"
+              value={formData.resourceId}
+              onChange={handleChange}
+              disabled={prefilledFromAvailability}
+              required
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Select Resource</option>
+              {Object.entries(groupedResources).map(([type, resourcesInGroup]) => (
+                <optgroup key={type} label={`${getGroupLabel(type)} (${resourcesInGroup.length})`}>
+                  {resourcesInGroup.map((resource) => (
+                    <option key={resource.id} value={resource.id}>
+                      {resource.name}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
             </select>
-          </label>
+            {prefilledFromAvailability && (
+              <p className="text-xs text-green-600 mt-1">
+                Resource is locked to the selection from Availability.
+              </p>
+            )}
+          </div>
 
-          <label className="field">
-            <span>Date</span>
+          {/* User ID */}
+          <div>
+            <label className="text-gray-600 text-sm font-medium mb-1 block">User ID</label>
             <input
-              name="date"
+              type="number"
+              name="userId"
+              value={formData.userId}
+              onChange={handleChange}
+              placeholder="Enter user ID"
+              required
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* Start Time */}
+          <div>
+            <label className="text-gray-600 text-sm font-medium mb-1 block">Start Time</label>
+            <input
+              type="datetime-local"
+              name="startTime"
+              value={formData.startTime}
               onChange={handleChange}
               required
-              type="date"
-              value={formData.date}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
-          </label>
+          </div>
 
-          <label className="field">
-            <span>Time Slot</span>
-            <select name="time" onChange={handleChange} value={formData.time}>
-              <option>09:00 - 11:00</option>
-              <option>11:30 - 13:00</option>
-              <option>14:00 - 16:00</option>
-            </select>
-          </label>
+          {/* End Time */}
+          <div>
+            <label className="text-gray-600 text-sm font-medium mb-1 block">End Time</label>
+            <input
+              type="datetime-local"
+              name="endTime"
+              value={formData.endTime}
+              onChange={handleChange}
+              required
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
 
-          <label className="field field-full">
-            <span>Purpose</span>
+          {/* Purpose */}
+          <div>
+            <label className="text-gray-600 text-sm font-medium mb-1 block">Purpose</label>
             <textarea
               name="purpose"
+              value={formData.purpose}
               onChange={handleChange}
-              placeholder="Describe the booking purpose"
+              placeholder="Enter booking purpose"
               required
               rows="4"
-              value={formData.purpose}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
             />
-          </label>
+          </div>
 
-          <div className="modal-actions">
-            <Button onClick={() => setIsModalOpen(false)} variant="secondary">
+          {/* Button Group */}
+          <div className="flex gap-4 mt-6">
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-6 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white font-semibold rounded-lg transition-colors"
+            >
+              {loading ? 'Creating...' : 'Create Booking'}
+            </button>
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded-lg transition-colors"
+            >
               Cancel
-            </Button>
-            <Button type="submit" variant="primary">
-              {isSubmitting ? "Submitting..." : "Submit Request"}
-            </Button>
+            </button>
           </div>
         </form>
-      </Modal>
+      </div>
+
+      {notification && (
+        <Notification
+          type={notification.type}
+          message={notification.message}
+          onClose={() => setNotification(null)}
+        />
+      )}
     </div>
   );
-}
+};
 
 export default CreateBookingPage;
 
