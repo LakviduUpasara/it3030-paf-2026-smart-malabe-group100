@@ -39,11 +39,17 @@ function AppLayout() {
 
 function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <AppLayout />
-      </BrowserRouter>
-    </AuthProvider>
+    <Router>
+      <Layout>
+        <Routes>
+          <Route path="/" element={<ResourceAvailabilityPage />} />
+          <Route path="/bookings" element={<MyBookingsPage />} />
+          <Route path="/booking/create" element={<CreateBookingPage />} />
+          <Route path="/admin" element={<AdminDashboardPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Layout>
+    </Router>
   );
 }
 

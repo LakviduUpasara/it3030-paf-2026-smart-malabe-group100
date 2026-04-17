@@ -1,59 +1,32 @@
-import axios from "axios";
-import { readStorageValue, STORAGE_KEYS } from "../utils/storage";
+import axios from 'axios';
+
+const API_BASE_URL = 'http://localhost:8082/api';
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:18080/api/v1",
-  timeout: 8000,
+  baseURL: API_BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
 });
 
-function readStoredSessionToken() {
-  try {
-    // AuthContext persists session token separately from the user profile.
-    const sessionToken = readStorageValue(STORAGE_KEYS.SESSION);
-    if (typeof sessionToken === "string" && sessionToken.trim()) {
-      return sessionToken.trim();
-    }
+export const bookingAPI = {
+  createBooking: (data) => api.post('/bookings', data),
+  getAllBookings: (params) => api.get('/bookings', { params }),
+  getBookingsByUser: (userId) => api.get(`/bookings/user/${userId}`),
+  approveBooking: (bookingId) => api.put(`/bookings/${bookingId}/approve`),
+  rejectBooking: (bookingId) => api.put(`/bookings/${bookingId}/reject`),
+  cancelBooking: (bookingId) => api.put(`/bookings/${bookingId}/cancel`),
+  checkAvailability: (resourceId, start, end) => 
+    api.get('/bookings/check', { params: { resourceId, start, end } }),
+};
 
-    // Backward-compatibility fallback for older local storage layouts.
-    const legacyUser = readStorageValue(STORAGE_KEYS.USER);
-    return legacyUser?.token || legacyUser?.user?.token || null;
-  } catch {
-    return null;
-  }
-}
+export const messageAPI = {
+  getAllMessages: () => api.get('/v1/messages'),
+  createMessage: (data) => api.post('/v1/messages', data),
+};
 
-api.interceptors.request.use((config) => {
-  const token = readStoredSessionToken();
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
-
-export function createServiceError(error, fallbackMessage) {
-  const responseMessage = error?.response?.data?.message;
-  const message = responseMessage || error?.message || fallbackMessage;
-  const normalizedError = new Error(message);
-
-  normalizedError.status = error?.response?.status || 500;
-  normalizedError.isNetworkError = !error?.response;
-
-  return normalizedError;
-}
-
-export async function requestWithFallback(requestFn, fallbackFactory, fallbackMessage) {
-  try {
-    const response = await requestFn();
-    return response.data;
-  } catch (error) {
-    if (!error?.response || error.response.status === 404) {
-      return typeof fallbackFactory === "function"
-        ? fallbackFactory()
-        : fallbackFactory;
-    }
-
-    throw createServiceError(error, fallbackMessage);
-  }
-}
+export const healthAPI = {
+  check: () => api.get('/health'),
+};
 
 export default api;

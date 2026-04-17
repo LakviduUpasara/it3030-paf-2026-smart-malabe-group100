@@ -1,27 +1,31 @@
 package com.example.app.controller;
 
-import com.example.app.config.AppProperties;
-import java.util.LinkedHashMap;
+import com.example.app.dto.ApiResponse;
+import java.util.HashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * Health check endpoint for the Smart Campus Backend API.
+ */
 @RestController
-@RequestMapping("/api/v1/health")
-@RequiredArgsConstructor
+@RequestMapping("/api/health")
 public class HealthController {
 
-    private final AppProperties appProperties;
-
+    /**
+     * Get system health status.
+     */
     @GetMapping
-    public Map<String, Object> health() {
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("status", "UP");
-        body.put("service", "Smart Campus Backend");
-        body.put("developerMode", appProperties.isDeveloperMode());
-        return body;
+    public ApiResponse<Map<String, String>> health() {
+        Map<String, String> healthData = new HashMap<>();
+        healthData.put("status", "UP");
+        healthData.put("service", "Smart Campus Backend");
+        healthData.put("version", "1.0.0");
+        
+        return ApiResponse.success("Service is healthy", healthData);
     }
 }
 

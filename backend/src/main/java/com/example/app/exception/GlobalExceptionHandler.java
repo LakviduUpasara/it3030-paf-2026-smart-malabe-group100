@@ -39,68 +39,34 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(response);
     }
 
-    @ExceptionHandler(ResourceNotFoundException.class)
-    public ResponseEntity<Map<String, Object>> handleResourceNotFoundException(ResourceNotFoundException ex) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(buildErrorResponse(ex.getMessage(), HttpStatus.NOT_FOUND));
-    }
-
-    @ExceptionHandler(DegreeProgramNotFoundException.class)
-    public ResponseEntity<Map<String, Object>> handleDegreeProgramNotFoundException(
-            DegreeProgramNotFoundException ex) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(buildErrorResponse(ex.getMessage(), HttpStatus.NOT_FOUND));
-    }
-
-    @ExceptionHandler(AcademicModuleNotFoundException.class)
-    public ResponseEntity<Map<String, Object>> handleAcademicModuleNotFoundException(
-            AcademicModuleNotFoundException ex) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(buildErrorResponse(ex.getMessage(), HttpStatus.NOT_FOUND));
-    }
-
-    @ExceptionHandler(SemesterNotFoundException.class)
-    public ResponseEntity<Map<String, Object>> handleSemesterNotFoundException(
-            SemesterNotFoundException ex) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(buildErrorResponse(ex.getMessage(), HttpStatus.NOT_FOUND));
-    }
-
-    @ExceptionHandler(StudentGroupNotFoundException.class)
-    public ResponseEntity<Map<String, Object>> handleStudentGroupNotFoundException(
-            StudentGroupNotFoundException ex) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(buildErrorResponse(ex.getMessage(), HttpStatus.NOT_FOUND));
-    }
-
-    @ExceptionHandler(ModuleOfferingNotFoundException.class)
-    public ResponseEntity<Map<String, Object>> handleModuleOfferingNotFoundException(
-            ModuleOfferingNotFoundException ex) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(buildErrorResponse(ex.getMessage(), HttpStatus.NOT_FOUND));
-    }
-
-    @ExceptionHandler(AcademicSessionNotFoundException.class)
-    public ResponseEntity<Map<String, Object>> handleAcademicSessionNotFoundException(
-            AcademicSessionNotFoundException ex) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(buildErrorResponse(ex.getMessage(), HttpStatus.NOT_FOUND));
-    }
-
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<Map<String, Object>> handleIllegalArgumentException(IllegalArgumentException ex) {
-        return ResponseEntity.badRequest()
-                .body(buildErrorResponse(ex.getMessage(), HttpStatus.BAD_REQUEST));
-    }
-
-    @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<Map<String, Object>> handleAccessDeniedException(AccessDeniedException ex) {
+    public ResponseEntity<Map<String, Object>> handleBadRequest(IllegalArgumentException ex) {
         Map<String, Object> response = new HashMap<>();
         response.put("timestamp", LocalDateTime.now());
-        response.put("status", HttpStatus.FORBIDDEN.value());
-        response.put("message", "You do not have permission to perform this action.");
+        response.put("status", HttpStatus.BAD_REQUEST.value());
+        response.put("message", ex.getMessage());
 
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
+        return ResponseEntity.badRequest().body(response);
+    }
+
+    @ExceptionHandler(NotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleNotFound(NotFoundException ex) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("timestamp", LocalDateTime.now());
+        response.put("status", HttpStatus.NOT_FOUND.value());
+        response.put("message", ex.getMessage());
+
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+    }
+
+    @ExceptionHandler(BookingConflictException.class)
+    public ResponseEntity<Map<String, Object>> handleConflict(BookingConflictException ex) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("timestamp", LocalDateTime.now());
+        response.put("status", HttpStatus.CONFLICT.value());
+        response.put("message", ex.getMessage());
+
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
     }
 
     @ExceptionHandler(Exception.class)
