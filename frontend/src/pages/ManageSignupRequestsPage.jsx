@@ -3,14 +3,32 @@ import Button from "../components/Button";
 import AdminPageHeader from "../components/admin/AdminPageHeader";
 import LoadingSpinner from "../components/LoadingSpinner";
 import { useAdminShell } from "../context/AdminShellContext";
+import { useAuth } from "../hooks/useAuth";
 import {
   approveSignupRequest,
   getPendingSignupRequests,
   rejectSignupRequest,
 } from "../services/authService";
-import { ROLES } from "../utils/roleUtils";
+import { normalizeRole, ROLES } from "../utils/roleUtils";
+
+/** Campus managers may assign staff/student roles; platform admins may assign any role. */
+const SIGNUP_ROLES_MANAGER = [
+  ROLES.USER,
+  ROLES.STUDENT,
+  ROLES.LECTURER,
+  ROLES.LAB_ASSISTANT,
+  ROLES.TECHNICIAN,
+];
+
+const SIGNUP_ROLES_FULL = [
+  ...SIGNUP_ROLES_MANAGER,
+  ROLES.MANAGER,
+  ROLES.ADMIN,
+  ROLES.LOST_ITEM_ADMIN,
+];
 
 function ManageSignupRequestsPage() {
+  const { user } = useAuth();
   const { setActiveWindow } = useAdminShell();
   const [requests, setRequests] = useState([]);
   const [roleSelections, setRoleSelections] = useState({});
@@ -47,6 +65,19 @@ function ManageSignupRequestsPage() {
     [requests.length],
   );
 
+  const assignableRoles = useMemo(() => {
+    const r = normalizeRole(user?.role);
+    if (r === ROLES.MANAGER) {
+      return SIGNUP_ROLES_MANAGER;
+    }
+    return SIGNUP_ROLES_FULL;
+  }, [user?.role]);
+
+  const defaultAssignableRole = useMemo(
+    () => assignableRoles[0] || ROLES.USER,
+    [assignableRoles],
+  );
+
   const handleRoleChange = (requestId, nextRole) => {
     setRoleSelections((currentSelections) => ({
       ...currentSelections,
@@ -70,8 +101,11 @@ function ManageSignupRequestsPage() {
     setError("");
 
     try {
+      const chosen = roleSelections[requestId] || defaultAssignableRole;
+      const safeRole = assignableRoles.includes(chosen) ? chosen : defaultAssignableRole;
+
       await approveSignupRequest(requestId, {
-        assignedRole: roleSelections[requestId] || ROLES.USER,
+        assignedRole: safeRole,
         reviewerNote: notes[requestId] || "",
       });
       removeRequest(requestId);
@@ -174,11 +208,17 @@ function ManageSignupRequestsPage() {
                   <select
                     className="h-11 rounded-2xl border border-border bg-card px-3 text-sm"
                     onChange={(event) => handleRoleChange(request.id, event.target.value)}
-                    value={roleSelections[request.id] || ROLES.USER}
+                    value={
+                      assignableRoles.includes(roleSelections[request.id])
+                        ? roleSelections[request.id]
+                        : defaultAssignableRole
+                    }
                   >
-                    <option value={ROLES.USER}>USER</option>
-                    <option value={ROLES.TECHNICIAN}>TECHNICIAN</option>
-                    <option value={ROLES.ADMIN}>ADMIN</option>
+                    {assignableRoles.map((roleValue) => (
+                      <option key={roleValue} value={roleValue}>
+                        {roleValue.replaceAll("_", " ")}
+                      </option>
+                    ))}
                   </select>
                 </label>
 

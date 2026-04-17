@@ -148,7 +148,7 @@ export function buildNotificationAudience(announcement) {
   if (type === "All") {
     return {
       ...base,
-      roles: ["USER", "STUDENT", "LECTURER", "LAB_ASSISTANT", "ADMIN", "LOST_ITEM_ADMIN", "TECHNICIAN"],
+      roles: ["USER", "STUDENT", "LECTURER", "LAB_ASSISTANT", "ADMIN", "LOST_ITEM_ADMIN", "TECHNICIAN", "MANAGER"],
     };
   }
 

@@ -31,6 +31,7 @@ import TechnicianDashboardPage from "../pages/TechnicianDashboardPage";
 import AdminConsoleLayout from "../components/admin/AdminConsoleLayout";
 import AdminRoute from "./AdminRoute";
 import RequireSuperAdmin from "./RequireSuperAdmin";
+import RequireUserRegistrar from "./RequireUserRegistrar";
 import ProtectedRoute from "./ProtectedRoute";
 import { getDefaultRouteForRole, ROLES } from "../utils/roleUtils";
 
@@ -168,6 +169,19 @@ function AppRoutes() {
         <Route path="academic/module-offerings" element={<Navigate to="/admin/academics/module-offerings" replace />} />
         <Route path="academic/sessions" element={<Navigate to="/admin/teaching/timetable" replace />} />
 
+        <Route element={<RequireUserRegistrar />}>
+          {/* Users — super admin + campus manager */}
+          <Route path="users/students/:studentId" element={<AdminScaffoldPage />} />
+          <Route path="users/students" element={<StudentsAdminPage />} />
+          <Route path="users/lecturers/:staffId" element={<AdminScaffoldPage />} />
+          <Route path="users/lecturers" element={<StaffRegistrationPage variant="lecturer" />} />
+          <Route path="users/lab-assistants/:staffId" element={<AdminScaffoldPage />} />
+          <Route path="users/lab-assistants" element={<StaffRegistrationPage variant="labAssistant" />} />
+          <Route path="users/bulk-import" element={<Navigate to="/admin/users/students" replace />} />
+          <Route path="users/requests" element={<ManageSignupRequestsPage />} />
+          <Route path="registrations" element={<Navigate to="/admin/users/requests" replace />} />
+        </Route>
+
         <Route element={<RequireSuperAdmin />}>
           {/* Academics */}
           <Route path="academics/faculties" element={<FacultiesAdminPage />} />
@@ -179,18 +193,9 @@ function AppRoutes() {
           <Route path="academics/modules" element={<CatalogModulesAdminPage />} />
           <Route path="academics/module-offerings" element={<ModuleOfferingsAdminPage />} />
 
-          {/* Users */}
-          <Route path="users/students/:studentId" element={<AdminScaffoldPage />} />
-          <Route path="users/students" element={<StudentsAdminPage />} />
-          <Route path="users/lecturers/:staffId" element={<AdminScaffoldPage />} />
-          <Route path="users/lecturers" element={<StaffRegistrationPage variant="lecturer" />} />
-          <Route path="users/lab-assistants/:staffId" element={<AdminScaffoldPage />} />
-          <Route path="users/lab-assistants" element={<StaffRegistrationPage variant="labAssistant" />} />
+          {/* Users — platform admins only */}
           <Route path="users/admins" element={<AdminsAdminPage />} />
           <Route path="users/roles-permissions" element={<AdminScaffoldPage />} />
-          <Route path="users/bulk-import" element={<Navigate to="/admin/users/students" replace />} />
-          <Route path="users/requests" element={<ManageSignupRequestsPage />} />
-          <Route path="registrations" element={<Navigate to="/admin/users/requests" replace />} />
 
           {/* Administration */}
           <Route path="administration/system-settings" element={<AdminScaffoldPage />} />

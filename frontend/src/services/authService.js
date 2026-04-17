@@ -122,6 +122,33 @@ export async function verifyTwoFactor({ challengeId, code }) {
   }
 }
 
+export async function changeFirstLoginPassword({ currentPassword, newPassword }) {
+  if (!currentPassword?.trim() || !newPassword?.trim()) {
+    throw new Error("Enter your current password and a new password.");
+  }
+  try {
+    const response = await api.post("/auth/first-login/change-password", {
+      currentPassword: currentPassword.trim(),
+      newPassword: newPassword.trim(),
+    });
+    return response.data;
+  } catch (error) {
+    throw createServiceError(error, "Unable to update your password.");
+  }
+}
+
+export async function selectFirstLoginTwoFactor({ method }) {
+  if (!method) {
+    throw new Error("Choose email or authenticator verification.");
+  }
+  try {
+    const response = await api.post("/auth/first-login/select-2fa-method", { method });
+    return response.data;
+  } catch (error) {
+    throw createServiceError(error, "Unable to save your verification method.");
+  }
+}
+
 export async function getCurrentSession() {
   try {
     const response = await api.get("/auth/me");

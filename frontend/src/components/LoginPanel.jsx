@@ -28,6 +28,9 @@ function LoginPanel({ showHeading = true }) {
   const [localError, setLocalError] = useState("");
   const [rememberMe, setRememberMe] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
+  const [firstLoginCurrentPw, setFirstLoginCurrentPw] = useState("");
+  const [firstLoginNewPw, setFirstLoginNewPw] = useState("");
+  const [firstLoginConfirmPw, setFirstLoginConfirmPw] = useState("");
   const {
     login,
     devLogin,
@@ -35,11 +38,15 @@ function LoginPanel({ showHeading = true }) {
     loginWithGoogle,
     loginWithApple,
     verifyTwoFactor,
+    changeFirstLoginPassword,
+    selectFirstLoginTwoFactorMethod,
     clearError,
     clearTwoFactor,
+    logout,
     isLoading,
     error,
     twoFactorChallenge,
+    sessionPhase,
   } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -120,6 +127,15 @@ function LoginPanel({ showHeading = true }) {
 
     if (response.authStatus === "PENDING_APPROVAL") {
       navigate("/approval-pending", { replace: true });
+    }
+
+    if (
+      response.authStatus === "PASSWORD_CHANGE_REQUIRED"
+      || response.authStatus === "TWO_FACTOR_METHOD_SELECTION_REQUIRED"
+    ) {
+      setFirstLoginCurrentPw("");
+      setFirstLoginNewPw("");
+      setFirstLoginConfirmPw("");
     }
   };
 
@@ -203,6 +219,48 @@ function LoginPanel({ showHeading = true }) {
     }
   };
 
+  const handleFirstLoginPassword = async (event) => {
+    event.preventDefault();
+    setLocalError("");
+    clearError();
+    if (!firstLoginCurrentPw.trim() || !firstLoginNewPw.trim()) {
+      setLocalError("Enter your current password and a new password.");
+      return;
+    }
+    if (firstLoginNewPw.length < 8) {
+      setLocalError("New password must be at least 8 characters.");
+      return;
+    }
+    if (firstLoginNewPw !== firstLoginConfirmPw) {
+      setLocalError("New password and confirmation do not match.");
+      return;
+    }
+    try {
+      const response = await changeFirstLoginPassword({
+        currentPassword: firstLoginCurrentPw,
+        newPassword: firstLoginNewPw,
+      });
+      handleAuthResponse(response);
+    } catch (passwordError) {
+      return passwordError;
+    }
+  };
+
+  const handlePickTwoFactorMethod = async (method) => {
+    setLocalError("");
+    clearError();
+    if (method !== "EMAIL_OTP" && method !== "AUTHENTICATOR_APP") {
+      setLocalError("Choose email or authenticator app verification.");
+      return;
+    }
+    try {
+      const response = await selectFirstLoginTwoFactorMethod(method);
+      handleAuthResponse(response);
+    } catch (selectionError) {
+      return selectionError;
+    }
+  };
+
   const handleVerifyTwoFactor = async (event) => {
     event.preventDefault();
 
@@ -222,12 +280,22 @@ function LoginPanel({ showHeading = true }) {
     }
   };
 
-  const handleBackToLogin = () => {
+  const handleBackToLogin = async () => {
     setVerificationCode("");
     setQrCodeDataUrl("");
     setLocalError("");
     clearError();
     clearTwoFactor();
+    setFirstLoginCurrentPw("");
+    setFirstLoginNewPw("");
+    setFirstLoginConfirmPw("");
+    if (sessionPhase) {
+      try {
+        await logout();
+      } catch {
+        /* ignore */
+      }
+    }
   };
 
   return (
@@ -236,25 +304,128 @@ function LoginPanel({ showHeading = true }) {
         <div className="signup-shell-head login-shell-head">
           <div className="signup-shell-head-top">
             <span className="signup-eyebrow login-eyebrow">
-              {twoFactorChallenge ? "Secure Verification" : "Campus Login"}
+              {sessionPhase === "PASSWORD_CHANGE"
+                ? "First sign-in"
+                : sessionPhase === "TWO_FACTOR_METHOD_SELECTION"
+                  ? "Security setup"
+                  : twoFactorChallenge
+                    ? "Secure Verification"
+                    : "Campus Login"}
             </span>
           </div>
           <div className="auth-heading signup-heading login-heading">
             <h1 className="auth-title signup-title login-title-premium">
-              {twoFactorChallenge ? "Complete verification" : "Welcome back"}
+              {sessionPhase === "PASSWORD_CHANGE"
+                ? "Set a new password"
+                : sessionPhase === "TWO_FACTOR_METHOD_SELECTION"
+                  ? "Choose verification method"
+                  : twoFactorChallenge
+                    ? "Complete verification"
+                    : "Welcome back"}
             </h1>
             <p className="auth-subtitle signup-subtitle login-subtitle-premium">
-              {twoFactorChallenge
-                ? "Verify your account to finish signing in to Smart Campus."
-                : developerMode
-                  ? "Developer mode is on: you can use quick sign-in or the standard flow below."
-                  : "Sign in with your approved campus account to continue to your workspace."}
+              {sessionPhase === "PASSWORD_CHANGE"
+                ? "Use your temporary or assigned password and choose a strong new password."
+                : sessionPhase === "TWO_FACTOR_METHOD_SELECTION"
+                  ? "Pick how you want to verify sign-in next time: email code or an authenticator app."
+                  : twoFactorChallenge
+                    ? "Verify your account to finish signing in to Smart Campus."
+                    : developerMode
+                      ? "Developer mode is on: you can use quick sign-in or the standard flow below."
+                      : "Sign in with your approved campus account to continue to your workspace."}
             </p>
           </div>
         </div>
       ) : null}
 
-      {twoFactorChallenge ? (
+      {sessionPhase === "PASSWORD_CHANGE" ? (
+        <form className="login-form" onSubmit={handleFirstLoginPassword}>
+          <p className="supporting-text">
+            Your administrator requires a password change before you can access your dashboard.
+          </p>
+          <label className="field field-annotated">
+            <span>Current password</span>
+            <input
+              autoComplete="current-password"
+              className="login-input"
+              onChange={(e) => setFirstLoginCurrentPw(e.target.value)}
+              type="password"
+              value={firstLoginCurrentPw}
+            />
+          </label>
+          <label className="field field-annotated">
+            <span>New password (min 8 characters)</span>
+            <input
+              autoComplete="new-password"
+              className="login-input"
+              onChange={(e) => setFirstLoginNewPw(e.target.value)}
+              type="password"
+              value={firstLoginNewPw}
+            />
+          </label>
+          <label className="field field-annotated">
+            <span>Confirm new password</span>
+            <input
+              autoComplete="new-password"
+              className="login-input"
+              onChange={(e) => setFirstLoginConfirmPw(e.target.value)}
+              type="password"
+              value={firstLoginConfirmPw}
+            />
+          </label>
+          {activeError ? <p className="alert alert-error">{activeError}</p> : null}
+          <div className="auth-actions-row signup-form-actions">
+            <Button className="signup-submit" disabled={isLoading} type="submit" variant="primary">
+              Continue
+            </Button>
+            <Button
+              className="login-secondary-action"
+              disabled={isLoading}
+              onClick={handleBackToLogin}
+              type="button"
+              variant="secondary"
+            >
+              Back
+            </Button>
+          </div>
+        </form>
+      ) : sessionPhase === "TWO_FACTOR_METHOD_SELECTION" ? (
+        <div className="login-form auth-verification-form">
+          <p className="supporting-text">
+            Next, choose how you want to complete two-step verification for this sign-in.
+          </p>
+          <div className="auth-actions-row signup-form-actions flex-col gap-2 sm:flex-row">
+            <Button
+              className="signup-submit flex-1"
+              disabled={isLoading}
+              onClick={() => handlePickTwoFactorMethod("EMAIL_OTP")}
+              type="button"
+              variant="primary"
+            >
+              Email verification code
+            </Button>
+            <Button
+              className="signup-submit flex-1"
+              disabled={isLoading}
+              onClick={() => handlePickTwoFactorMethod("AUTHENTICATOR_APP")}
+              type="button"
+              variant="secondary"
+            >
+              Google Authenticator (TOTP)
+            </Button>
+          </div>
+          {activeError ? <p className="alert alert-error">{activeError}</p> : null}
+          <Button
+            className="login-secondary-action mt-2"
+            disabled={isLoading}
+            onClick={handleBackToLogin}
+            type="button"
+            variant="secondary"
+          >
+            Back
+          </Button>
+        </div>
+      ) : twoFactorChallenge ? (
         <form className="login-form auth-verification-form" onSubmit={handleVerifyTwoFactor}>
           <div className="auth-help-panel">
             <p className="supporting-text">{twoFactorChallenge.deliveryHint}</p>

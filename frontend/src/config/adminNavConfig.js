@@ -15,6 +15,7 @@ import {
 export const LMS_ROLES = Object.freeze({
   SUPER_ADMIN: "SUPER_ADMIN",
   LECTURER: "LECTURER",
+  MANAGER: "MANAGER",
 });
 
 /**
@@ -27,7 +28,7 @@ export const ADMIN_NAV_SECTIONS = [
     id: "dashboard",
     label: "Dashboard",
     icon: LayoutDashboard,
-    allowedRoles: [LMS_ROLES.SUPER_ADMIN, LMS_ROLES.LECTURER],
+    allowedRoles: [LMS_ROLES.SUPER_ADMIN, LMS_ROLES.LECTURER, LMS_ROLES.MANAGER],
     defaultOpen: true,
     items: [
       {
@@ -36,7 +37,7 @@ export const ADMIN_NAV_SECTIONS = [
         href: "/admin",
         end: true,
         matchHrefs: ["/admin"],
-        allowedRoles: [LMS_ROLES.SUPER_ADMIN, LMS_ROLES.LECTURER],
+        allowedRoles: [LMS_ROLES.SUPER_ADMIN, LMS_ROLES.LECTURER, LMS_ROLES.MANAGER],
       },
     ],
   },
@@ -59,13 +60,34 @@ export const ADMIN_NAV_SECTIONS = [
     id: "users",
     label: "Users",
     icon: Users,
-    allowedRoles: [LMS_ROLES.SUPER_ADMIN],
+    allowedRoles: [LMS_ROLES.SUPER_ADMIN, LMS_ROLES.MANAGER],
     defaultOpen: false,
     items: [
-      { id: "students", label: "Students", href: "/admin/users/students", allowedRoles: [LMS_ROLES.SUPER_ADMIN] },
-      { id: "lecturers", label: "Lecturers", href: "/admin/users/lecturers", allowedRoles: [LMS_ROLES.SUPER_ADMIN] },
-      { id: "lab-assistants", label: "Lab Assistants", href: "/admin/users/lab-assistants", allowedRoles: [LMS_ROLES.SUPER_ADMIN] },
-      { id: "user-requests", label: "User requests", href: "/admin/users/requests", matchHrefs: ["/admin/registrations"], allowedRoles: [LMS_ROLES.SUPER_ADMIN] },
+      {
+        id: "students",
+        label: "Students",
+        href: "/admin/users/students",
+        allowedRoles: [LMS_ROLES.SUPER_ADMIN, LMS_ROLES.MANAGER],
+      },
+      {
+        id: "lecturers",
+        label: "Lecturers",
+        href: "/admin/users/lecturers",
+        allowedRoles: [LMS_ROLES.SUPER_ADMIN, LMS_ROLES.MANAGER],
+      },
+      {
+        id: "lab-assistants",
+        label: "Lab Assistants",
+        href: "/admin/users/lab-assistants",
+        allowedRoles: [LMS_ROLES.SUPER_ADMIN, LMS_ROLES.MANAGER],
+      },
+      {
+        id: "user-requests",
+        label: "User requests",
+        href: "/admin/users/requests",
+        matchHrefs: ["/admin/registrations"],
+        allowedRoles: [LMS_ROLES.SUPER_ADMIN, LMS_ROLES.MANAGER],
+      },
       { id: "admins", label: "Admins", href: "/admin/users/admins", allowedRoles: [LMS_ROLES.SUPER_ADMIN] },
       { id: "roles", label: "Roles & Permissions", href: "/admin/users/roles-permissions", allowedRoles: [LMS_ROLES.SUPER_ADMIN] },
     ],

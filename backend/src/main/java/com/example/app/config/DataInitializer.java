@@ -34,6 +34,14 @@ public class DataInitializer {
                     "Tech@12345",
                     Role.TECHNICIAN
             );
+            upsertLocalDemoAccount(
+                    userAccountRepository,
+                    passwordEncoder,
+                    "manager@smartcampus.edu",
+                    "Campus User Manager",
+                    "Manager@12345",
+                    Role.MANAGER
+            );
             upsertSocialDemoAccount(
                     userAccountRepository,
                     "google.user@smartcampus.edu",

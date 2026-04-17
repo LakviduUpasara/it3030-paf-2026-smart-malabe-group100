@@ -30,4 +30,7 @@ public class SessionToken {
 
     @CreatedDate
     private LocalDateTime createdAt;
+
+    /** When null, legacy tokens are treated as {@link SessionPhase#FULL}. */
+    private SessionPhase phase;
 }

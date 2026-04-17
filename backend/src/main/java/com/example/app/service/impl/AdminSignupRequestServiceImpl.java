@@ -7,10 +7,12 @@ import com.example.app.entity.SignupRequest;
 import com.example.app.entity.UserAccount;
 import com.example.app.entity.enums.AccountStatus;
 import com.example.app.entity.enums.AuthProvider;
+import com.example.app.entity.enums.Role;
 import com.example.app.entity.enums.SignupRequestStatus;
 import com.example.app.exception.ApiException;
 import com.example.app.repository.SignupRequestRepository;
 import com.example.app.repository.UserAccountRepository;
+import com.example.app.security.AuthenticatedUser;
 import com.example.app.service.AdminSignupRequestService;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -33,8 +35,18 @@ public class AdminSignupRequestServiceImpl implements AdminSignupRequestService 
     }
 
     @Override
-    public SignupRequestSummaryResponse approveRequest(String requestId, SignupRequestDecisionRequest request) {
+    public SignupRequestSummaryResponse approveRequest(
+            String requestId, SignupRequestDecisionRequest request, AuthenticatedUser reviewer) {
         SignupRequest signupRequest = getPendingRequest(requestId);
+
+        if (reviewer != null && reviewer.getRole() == Role.MANAGER) {
+            Role assigned = request.getAssignedRole();
+            if (assigned == Role.ADMIN || assigned == Role.LOST_ITEM_ADMIN || assigned == Role.MANAGER) {
+                throw new ApiException(
+                        HttpStatus.FORBIDDEN,
+                        "Only a platform administrator can assign administrator or manager roles.");
+            }
+        }
 
         if (userAccountRepository.existsByEmailIgnoreCase(signupRequest.getEmail())) {
             throw new ApiException(HttpStatus.CONFLICT, "An account already exists for this email.");

@@ -3,6 +3,8 @@ package com.example.app.service.impl;
 import com.example.app.dto.auth.AuthFlowResponse;
 import com.example.app.dto.auth.AuthFlowStatus;
 import com.example.app.dto.auth.AuthenticatedUserResponse;
+import com.example.app.dto.auth.ChangeFirstLoginPasswordRequest;
+import com.example.app.dto.auth.SelectFirstLoginTwoFactorRequest;
 import com.example.app.dto.auth.GoogleCredentialRequest;
 import com.example.app.dto.auth.GoogleLoginRequest;
 import com.example.app.dto.auth.GoogleSignupSessionResponse;
@@ -12,6 +14,7 @@ import com.example.app.dto.auth.RegisterRequest;
 import com.example.app.dto.auth.TwoFactorChallengeResponse;
 import com.example.app.dto.auth.VerifyTwoFactorRequest;
 import com.example.app.entity.GoogleSignupSession;
+import com.example.app.entity.SessionPhase;
 import com.example.app.entity.SessionToken;
 import com.example.app.entity.SignupRequest;
 import com.example.app.entity.TwoFactorChallenge;
@@ -37,6 +40,7 @@ import com.warrenstrange.googleauth.GoogleAuthenticatorKey;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
@@ -68,6 +72,9 @@ public class AuthServiceImpl implements AuthService {
 
     @Value("${app.auth.challenge-minutes:10}")
     private long challengeMinutes;
+
+    @Value("${app.auth.first-login-setup-hours:4}")
+    private long firstLoginSetupHours;
 
     @Value("${app.auth.dev-expose-otp:true}")
     private boolean exposeDevelopmentOtp;
@@ -164,6 +171,10 @@ public class AuthServiceImpl implements AuthService {
 
         if (appProperties.isDeveloperMode()) {
             return authenticatedResponse(userAccount, "Developer mode: second factor is disabled.");
+        }
+
+        if (userAccount.isMustChangePassword()) {
+            return passwordChangeRequiredResponse(userAccount);
         }
 
         return buildTwoFactorChallenge(userAccount);
@@ -274,6 +285,11 @@ public class AuthServiceImpl implements AuthService {
             return authenticatedResponse(userAccount, "Developer mode: second factor is disabled.");
         }
 
+        if (userAccount.isMustChangePassword()) {
+            userAccount.setMustChangePassword(false);
+            userAccountRepository.save(userAccount);
+        }
+
         return buildTwoFactorChallenge(userAccount);
     }
 
@@ -378,19 +394,141 @@ public class AuthServiceImpl implements AuthService {
             return authenticatedResponse(userAccount, "Developer mode: second factor is disabled.");
         }
 
+        if (userAccount.isMustChangePassword()) {
+            return passwordChangeRequiredResponse(userAccount);
+        }
+
         return buildTwoFactorChallenge(userAccount);
     }
 
     @Override
-    public AuthFlowResponse getCurrentSession(AuthenticatedUser authenticatedUser) {
+    public AuthFlowResponse changeFirstLoginPassword(
+            ChangeFirstLoginPasswordRequest request,
+            AuthenticatedUser user,
+            String authorizationHeader
+    ) {
+        String tokenValue = extractBearerToken(authorizationHeader);
+        if (tokenValue == null || tokenValue.isBlank()) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "Sign in again to continue password setup.");
+        }
+        SessionToken sessionToken = sessionTokenRepository
+                .findById(tokenValue.trim())
+                .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "Your setup session expired. Please sign in again."));
+        if (sessionToken.getExpiresAt().isBefore(LocalDateTime.now())) {
+            sessionTokenRepository.deleteById(tokenValue.trim());
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "Your setup session expired. Please sign in again.");
+        }
+        if (sessionToken.getPhase() != SessionPhase.PASSWORD_CHANGE) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Password change is not required for this session.");
+        }
+        if (!Objects.equals(sessionToken.getUserId(), user.getUserId())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Session does not match the signed-in user.");
+        }
+
+        UserAccount userAccount = userAccountRepository
+                .findById(user.getUserId())
+                .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "Account not found."));
+
+        if (userAccount.getPasswordHash() == null
+                || !passwordEncoder.matches(request.getCurrentPassword(), userAccount.getPasswordHash())) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "Current password is incorrect.");
+        }
+
+        userAccount.setPasswordHash(passwordEncoder.encode(request.getNewPassword().trim()));
+        userAccount.setMustChangePassword(false);
+        userAccountRepository.save(userAccount);
+
+        sessionTokenRepository.deleteById(tokenValue.trim());
+
+        SessionToken nextToken = sessionTokenRepository.save(SessionToken.builder()
+                .token(UUID.randomUUID() + "-" + UUID.randomUUID())
+                .userId(userAccount.getId())
+                .phase(SessionPhase.TWO_FACTOR_METHOD_SELECTION)
+                .createdAt(LocalDateTime.now())
+                .expiresAt(LocalDateTime.now().plusHours(firstLoginSetupHours))
+                .build());
+
+        return AuthFlowResponse.builder()
+                .authStatus(AuthFlowStatus.TWO_FACTOR_METHOD_SELECTION_REQUIRED)
+                .message("Choose how you want to verify sign-in: email code or authenticator app.")
+                .token(nextToken.getToken())
+                .user(toAuthenticatedUserResponse(userAccount))
+                .sessionPhase(SessionPhase.TWO_FACTOR_METHOD_SELECTION.name())
+                .build();
+    }
+
+    @Override
+    public AuthFlowResponse selectFirstLoginTwoFactor(
+            SelectFirstLoginTwoFactorRequest request,
+            AuthenticatedUser user,
+            String authorizationHeader
+    ) {
+        String tokenValue = extractBearerToken(authorizationHeader);
+        if (tokenValue == null || tokenValue.isBlank()) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "Sign in again to continue setup.");
+        }
+        SessionToken sessionToken = sessionTokenRepository
+                .findById(tokenValue.trim())
+                .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "Your setup session expired. Please sign in again."));
+        if (sessionToken.getExpiresAt().isBefore(LocalDateTime.now())) {
+            sessionTokenRepository.deleteById(tokenValue.trim());
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "Your setup session expired. Please sign in again.");
+        }
+        if (sessionToken.getPhase() != SessionPhase.TWO_FACTOR_METHOD_SELECTION) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Choose your verification method in the sign-in setup flow.");
+        }
+        if (!Objects.equals(sessionToken.getUserId(), user.getUserId())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Session does not match the signed-in user.");
+        }
+
+        UserAccount userAccount = userAccountRepository
+                .findById(user.getUserId())
+                .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "Account not found."));
+
+        TwoFactorMethod method = request.getMethod();
+        userAccount.setPreferredTwoFactorMethod(method);
+        if (method == TwoFactorMethod.EMAIL_OTP) {
+            userAccount.setAuthenticatorSecret(null);
+            userAccount.setAuthenticatorConfirmed(false);
+        } else {
+            userAccount.setAuthenticatorSecret(null);
+            userAccount.setAuthenticatorConfirmed(false);
+        }
+        userAccountRepository.save(userAccount);
+
+        sessionTokenRepository.deleteById(tokenValue.trim());
+
+        UserAccount reloaded = userAccountRepository
+                .findById(userAccount.getId())
+                .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "Account not found."));
+        return buildTwoFactorChallenge(reloaded);
+    }
+
+    @Override
+    public AuthFlowResponse getCurrentSession(AuthenticatedUser authenticatedUser, String authorizationHeader) {
         UserAccount userAccount = userAccountRepository.findById(authenticatedUser.getUserId())
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "The current session is no longer valid."));
 
-        return AuthFlowResponse.builder()
+        String tokenValue = extractBearerToken(authorizationHeader);
+        String sessionPhaseName = null;
+        if (tokenValue != null && !tokenValue.isBlank()) {
+            Optional<SessionToken> st = sessionTokenRepository.findById(tokenValue.trim());
+            if (st.isPresent() && st.get().getExpiresAt().isAfter(LocalDateTime.now())) {
+                SessionPhase p = st.get().getPhase();
+                if (p != null && p != SessionPhase.FULL) {
+                    sessionPhaseName = p.name();
+                }
+            }
+        }
+
+        AuthFlowResponse.AuthFlowResponseBuilder builder = AuthFlowResponse.builder()
                 .authStatus(AuthFlowStatus.AUTHENTICATED)
                 .message("Authenticated session loaded successfully.")
-                .user(toAuthenticatedUserResponse(userAccount))
-                .build();
+                .user(toAuthenticatedUserResponse(userAccount));
+        if (sessionPhaseName != null) {
+            builder.sessionPhase(sessionPhaseName);
+        }
+        return builder.build();
     }
 
     private AuthFlowResponse resolveSignupRequestState(String email, String fallbackMessage) {
@@ -413,11 +551,16 @@ public class AuthServiceImpl implements AuthService {
     private AuthFlowResponse buildTwoFactorChallenge(UserAccount userAccount) {
         twoFactorChallengeRepository.deleteByUserId(userAccount.getId());
 
+        TwoFactorMethod method =
+                userAccount.getPreferredTwoFactorMethod() == null
+                        ? TwoFactorMethod.EMAIL_OTP
+                        : userAccount.getPreferredTwoFactorMethod();
+
         // Persist the challenge as a small Mongo document so 2FA can be resumed safely.
         TwoFactorChallenge challenge = TwoFactorChallenge.builder()
                 .id(UUID.randomUUID().toString())
                 .userId(userAccount.getId())
-                .method(userAccount.getPreferredTwoFactorMethod())
+                .method(method)
                 .createdAt(LocalDateTime.now())
                 .expiresAt(LocalDateTime.now().plusMinutes(challengeMinutes))
                 .used(false)
@@ -426,7 +569,7 @@ public class AuthServiceImpl implements AuthService {
         AuthFlowStatus authFlowStatus = AuthFlowStatus.TWO_FACTOR_REQUIRED;
         String message = "Enter the code from your second verification step to continue.";
 
-        if (userAccount.getPreferredTwoFactorMethod() == TwoFactorMethod.EMAIL_OTP) {
+        if (method == TwoFactorMethod.EMAIL_OTP) {
             String otpCode = generateOtpCode();
             challenge.setOtpCode(otpCode);
             authEmailOtpNotifier.sendSignInOtp(userAccount.getEmail(), otpCode);
@@ -453,11 +596,31 @@ public class AuthServiceImpl implements AuthService {
                 .build();
     }
 
+    private AuthFlowResponse passwordChangeRequiredResponse(UserAccount userAccount) {
+        sessionTokenRepository.deleteByUserId(userAccount.getId());
+        SessionToken sessionToken = sessionTokenRepository.save(SessionToken.builder()
+                .token(UUID.randomUUID() + "-" + UUID.randomUUID())
+                .userId(userAccount.getId())
+                .phase(SessionPhase.PASSWORD_CHANGE)
+                .createdAt(LocalDateTime.now())
+                .expiresAt(LocalDateTime.now().plusHours(firstLoginSetupHours))
+                .build());
+
+        return AuthFlowResponse.builder()
+                .authStatus(AuthFlowStatus.PASSWORD_CHANGE_REQUIRED)
+                .message("You must set a new password using your current password before continuing.")
+                .token(sessionToken.getToken())
+                .user(toAuthenticatedUserResponse(userAccount))
+                .sessionPhase(SessionPhase.PASSWORD_CHANGE.name())
+                .build();
+    }
+
     private AuthFlowResponse authenticatedResponse(UserAccount userAccount, String message) {
         sessionTokenRepository.deleteByUserId(userAccount.getId());
         SessionToken sessionToken = sessionTokenRepository.save(SessionToken.builder()
                 .token(UUID.randomUUID() + "-" + UUID.randomUUID())
                 .userId(userAccount.getId())
+                .phase(SessionPhase.FULL)
                 .createdAt(LocalDateTime.now())
                 .expiresAt(LocalDateTime.now().plusHours(sessionHours))
                 .build());
@@ -487,6 +650,7 @@ public class AuthServiceImpl implements AuthService {
                 .status(userAccount.getStatus())
                 .provider(userAccount.getProvider())
                 .preferredTwoFactorMethod(userAccount.getPreferredTwoFactorMethod())
+                .mustChangePassword(userAccount.isMustChangePassword())
                 .build();
     }
 
@@ -614,6 +778,11 @@ public class AuthServiceImpl implements AuthService {
 
         if (appProperties.isDeveloperMode()) {
             return authenticatedResponse(userAccount, "Developer mode: second factor is disabled.");
+        }
+
+        if (userAccount.isMustChangePassword()) {
+            userAccount.setMustChangePassword(false);
+            userAccountRepository.save(userAccount);
         }
 
         return buildTwoFactorChallenge(userAccount);

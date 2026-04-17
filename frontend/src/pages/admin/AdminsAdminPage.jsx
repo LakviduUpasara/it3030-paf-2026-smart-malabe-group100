@@ -1,11 +1,11 @@
 import { useCallback, useDeferredValue, useEffect, useState } from "react";
-import { Copy, Plus } from "lucide-react";
+import { Copy, Pencil, Plus, Trash2 } from "lucide-react";
 import Button from "../../components/Button";
 import AdminPageHeader from "../../components/admin/AdminPageHeader";
 import { useAdminShell } from "../../context/AdminShellContext";
 import * as registrationService from "../../services/registrationService";
 
-const ROLES = ["ADMIN", "LOST_ITEM_ADMIN"];
+const ROLES = ["ADMIN", "USER", "TECHNICIAN", "MANAGER", "LOST_ITEM_ADMIN"];
 const STATUSES = ["ACTIVE", "INACTIVE"];
 
 function emptyAdminForm() {
@@ -22,6 +22,7 @@ function emptyAdminForm() {
 function AdminsAdminPage() {
   const { setActiveWindow } = useAdminShell();
   const [viewMode, setViewMode] = useState("list");
+  const [editingId, setEditingId] = useState(null);
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -32,6 +33,7 @@ function AdminsAdminPage() {
 
   const [form, setForm] = useState(() => emptyAdminForm());
   const [submitting, setSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState("");
   const [formError, setFormError] = useState("");
   const [formSuccess, setFormSuccess] = useState("");
   const [lastGeneratedPassword, setLastGeneratedPassword] = useState("");
@@ -47,7 +49,7 @@ function AdminsAdminPage() {
       const data = await registrationService.listAdmins(q);
       setList(Array.isArray(data) ? data : []);
     } catch (e) {
-      setError(e.message || "Failed to load admins.");
+      setError(e.message || "Failed to load accounts.");
     } finally {
       setLoading(false);
     }
@@ -58,6 +60,7 @@ function AdminsAdminPage() {
   }, [load]);
 
   const openAdd = () => {
+    setEditingId(null);
     setForm(emptyAdminForm());
     setFormError("");
     setFormSuccess("");
@@ -66,8 +69,26 @@ function AdminsAdminPage() {
     setActiveWindow("Register");
   };
 
-  const cancelAdd = () => {
+  const openEdit = (row) => {
+    setEditingId(row.id);
+    setForm({
+      fullName: row.fullName || "",
+      username: row.username || "",
+      email: row.email || "",
+      password: "",
+      role: row.role || "ADMIN",
+      status: row.status || "ACTIVE",
+    });
+    setFormError("");
+    setFormSuccess("");
+    setLastGeneratedPassword("");
+    setViewMode("form");
+    setActiveWindow("Edit");
+  };
+
+  const cancelForm = () => {
     setViewMode("list");
+    setEditingId(null);
     setFormError("");
     setActiveWindow("");
   };
@@ -77,29 +98,60 @@ function AdminsAdminPage() {
     setFormError("");
     setLastGeneratedPassword("");
     try {
-      const payload = {
+      const base = {
         fullName: form.fullName.trim(),
         username: form.username.trim(),
         email: form.email.trim(),
         role: form.role,
         status: form.status,
       };
-      if (form.password.trim()) {
-        payload.password = form.password.trim();
+
+      if (editingId) {
+        const payload = { ...base };
+        if (form.password.trim()) {
+          payload.password = form.password.trim();
+        }
+        await registrationService.updateAdmin(editingId, payload);
+        setFormSuccess("Account updated.");
+      } else {
+        const payload = { ...base };
+        if (form.password.trim()) {
+          payload.password = form.password.trim();
+        }
+        const res = await registrationService.createAdmin(payload);
+        if (res.generatedPassword) {
+          setLastGeneratedPassword(res.generatedPassword);
+        }
+        setFormSuccess("Account created.");
       }
-      const res = await registrationService.createAdmin(payload);
-      if (res.generatedPassword) {
-        setLastGeneratedPassword(res.generatedPassword);
-      }
-      setFormSuccess("Admin account created.");
+
       setForm(emptyAdminForm());
+      setEditingId(null);
       setViewMode("list");
       setActiveWindow("");
       await load();
     } catch (e) {
-      setFormError(e.message || "Create failed.");
+      setFormError(e.message || "Save failed.");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const confirmDelete = async (row) => {
+    const ok = window.confirm(
+      `Delete account for ${row.fullName} (${row.email})? This cannot be undone.`,
+    );
+    if (!ok) return;
+    setDeletingId(row.id);
+    setError("");
+    try {
+      await registrationService.deleteAdmin(row.id);
+      setFormSuccess("Account deleted.");
+      await load();
+    } catch (e) {
+      setError(e.message || "Delete failed.");
+    } finally {
+      setDeletingId("");
     }
   };
 
@@ -111,6 +163,8 @@ function AdminsAdminPage() {
     }
   };
 
+  const isEdit = Boolean(editingId);
+
   return (
     <>
       <AdminPageHeader
@@ -118,21 +172,23 @@ function AdminsAdminPage() {
           viewMode === "list" ? (
             <Button className="inline-flex items-center gap-2" onClick={openAdd} type="button" variant="primary">
               <Plus className="h-4 w-4" aria-hidden />
-              Add admin
+              Add user
             </Button>
           ) : (
-            <Button className="inline-flex items-center gap-2" onClick={cancelAdd} type="button" variant="secondary">
-              Cancel
+            <Button className="inline-flex items-center gap-2" onClick={cancelForm} type="button" variant="secondary">
+              Back to list
             </Button>
           )
         }
-        description="Create console admin user accounts (no separate staff profile). Optional password — otherwise the server generates one and shows it once."
+        description="Create and manage platform accounts (admin, user, technician, manager). Optional password on create — otherwise the server generates one and shows it once. Edit details or remove accounts from the directory."
         title="Admins"
       />
 
       {viewMode === "form" ? (
         <section className="rounded-3xl border border-border bg-card p-6 shadow-shadow">
-          <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-text/60">New admin</h2>
+          <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-text/60">
+            {isEdit ? "Edit account" : "New account"}
+          </h2>
           <div className="mt-4 flex flex-col gap-3">
             <label className="flex flex-col gap-1">
               <span className="text-xs font-semibold text-text/70">Full name *</span>
@@ -162,7 +218,9 @@ function AdminsAdminPage() {
               />
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-xs font-semibold text-text/70">Password (optional, min 8 if set)</span>
+              <span className="text-xs font-semibold text-text/70">
+                {isEdit ? "New password (optional, min 8 if set; leave blank to keep current)" : "Password (optional, min 8 if set)"}
+              </span>
               <input
                 className="h-11 rounded-2xl border border-border bg-card px-3 text-sm"
                 type="password"
@@ -181,7 +239,7 @@ function AdminsAdminPage() {
                 >
                   {ROLES.map((r) => (
                     <option key={r} value={r}>
-                      {r}
+                      {r.replaceAll("_", " ")}
                     </option>
                   ))}
                 </select>
@@ -211,9 +269,9 @@ function AdminsAdminPage() {
 
           <div className="mt-6 flex flex-wrap gap-2">
             <Button disabled={submitting} onClick={submit} type="button" variant="primary">
-              Create admin
+              {submitting ? "Saving…" : isEdit ? "Save changes" : "Create account"}
             </Button>
-            <Button type="button" variant="secondary" onClick={cancelAdd}>
+            <Button type="button" variant="secondary" onClick={cancelForm}>
               Cancel
             </Button>
           </div>
@@ -258,7 +316,7 @@ function AdminsAdminPage() {
                 placeholder="Name, username, email"
               />
             </label>
-            <label className="flex w-full flex-col gap-1 md:w-40">
+            <label className="flex w-full flex-col gap-1 md:w-44">
               <span className="text-xs font-semibold uppercase tracking-[0.08em] text-text/60">Role</span>
               <select
                 className="h-12 rounded-2xl border border-border bg-card px-3 text-sm"
@@ -268,7 +326,7 @@ function AdminsAdminPage() {
                 <option value="">All</option>
                 {ROLES.map((r) => (
                   <option key={r} value={r}>
-                    {r}
+                    {r.replaceAll("_", " ")}
                   </option>
                 ))}
               </select>
@@ -300,7 +358,7 @@ function AdminsAdminPage() {
             {loading ? (
               <p className="text-sm text-text/70">Loading…</p>
             ) : (
-              <table className="w-full min-w-[640px] border-collapse text-left text-sm">
+              <table className="w-full min-w-[720px] border-collapse text-left text-sm">
                 <thead>
                   <tr className="border-b border-border text-xs font-semibold uppercase tracking-[0.08em] text-text/60">
                     <th className="py-3 pr-4">Name</th>
@@ -308,6 +366,7 @@ function AdminsAdminPage() {
                     <th className="py-3 pr-4">Email</th>
                     <th className="py-3 pr-4">Role</th>
                     <th className="py-3 pr-4">Status</th>
+                    <th className="py-3 pr-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -316,11 +375,36 @@ function AdminsAdminPage() {
                       <td className="py-3 pr-4 font-medium text-heading">{row.fullName}</td>
                       <td className="py-3 pr-4">{row.username}</td>
                       <td className="py-3 pr-4 text-text/80">{row.email}</td>
-                      <td className="py-3 pr-4">{row.role}</td>
+                      <td className="py-3 pr-4">{String(row.role).replaceAll("_", " ")}</td>
                       <td className="py-3 pr-4">
                         <span className="inline-flex rounded-full border border-border bg-tint px-2.5 py-1 text-xs font-semibold">
                           {row.status}
                         </span>
+                      </td>
+                      <td className="py-3 pl-2 text-right">
+                        <div className="inline-flex flex-wrap items-center justify-end gap-1">
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            className="inline-flex items-center gap-1 px-2 py-1.5 text-xs"
+                            onClick={() => openEdit(row)}
+                            aria-label={`Edit ${row.fullName}`}
+                          >
+                            <Pencil className="h-3.5 w-3.5" aria-hidden />
+                            Edit
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            className="inline-flex items-center gap-1 border-red-500/30 px-2 py-1.5 text-xs text-red-700 hover:bg-red-500/10 dark:text-red-300"
+                            disabled={deletingId === row.id}
+                            onClick={() => confirmDelete(row)}
+                            aria-label={`Delete ${row.fullName}`}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                            {deletingId === row.id ? "…" : "Delete"}
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -328,7 +412,7 @@ function AdminsAdminPage() {
               </table>
             )}
             {!loading && !list.length ? (
-              <p className="mt-4 text-sm text-text/70">No admins match the filters.</p>
+              <p className="mt-4 text-sm text-text/70">No accounts match the filters.</p>
             ) : null}
           </div>
         </section>

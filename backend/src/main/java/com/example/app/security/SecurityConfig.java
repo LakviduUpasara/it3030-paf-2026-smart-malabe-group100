@@ -16,6 +16,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     private final SessionAuthenticationFilter sessionAuthenticationFilter;
+    private final FirstLoginSessionAuthorizationFilter firstLoginSessionAuthorizationFilter;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -27,15 +28,17 @@ public class SecurityConfig {
                         // CORS preflight must not require auth (browser sends OPTIONS without Bearer token).
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/v1/health/**", "/api/v1/auth/**").permitAll()
+                        .requestMatchers("/api/v1/admin/signup-requests/**")
+                                .hasAnyRole("ADMIN", "LOST_ITEM_ADMIN", "MANAGER")
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/lecturers/**")
-                                .hasAnyRole("ADMIN", "LOST_ITEM_ADMIN")
+                                .hasAnyRole("ADMIN", "LOST_ITEM_ADMIN", "MANAGER")
                         .requestMatchers("/api/v1/lab-assistants/**")
-                                .hasAnyRole("ADMIN", "LOST_ITEM_ADMIN")
+                                .hasAnyRole("ADMIN", "LOST_ITEM_ADMIN", "MANAGER")
                         .requestMatchers("/api/v1/admins/**")
                                 .hasAnyRole("ADMIN", "LOST_ITEM_ADMIN")
                         .requestMatchers("/api/v1/students/**")
-                                .hasAnyRole("ADMIN", "LOST_ITEM_ADMIN")
+                                .hasAnyRole("ADMIN", "LOST_ITEM_ADMIN", "MANAGER")
                         .requestMatchers("/api/v1/intakes/**")
                                 .hasAnyRole("ADMIN", "LOST_ITEM_ADMIN")
                         .requestMatchers("/api/v1/subgroups/**")
@@ -60,6 +63,7 @@ public class SecurityConfig {
                                 .hasAnyRole("ADMIN", "LOST_ITEM_ADMIN", "LECTURER")
                         .anyRequest().authenticated())
                 .addFilterBefore(sessionAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(firstLoginSessionAuthorizationFilter, SessionAuthenticationFilter.class)
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable);
 

@@ -22,6 +22,7 @@ export function AuthProvider({ children }) {
     STORAGE_KEYS.TWO_FACTOR_CHALLENGE,
     null,
   );
+  const [sessionPhase, setSessionPhase] = useLocalStorage(STORAGE_KEYS.SESSION_PHASE, null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [developerMode, setDeveloperMode] = useState(false);
@@ -54,9 +55,11 @@ export function AuthProvider({ children }) {
     setUser(null);
     setSessionToken(null);
     setTwoFactorChallenge(null);
+    setSessionPhase(null);
     clearStorage(STORAGE_KEYS.USER);
     clearStorage(STORAGE_KEYS.SESSION);
     clearStorage(STORAGE_KEYS.TWO_FACTOR_CHALLENGE);
+    clearStorage(STORAGE_KEYS.SESSION_PHASE);
   };
 
   const clearClientState = () => {
@@ -76,10 +79,28 @@ export function AuthProvider({ children }) {
         setSessionToken(response.token);
         setPendingApproval(null);
         setTwoFactorChallenge(null);
+        setSessionPhase(null);
+        clearStorage(STORAGE_KEYS.SESSION_PHASE);
         break;
       case "PENDING_APPROVAL":
         clearClientState();
         setPendingApproval(response.pendingApproval);
+        break;
+      case "PASSWORD_CHANGE_REQUIRED":
+        setUser(response.user);
+        setSessionToken(response.token);
+        setSessionPhase(response.sessionPhase || "PASSWORD_CHANGE");
+        setPendingApproval(null);
+        setTwoFactorChallenge(null);
+        clearStorage(STORAGE_KEYS.PENDING_APPROVAL);
+        break;
+      case "TWO_FACTOR_METHOD_SELECTION_REQUIRED":
+        setUser(response.user);
+        setSessionToken(response.token);
+        setSessionPhase(response.sessionPhase || "TWO_FACTOR_METHOD_SELECTION");
+        setPendingApproval(null);
+        setTwoFactorChallenge(null);
+        clearStorage(STORAGE_KEYS.PENDING_APPROVAL);
         break;
       case "TWO_FACTOR_REQUIRED":
       case "AUTHENTICATOR_SETUP_REQUIRED":
@@ -87,6 +108,8 @@ export function AuthProvider({ children }) {
         setSessionToken(null);
         clearStorage(STORAGE_KEYS.USER);
         clearStorage(STORAGE_KEYS.SESSION);
+        setSessionPhase(null);
+        clearStorage(STORAGE_KEYS.SESSION_PHASE);
         setPendingApproval(null);
         clearStorage(STORAGE_KEYS.PENDING_APPROVAL);
         if (response.twoFactorChallenge) {
@@ -159,6 +182,18 @@ export function AuthProvider({ children }) {
       "Unable to verify the second-factor code.",
     );
 
+  const changeFirstLoginPassword = async (payload) =>
+    performAuthAction(
+      () => authService.changeFirstLoginPassword(payload),
+      "Unable to update your password.",
+    );
+
+  const selectFirstLoginTwoFactorMethod = async (method) =>
+    performAuthAction(
+      () => authService.selectFirstLoginTwoFactor({ method }),
+      "Unable to save your verification method.",
+    );
+
   const refreshPendingApproval = async (lookup) => {
     setIsLoading(true);
     setError("");
@@ -210,8 +245,9 @@ export function AuthProvider({ children }) {
     sessionToken,
     pendingApproval,
     twoFactorChallenge,
+    sessionPhase,
     developerMode,
-    isAuthenticated: Boolean(user?.email && sessionToken),
+    isAuthenticated: Boolean(user?.email && sessionToken && !sessionPhase),
     isLoading,
     error,
     clearError,
@@ -224,6 +260,8 @@ export function AuthProvider({ children }) {
     loginWithGoogle,
     loginWithApple,
     verifyTwoFactor,
+    changeFirstLoginPassword,
+    selectFirstLoginTwoFactorMethod,
     refreshPendingApproval,
     activateApprovedSignup,
     logout,

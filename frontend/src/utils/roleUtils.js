@@ -6,6 +6,7 @@ export const ROLES = Object.freeze({
   USER: "USER",
   ADMIN: "ADMIN",
   TECHNICIAN: "TECHNICIAN",
+  MANAGER: "MANAGER",
   LECTURER: "LECTURER",
   LAB_ASSISTANT: "LAB_ASSISTANT",
   STUDENT: "STUDENT",
@@ -22,6 +23,9 @@ export function resolveAdminConsoleRole(apiRole) {
   }
   if (r === ROLES.LECTURER || r === "TEACHER") {
     return LMS_ROLES.LECTURER;
+  }
+  if (r === ROLES.MANAGER) {
+    return LMS_ROLES.MANAGER;
   }
   return r;
 }
@@ -110,6 +114,10 @@ export function getDefaultRouteForRole(role) {
   }
 
   if (r === ROLES.LECTURER) {
+    return "/admin";
+  }
+
+  if (r === ROLES.MANAGER) {
     return "/admin";
   }
 

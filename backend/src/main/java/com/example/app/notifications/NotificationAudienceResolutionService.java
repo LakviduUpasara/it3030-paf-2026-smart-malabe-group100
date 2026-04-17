@@ -73,7 +73,9 @@ public class NotificationAudienceResolutionService {
                 rec = buildLabRecipient(ua, audience);
             } else if (ua.getRole() == Role.ADMIN || ua.getRole() == Role.LOST_ITEM_ADMIN) {
                 rec = buildStaffAdminRecipient(ua, audience);
-            } else if (ua.getRole() == Role.USER || ua.getRole() == Role.TECHNICIAN) {
+            } else if (ua.getRole() == Role.USER
+                    || ua.getRole() == Role.TECHNICIAN
+                    || ua.getRole() == Role.MANAGER) {
                 rec = buildGenericRecipient(ua, audience);
             }
 

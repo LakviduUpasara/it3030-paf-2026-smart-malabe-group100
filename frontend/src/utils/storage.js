@@ -1,6 +1,7 @@
 export const STORAGE_KEYS = Object.freeze({
   USER: "smart-campus-user",
   SESSION: "smart-campus-session",
+  SESSION_PHASE: "smart-campus-session-phase",
   PENDING_APPROVAL: "smart-campus-pending-approval",
   TWO_FACTOR_CHALLENGE: "smart-campus-two-factor",
 });

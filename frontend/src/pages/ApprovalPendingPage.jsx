@@ -72,6 +72,8 @@ function ApprovalPendingPage() {
         if (
           response?.authStatus === "TWO_FACTOR_REQUIRED"
           || response?.authStatus === "AUTHENTICATOR_SETUP_REQUIRED"
+          || response?.authStatus === "PASSWORD_CHANGE_REQUIRED"
+          || response?.authStatus === "TWO_FACTOR_METHOD_SELECTION_REQUIRED"
         ) {
           navigate("/login", { replace: true });
         }
@@ -147,6 +149,8 @@ function ApprovalPendingPage() {
       if (
         response?.authStatus === "TWO_FACTOR_REQUIRED"
         || response?.authStatus === "AUTHENTICATOR_SETUP_REQUIRED"
+        || response?.authStatus === "PASSWORD_CHANGE_REQUIRED"
+        || response?.authStatus === "TWO_FACTOR_METHOD_SELECTION_REQUIRED"
       ) {
         navigate("/login", { replace: true });
       }

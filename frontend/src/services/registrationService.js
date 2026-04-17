@@ -68,6 +68,23 @@ export async function listAdmins(query) {
   }
 }
 
+export async function updateAdmin(id, payload) {
+  try {
+    const { data } = await api.put(`/admins/${encodeURIComponent(id)}`, payload);
+    return data;
+  } catch (e) {
+    throw createServiceError(e, "Unable to update account.");
+  }
+}
+
+export async function deleteAdmin(id) {
+  try {
+    await api.delete(`/admins/${encodeURIComponent(id)}`);
+  } catch (e) {
+    throw createServiceError(e, "Unable to delete account.");
+  }
+}
+
 /** --- Students --- */
 export async function createStudent(payload) {
   try {

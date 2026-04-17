@@ -7,8 +7,11 @@ import com.example.app.entity.enums.Role;
 import com.example.app.exception.ApiException;
 import com.example.app.registration.dto.AdminCreateRequest;
 import com.example.app.registration.dto.AdminCreateResponse;
+import com.example.app.registration.dto.AdminUpdateRequest;
 import com.example.app.registration.dto.AdminUserResponse;
 import com.example.app.repository.UserAccountRepository;
+import com.example.app.security.AuthenticatedUser;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
@@ -31,7 +34,9 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class AdminRegistrationService {
 
-    private static final Set<Role> ADMIN_ROLES = EnumSet.of(Role.ADMIN, Role.LOST_ITEM_ADMIN);
+    /** Roles that may be created, listed, updated, or deleted from the console “Admins” API. */
+    private static final Set<Role> MANAGEABLE_ROLES =
+            EnumSet.of(Role.ADMIN, Role.LOST_ITEM_ADMIN, Role.USER, Role.TECHNICIAN, Role.MANAGER);
 
     private final UserAccountRepository userAccountRepository;
     private final PasswordEncoder passwordEncoder;
@@ -52,8 +57,8 @@ public class AdminRegistrationService {
         String normalizedUsername = username.trim();
 
         Role role = request.getRole() == null ? Role.ADMIN : request.getRole();
-        if (!ADMIN_ROLES.contains(role)) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid admin role");
+        if (!MANAGEABLE_ROLES.contains(role)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid role for this registration");
         }
 
         AccountStatus status = request.getStatus() == null ? AccountStatus.ACTIVE : request.getStatus();
@@ -107,15 +112,94 @@ public class AdminRegistrationService {
                 .build();
     }
 
+    public AdminUserResponse update(String id, AdminUpdateRequest request) {
+        UserAccount user = userAccountRepository
+                .findById(id)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Account not found"));
+        if (!MANAGEABLE_ROLES.contains(user.getRole())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "This account cannot be edited from the console user directory");
+        }
+
+        String fullName = RegistrationStringUtils.sanitizePersonName(request.getFullName());
+        String username = RegistrationStringUtils.trimToNull(request.getUsername());
+        String email = RegistrationStringUtils.trimToNull(request.getEmail());
+        if (fullName == null || username == null || email == null) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Full name, username, and email are required");
+        }
+
+        String normalizedEmail = email.toLowerCase(Locale.ROOT);
+        String normalizedUsername = username.trim();
+
+        Role role = request.getRole() == null ? user.getRole() : request.getRole();
+        if (!MANAGEABLE_ROLES.contains(role)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid role for this registration");
+        }
+
+        AccountStatus status = request.getStatus() == null ? user.getStatus() : request.getStatus();
+        if (status != AccountStatus.ACTIVE && status != AccountStatus.INACTIVE) {
+            status = user.getStatus();
+        }
+
+        if (userAccountRepository.existsByEmailIgnoreCaseAndIdNot(normalizedEmail, id)) {
+            throw new ApiException(HttpStatus.CONFLICT, "Email already exists");
+        }
+        if (userAccountRepository.existsByUsernameIgnoreCaseAndIdNot(normalizedUsername, id)) {
+            throw new ApiException(HttpStatus.CONFLICT, "Username already exists");
+        }
+
+        String plainPassword = RegistrationStringUtils.trimToNull(request.getPassword());
+        if (plainPassword != null) {
+            if (plainPassword.length() < 8) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "Password must be at least 8 characters");
+            }
+            user.setPasswordHash(passwordEncoder.encode(plainPassword));
+            user.setMustChangePassword(true);
+        }
+
+        user.setFullName(fullName);
+        user.setUsername(normalizedUsername);
+        user.setEmail(normalizedEmail);
+        user.setRole(role);
+        user.setStatus(status);
+
+        try {
+            user = userAccountRepository.save(user);
+        } catch (DuplicateKeyException e) {
+            String msg = String.valueOf(e.getMessage());
+            if (msg.contains("email")) {
+                throw new ApiException(HttpStatus.CONFLICT, "Email already exists");
+            }
+            if (msg.contains("username")) {
+                throw new ApiException(HttpStatus.CONFLICT, "Username already exists");
+            }
+            throw new ApiException(HttpStatus.CONFLICT, "Email or username already exists");
+        }
+
+        return toAdminUserResponse(user);
+    }
+
+    public void delete(String id, AuthenticatedUser reviewer) {
+        if (reviewer != null && id.equals(reviewer.getUserId())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "You cannot delete your own account");
+        }
+        UserAccount user = userAccountRepository
+                .findById(id)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Account not found"));
+        if (!MANAGEABLE_ROLES.contains(user.getRole())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "This account cannot be removed from the console user directory");
+        }
+        userAccountRepository.deleteById(id);
+    }
+
     public List<AdminUserResponse> list(Role roleFilter, AccountStatus statusFilter, String search) {
-        if (roleFilter != null && !ADMIN_ROLES.contains(roleFilter)) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid admin role filter");
+        if (roleFilter != null && !MANAGEABLE_ROLES.contains(roleFilter)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid role filter");
         }
         Query query = new Query();
         if (roleFilter != null) {
             query.addCriteria(Criteria.where("role").is(roleFilter));
         } else {
-            query.addCriteria(Criteria.where("role").in(Role.ADMIN, Role.LOST_ITEM_ADMIN));
+            query.addCriteria(Criteria.where("role").in(new ArrayList<>(MANAGEABLE_ROLES)));
         }
         if (statusFilter != null) {
             query.addCriteria(Criteria.where("status").is(statusFilter));

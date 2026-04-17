@@ -22,4 +22,5 @@ public class AuthenticatedUserResponse {
     private AccountStatus status;
     private AuthProvider provider;
     private TwoFactorMethod preferredTwoFactorMethod;
+    private Boolean mustChangePassword;
 }
