@@ -23,6 +23,7 @@ public class BookingResponse {
     private String purpose;
     private BookingStatus status;
     private LocalDateTime createdAt;
+    private String rejectionReason;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -40,4 +41,6 @@ public class BookingResponse {
     public void setStatus(BookingStatus status) { this.status = status; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public String getRejectionReason() { return rejectionReason; }
+    public void setRejectionReason(String rejectionReason) { this.rejectionReason = rejectionReason; }
 }
