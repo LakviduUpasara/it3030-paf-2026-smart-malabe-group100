@@ -127,16 +127,24 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     @Transactional
-    public BookingResponse rejectBooking(Long bookingId) {
-        logger.info("Rejecting booking ID: {}", bookingId);
+    public BookingResponse rejectBooking(Long bookingId, String reason) {
+        logger.info("Rejecting booking ID: {} with reason: {}", bookingId, reason);
+        
+        // Validate reason
+        if (reason == null || reason.trim().isEmpty()) {
+            logger.warn("Rejection failed: reason is null or empty for booking {}", bookingId);
+            throw new IllegalArgumentException("Rejection reason is required.");
+        }
+        
         Booking booking = findBookingOrThrow(bookingId);
         if (booking.getStatus() != BookingStatus.PENDING) {
             logger.warn("Cannot reject booking {} - status is {}", bookingId, booking.getStatus());
             throw new IllegalArgumentException("Only pending bookings can be rejected.");
         }
         booking.setStatus(BookingStatus.REJECTED);
+        booking.setRejectionReason(reason.trim());
         bookingRepository.save(booking);
-        logger.info("Booking {} rejected successfully", bookingId);
+        logger.info("Booking {} rejected successfully with reason: {}", bookingId, reason);
         return mapToResponse(booking);
     }
 
@@ -197,6 +205,7 @@ public class BookingServiceImpl implements BookingService {
         response.setPurpose(booking.getPurpose());
         response.setStatus(booking.getStatus());
         response.setCreatedAt(booking.getCreatedAt());
+        response.setRejectionReason(booking.getRejectionReason());
         return response;
     }
 
