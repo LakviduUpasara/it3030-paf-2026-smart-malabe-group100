@@ -358,8 +358,9 @@ function LoginPanel({ showHeading = true }) {
             <>
               <div className="auth-help-panel login-dev-banner">
                 <p className="supporting-text">
-                  <strong>Developer mode:</strong> second-factor and email OTP delivery are bypassed on the server.
-                  Never turn this on for production deployments.
+                  <strong>Developer mode (API):</strong> the server skips second-factor and allows quick sign-in. This
+                  banner only appears when the backend reports developer mode (see
+                  <code> APP_DEVELOPER_MODE</code> or Spring <code>dev</code> profile).
                 </p>
                 <Button
                   className="signup-submit login-dev-quick"

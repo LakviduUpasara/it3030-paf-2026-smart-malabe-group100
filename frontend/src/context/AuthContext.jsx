@@ -1,11 +1,12 @@
 import { createContext, useEffect, useState } from "react";
 import * as authService from "../services/authService";
+import { clearStorage, STORAGE_KEYS } from "../utils/storage";
 
+/** Fallback when /health cannot be reached (offline UI). Server APP_DEVELOPER_MODE is authoritative when health loads. */
 const envDeveloperMode =
   String(import.meta.env.VITE_DEVELOPER_MODE ?? "")
     .trim()
     .toLowerCase() === "true";
-import { clearStorage, STORAGE_KEYS } from "../utils/storage";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 
 export const AuthContext = createContext(null);
@@ -23,7 +24,7 @@ export function AuthProvider({ children }) {
   );
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
-  const [developerMode, setDeveloperMode] = useState(envDeveloperMode);
+  const [developerMode, setDeveloperMode] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -31,8 +32,8 @@ export function AuthProvider({ children }) {
       try {
         const health = await authService.fetchHealthStatus();
         if (!cancelled) {
-          // Env flag stays on: backend may not have APP_DEVELOPER_MODE set, but UI still shows dev tools.
-          setDeveloperMode(Boolean(health.developerMode) || envDeveloperMode);
+          // Must match backend: VITE_DEVELOPER_MODE alone must not show quick sign-in when API has dev mode off.
+          setDeveloperMode(Boolean(health?.developerMode));
         }
       } catch {
         if (!cancelled) {
@@ -82,8 +83,15 @@ export function AuthProvider({ children }) {
         break;
       case "TWO_FACTOR_REQUIRED":
       case "AUTHENTICATOR_SETUP_REQUIRED":
-        clearClientState();
-        setTwoFactorChallenge(response.twoFactorChallenge);
+        setUser(null);
+        setSessionToken(null);
+        clearStorage(STORAGE_KEYS.USER);
+        clearStorage(STORAGE_KEYS.SESSION);
+        setPendingApproval(null);
+        clearStorage(STORAGE_KEYS.PENDING_APPROVAL);
+        if (response.twoFactorChallenge) {
+          setTwoFactorChallenge(response.twoFactorChallenge);
+        }
         break;
       default:
         break;
