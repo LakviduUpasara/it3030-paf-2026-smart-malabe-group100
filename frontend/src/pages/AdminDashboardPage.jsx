@@ -111,14 +111,14 @@ const AdminDashboardPage = () => {
       {/* Stats */}
       <div className="grid grid-cols-4 gap-4 mb-8">
         {[
-          { label: 'Total Bookings', value: stats.total, color: 'bg-blue-600' },
-          { label: 'Approved', value: stats.approved, color: 'bg-green-600' },
-          { label: 'Pending', value: stats.pending, color: 'bg-yellow-600' },
-          { label: 'Rejected', value: stats.rejected, color: 'bg-red-600' },
+          { label: 'Total Bookings', value: stats.total, color: 'bg-blue-100' },
+          { label: 'Approved', value: stats.approved, color: 'bg-green-100' },
+          { label: 'Pending', value: stats.pending, color: 'bg-yellow-100' },
+          { label: 'Rejected', value: stats.rejected, color: 'bg-red-100' },
         ].map((stat, idx) => (
           <Card key={idx} className={stat.color}>
-            <p className="text-gray-200 text-sm">{stat.label}</p>
-            <p className="text-3xl font-bold text-white">{stat.value}</p>
+            <p className="text-gray-700 text-sm font-semibold">{stat.label}</p>
+            <p className="text-3xl font-bold text-gray-900">{stat.value}</p>
           </Card>
         ))}
       </div>
@@ -129,29 +129,31 @@ const AdminDashboardPage = () => {
           <p className="text-gray-400 text-center py-8">No bookings to manage</p>
         </Card>
       ) : (
-        <Card className="overflow-x-auto">
-          <table className="w-full text-left">
+        <Card className="overflow-x-auto bg-white">
+          <table className="w-full text-left bg-white">
             <thead>
-              <tr className="border-b border-gray-700">
-                <th className="py-3 px-4 text-gray-400">ID</th>
-                <th className="py-3 px-4 text-gray-400">Resource</th>
-                <th className="py-3 px-4 text-gray-400">User</th>
-                <th className="py-3 px-4 text-gray-400">Start Time</th>
-                <th className="py-3 px-4 text-gray-400">End Time</th>
-                <th className="py-3 px-4 text-gray-400">Status</th>
-                <th className="py-3 px-4 text-gray-400">Actions</th>
+              <tr className="border-b border-gray-300 bg-gray-50">
+                <th className="py-3 px-4 text-gray-700 font-semibold">ID</th>
+                <th className="py-3 px-4 text-gray-700 font-semibold">Resource</th>
+                <th className="py-3 px-4 text-gray-700 font-semibold">User</th>
+                <th className="py-3 px-4 text-gray-700 font-semibold">Start Time</th>
+                <th className="py-3 px-4 text-gray-700 font-semibold">End Time</th>
+                <th className="py-3 px-4 text-gray-700 font-semibold">Status</th>
+                <th className="py-3 px-4 text-gray-700 font-semibold">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {bookings.map(booking => (
-                <tr key={booking.id} className="border-b border-gray-700 hover:bg-gray-700">
-                  <td className="py-3 px-4 text-white">{booking.id}</td>
-                  <td className="py-3 px-4 text-white">{booking.resourceId}</td>
-                  <td className="py-3 px-4 text-white">{booking.userId}</td>
-                  <td className="py-3 px-4 text-white text-sm">
+              {[...bookings]
+                .sort((a, b) => a.id - b.id)
+                .map(booking => (
+                <tr key={booking.id} className="border-b border-gray-300 hover:bg-gray-100">
+                  <td className="py-3 px-4 text-gray-800">{booking.id}</td>
+                  <td className="py-3 px-4 text-gray-800">{booking.resourceId}</td>
+                  <td className="py-3 px-4 text-gray-800">{booking.userId}</td>
+                  <td className="py-3 px-4 text-gray-800 text-sm">
                     {new Date(booking.startTime).toLocaleString()}
                   </td>
-                  <td className="py-3 px-4 text-white text-sm">
+                  <td className="py-3 px-4 text-gray-800 text-sm">
                     {new Date(booking.endTime).toLocaleString()}
                   </td>
                   <td className="py-3 px-4">
@@ -162,21 +164,22 @@ const AdminDashboardPage = () => {
                   <td className="py-3 px-4">
                     {booking.status === 'PENDING' && (
                       <div className="flex gap-2">
-                        <Button
-                          variant="success"
+                        <button
                           onClick={() => handleApprove(booking.id)}
-                          className="text-sm px-3 py-1"
+                          className="px-3 py-1 rounded text-sm font-semibold bg-green-500 hover:bg-green-600 text-white transition-colors"
                         >
                           <FiCheckCircle className="inline mr-1" /> Approve
-                        </Button>
-                        <Button
-                          variant="danger"
+                        </button>
+                        <button
                           onClick={() => handleReject(booking.id)}
-                          className="text-sm px-3 py-1"
+                          className="px-3 py-1 rounded text-sm font-semibold bg-red-500 hover:bg-red-600 text-white transition-colors"
                         >
                           <FiXCircle className="inline mr-1" /> Reject
-                        </Button>
+                        </button>
                       </div>
+                    )}
+                    {booking.status !== 'PENDING' && (
+                      <p className="text-gray-500 text-sm">{booking.status}</p>
                     )}
                   </td>
                 </tr>
