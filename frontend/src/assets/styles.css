@@ -2399,6 +2399,18 @@ a {
   gap: 0.5rem;
 }
 
+.admin-ticket-assign-locked {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.5rem 0.8rem;
+  border-radius: 999px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+}
+
 .modal-panel--admin-ticket-detail {
   max-width: 560px;
 }
@@ -3321,6 +3333,15 @@ a {
   flex-shrink: 0;
   padding: 0.45rem 0.95rem;
   font-size: 0.875rem;
+}
+
+.ticket-detail-assign-locked {
+  flex-shrink: 0;
+  padding: 0.45rem 0.95rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
 }
 
 .ticket-detail-description {

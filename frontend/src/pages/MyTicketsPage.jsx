@@ -24,6 +24,7 @@ import {
   WITHDRAWAL_REASON_OPTIONS,
   formatWithdrawalReasonForDisplay,
 } from "../utils/withdrawalReason";
+import { blobUrlToDataUrl, downloadResolvedTicketPdf } from "../utils/ticketPdfExport";
 import maintenanceIllustration from "../assets/maintenance1.png";
 import {
   createTicketDefaultValues,
@@ -190,6 +191,7 @@ function MyTicketsPage() {
   const [editSubCategories, setEditSubCategories] = useState([]);
   const [updateError, setUpdateError] = useState("");
   const [updateBusy, setUpdateBusy] = useState(false);
+  const [pdfExportBusy, setPdfExportBusy] = useState(false);
   const [evidencePreviewById, setEvidencePreviewById] = useState({});
   const [techEvidencePreviewById, setTechEvidencePreviewById] = useState({});
   const [editEvidenceFiles, setEditEvidenceFiles] = useState([]);
@@ -1059,6 +1061,54 @@ function MyTicketsPage() {
     }
   };
 
+  const handleDownloadResolvedTicketPdf = async () => {
+    if (!detailTicket?.id || normalizeTicketStatus(detailTicket.status) !== "RESOLVED" || !ticketDetailView) {
+      return;
+    }
+    setPdfExportBusy(true);
+    setUpdateError("");
+    try {
+      const userImages = [];
+      const userOther = [];
+      for (const att of detailTicket.attachments || []) {
+        const p = evidencePreviewById[att.id];
+        const name = att.fileName || "Attachment";
+        if (p?.url && isImageEvidence(p.mime, name)) {
+          const dataUrl = await blobUrlToDataUrl(p.url);
+          userImages.push({ dataUrl, caption: name });
+        } else if (name) {
+          userOther.push(name);
+        }
+      }
+      const techImages = [];
+      const techOther = [];
+      for (const att of detailTicket.technicianAttachments || []) {
+        const p = techEvidencePreviewById[att.id];
+        const name = att.fileName || "Attachment";
+        if (p?.url && isImageEvidence(p.mime, name)) {
+          const dataUrl = await blobUrlToDataUrl(p.url);
+          techImages.push({ dataUrl, caption: name });
+        } else if (name) {
+          techOther.push(name);
+        }
+      }
+      await downloadResolvedTicketPdf({
+        ticket: detailTicket,
+        view: ticketDetailView,
+        statusLabel: formatStudentTicketStatusLabel(detailTicket.status),
+        assigneeLabel: formatAssigneeDisplay(detailTicket),
+        userEvidence: userImages,
+        technicianEvidence: techImages,
+        userEvidenceOtherFiles: userOther,
+        technicianEvidenceOtherFiles: techOther,
+      });
+    } catch (err) {
+      setUpdateError(err.message || "Could not generate PDF.");
+    } finally {
+      setPdfExportBusy(false);
+    }
+  };
+
   const detailModalTitle =
     detailSubView === "manage"
       ? "Update ticket"
@@ -1433,6 +1483,16 @@ function MyTicketsPage() {
                     <Button onClick={closeDetailModal} type="button" variant="secondary">
                       Close
                     </Button>
+                    {normalizeTicketStatus(detailTicket.status) === "RESOLVED" ? (
+                      <Button
+                        disabled={pdfExportBusy || updateBusy}
+                        onClick={handleDownloadResolvedTicketPdf}
+                        type="button"
+                        variant="secondary"
+                      >
+                        {pdfExportBusy ? "Preparing PDF…" : "Download PDF"}
+                      </Button>
+                    ) : null}
                     {isTicketEditable(detailTicket.status) ? (
                       <Button
                         onClick={() => {

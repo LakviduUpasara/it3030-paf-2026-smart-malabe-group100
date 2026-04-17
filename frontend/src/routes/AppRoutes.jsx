@@ -172,6 +172,14 @@ function AppRoutes() {
           </AdminRoute>
         }
       />
+      <Route
+        path="/admin/technicians"
+        element={
+          <AdminRoute>
+            <Navigate replace to="/admin/tickets?section=technicians" />
+          </AdminRoute>
+        }
+      />
 
       <Route path="*" element={<NotFoundPage />} />
     </Routes>

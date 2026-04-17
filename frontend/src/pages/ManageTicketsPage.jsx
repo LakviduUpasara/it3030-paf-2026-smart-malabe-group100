@@ -1,12 +1,18 @@
 import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import AdminCategoriesPanel from "../components/AdminCategoriesPanel";
+import AdminTechniciansPanel from "../components/AdminTechniciansPanel";
 import Button from "../components/Button";
 import Card from "../components/Card";
 import LoadingSpinner from "../components/LoadingSpinner";
 import TicketCard from "../components/TicketCard";
 import { getTechnicians } from "../services/adminService";
-import { assignTicketToTechnician, getTicketById, getTickets } from "../services/ticketService";
+import {
+  assignTicketToTechnician,
+  fetchAttachmentPreview,
+  getTicketById,
+  getTickets,
+} from "../services/ticketService";
 import { parseTicketDescription } from "../utils/ticketDescription";
 import { formatDateTime, toToken } from "../utils/formatters";
 import { formatWithdrawalReasonForDisplay } from "../utils/withdrawalReason";
@@ -49,6 +55,11 @@ function shortTicketReference(id) {
   return `…${s.slice(-10)}`;
 }
 
+function isImageAttachment(mime, fileName) {
+  if (mime && String(mime).startsWith("image/")) return true;
+  return /\.(png|jpe?g|gif|webp|bmp)$/i.test(fileName || "");
+}
+
 function normalizeTicketStatus(status) {
   return String(status || "OPEN")
     .trim()
@@ -69,6 +80,7 @@ const VALID_ADMIN_SECTIONS = new Set([
   "resolved",
   "withdrawn",
   "categories",
+  "technicians",
 ]);
 
 function ManageTicketsPage() {
@@ -105,6 +117,31 @@ function ManageTicketsPage() {
   const [assignSubmitting, setAssignSubmitting] = useState(false);
   const [assignActionError, setAssignActionError] = useState("");
   const [assignIdCopied, setAssignIdCopied] = useState(false);
+
+  const [requesterPreviewById, setRequesterPreviewById] = useState({});
+  const [technicianPreviewById, setTechnicianPreviewById] = useState({});
+
+  const requesterAttachmentKey = useMemo(() => {
+    const list = Array.isArray(detailTicket?.attachments) ? detailTicket.attachments : [];
+    return list.map((a) => a?.id).filter(Boolean).join("|");
+  }, [detailTicket?.attachments]);
+
+  const technicianAttachmentKey = useMemo(() => {
+    const list = Array.isArray(detailTicket?.technicianAttachments)
+      ? detailTicket.technicianAttachments
+      : [];
+    return list.map((a) => a?.id).filter(Boolean).join("|");
+  }, [detailTicket?.technicianAttachments]);
+
+  /** Oldest first for a readable timeline (same fields as student "Technician updates"). */
+  const sortedTechnicianUpdates = useMemo(() => {
+    const raw = Array.isArray(detailTicket?.updates) ? detailTicket.updates : [];
+    return [...raw].sort((a, b) => {
+      const ta = a.timestamp ? Date.parse(String(a.timestamp)) : 0;
+      const tb = b.timestamp ? Date.parse(String(b.timestamp)) : 0;
+      return ta - tb;
+    });
+  }, [detailTicket?.updates]);
 
   /** Align fixed left rail with the real navbar bottom (avoids overlap and blocked clicks). */
   useLayoutEffect(() => {
@@ -154,7 +191,7 @@ function ManageTicketsPage() {
   }, [tickets]);
 
   const filteredTickets = useMemo(() => {
-    if (activeSection === "categories") {
+    if (activeSection === "categories" || activeSection === "technicians") {
       return [];
     }
     const def = ADMIN_TICKET_SECTIONS.find((sec) => sec.id === activeSection);
@@ -194,6 +231,108 @@ function ManageTicketsPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!detailTicket?.id) {
+      setRequesterPreviewById((prev) => {
+        Object.values(prev).forEach((entry) => {
+          if (entry?.url) URL.revokeObjectURL(entry.url);
+        });
+        return {};
+      });
+      return undefined;
+    }
+    const atts = Array.isArray(detailTicket.attachments) ? detailTicket.attachments : [];
+    if (atts.length === 0) {
+      setRequesterPreviewById((prev) => {
+        Object.values(prev).forEach((entry) => {
+          if (entry?.url) URL.revokeObjectURL(entry.url);
+        });
+        return {};
+      });
+      return undefined;
+    }
+
+    let cancelled = false;
+    async function loadRequesterPreviews() {
+      const next = {};
+      for (const att of atts) {
+        if (!att?.id) continue;
+        try {
+          const preview = await fetchAttachmentPreview(detailTicket.id, att.id);
+          if (!cancelled) {
+            next[att.id] = { ...preview, fileName: att.fileName || "" };
+          }
+        } catch {
+          /* skip failed preview */
+        }
+      }
+      if (!cancelled) {
+        setRequesterPreviewById((prev) => {
+          Object.values(prev).forEach((entry) => {
+            if (entry?.url) URL.revokeObjectURL(entry.url);
+          });
+          return next;
+        });
+      }
+    }
+    loadRequesterPreviews();
+    return () => {
+      cancelled = true;
+    };
+  }, [detailTicket?.id, requesterAttachmentKey]);
+
+  useEffect(() => {
+    if (!detailTicket?.id) {
+      setTechnicianPreviewById((prev) => {
+        Object.values(prev).forEach((entry) => {
+          if (entry?.url) URL.revokeObjectURL(entry.url);
+        });
+        return {};
+      });
+      return undefined;
+    }
+    const atts = Array.isArray(detailTicket.technicianAttachments)
+      ? detailTicket.technicianAttachments
+      : [];
+    if (atts.length === 0) {
+      setTechnicianPreviewById((prev) => {
+        Object.values(prev).forEach((entry) => {
+          if (entry?.url) URL.revokeObjectURL(entry.url);
+        });
+        return {};
+      });
+      return undefined;
+    }
+
+    let cancelled = false;
+    async function loadTechnicianPreviews() {
+      const next = {};
+      for (const att of atts) {
+        if (!att?.id) continue;
+        try {
+          const preview = await fetchAttachmentPreview(detailTicket.id, att.id);
+          if (!cancelled) {
+            next[att.id] = { ...preview, fileName: att.fileName || "" };
+          }
+        } catch {
+          /* skip failed preview */
+        }
+      }
+      if (!cancelled) {
+        setTechnicianPreviewById((prev) => {
+          Object.values(prev).forEach((entry) => {
+            if (entry?.url) URL.revokeObjectURL(entry.url);
+          });
+          return next;
+        });
+      }
+    }
+    loadTechnicianPreviews();
+    return () => {
+      cancelled = true;
+    };
+  }, [detailTicket?.id, technicianAttachmentKey]);
+
   async function reloadTicketsQuiet() {
     try {
       const res = await getTickets();
@@ -221,6 +360,8 @@ function ManageTicketsPage() {
 
   const openAssignTicket = async (ticket) => {
     if (!ticket?.id) return;
+    const assignStatus = normalizeTicketStatus(ticket.status);
+    if (assignStatus === "RESOLVED" || assignStatus === "WITHDRAWN") return;
     setAssignTicket(ticket);
     setAssignOpen(true);
     setAssignListError("");
@@ -313,6 +454,16 @@ function ManageTicketsPage() {
 
   const detailParsed = detailTicket ? parseTicketDescription(detailTicket.description) : null;
 
+  const detailStatusNorm = detailTicket ? normalizeTicketStatus(detailTicket.status) : "";
+  const detailAssignmentLocked =
+    detailStatusNorm === "RESOLVED" || detailStatusNorm === "WITHDRAWN";
+  const detailAssignmentLockedTitle =
+    detailStatusNorm === "RESOLVED"
+      ? "Resolved tickets cannot be reassigned."
+      : detailStatusNorm === "WITHDRAWN"
+        ? "Withdrawn tickets cannot be reassigned."
+        : "";
+
   const emptySectionMessage =
     activeSection === "open"
       ? "No open tickets awaiting assignment."
@@ -322,7 +473,7 @@ function ManageTicketsPage() {
           ? "No resolved tickets yet."
           : "No withdrawn tickets.";
 
-  const showTicketList = activeSection !== "categories";
+  const showTicketList = activeSection !== "categories" && activeSection !== "technicians";
 
   return (
     <>
@@ -363,6 +514,16 @@ function ManageTicketsPage() {
             >
               <span className="admin-tickets-nav-label">Category setup</span>
             </button>
+            <button
+              type="button"
+              className={`admin-tickets-nav-item admin-tickets-nav-item--no-count${
+                activeSection === "technicians" ? " is-active" : ""
+              }`}
+              onClick={() => setActiveSection("technicians")}
+              aria-pressed={activeSection === "technicians"}
+            >
+              <span className="admin-tickets-nav-label">Technicians</span>
+            </button>
           </nav>
         </aside>
 
@@ -391,8 +552,10 @@ function ManageTicketsPage() {
                 ))}
               </div>
             </Card>
-          ) : (
+          ) : activeSection === "categories" ? (
             <AdminCategoriesPanel />
+          ) : (
+            <AdminTechniciansPanel />
           )}
         </div>
       </div>
@@ -474,17 +637,26 @@ function ManageTicketsPage() {
                               ? ` · ${detailTicket.assignedTechnicianUserId}`
                               : ""}
                           </div>
-                          <Button
-                            type="button"
-                            variant="primary"
-                            className="ticket-detail-assign-btn"
-                            onClick={() => openAssignTicket(detailTicket)}
-                          >
-                            {detailTicket.assignedTechnicianUserId ||
-                            detailTicket.assignedTechnicianUsername
-                              ? "Reassign"
-                              : "Assign"}
-                          </Button>
+                          {detailAssignmentLocked ? (
+                            <span
+                              className="ticket-detail-assign-locked"
+                              title={detailAssignmentLockedTitle || undefined}
+                            >
+                              Assignment closed
+                            </span>
+                          ) : (
+                            <Button
+                              type="button"
+                              variant="primary"
+                              className="ticket-detail-assign-btn"
+                              onClick={() => openAssignTicket(detailTicket)}
+                            >
+                              {detailTicket.assignedTechnicianUserId ||
+                              detailTicket.assignedTechnicianUsername
+                                ? "Reassign"
+                                : "Assign"}
+                            </Button>
+                          )}
                         </div>
                       </div>
                       {detailTicket.createdAt ? (
@@ -514,14 +686,57 @@ function ManageTicketsPage() {
                           {detailParsed.content || "No description provided."}
                         </div>
                       </div>
+                      {sortedTechnicianUpdates.length > 0 ? (
+                        <div className="ticket-detail-row ticket-detail-row--block">
+                          <div className="ticket-detail-label">Technician updates</div>
+                          <div className="ticket-detail-value">
+                            <ul className="ticket-detail-updates-list">
+                              {sortedTechnicianUpdates.map((u) => (
+                                <li className="ticket-detail-update-item" key={u.id || u.message}>
+                                  <div className="ticket-detail-update-meta">
+                                    {[u.updatedBy, u.timestamp ? formatDateTime(u.timestamp) : null]
+                                      .filter(Boolean)
+                                      .join(" · ")}
+                                  </div>
+                                  <p className="ticket-detail-update-message">{u.message || "—"}</p>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+                      ) : null}
                       {detailTicket.attachments && detailTicket.attachments.length > 0 ? (
                         <div className="ticket-detail-row ticket-detail-row--block">
                           <div className="ticket-detail-label">Requester attachments</div>
                           <div className="ticket-detail-value">
-                            <ul className="admin-ticket-attachment-list">
-                              {detailTicket.attachments.map((a) => (
-                                <li key={a.id || a.fileName}>{a.fileName || "File"}</li>
-                              ))}
+                            <ul className="ticket-detail-evidence-list">
+                              {detailTicket.attachments.map((att) => {
+                                const preview = requesterPreviewById[att.id];
+                                const name = att.fileName || "Attachment";
+                                const showImg = preview?.url && isImageAttachment(preview.mime, name);
+                                return (
+                                  <li className="ticket-detail-evidence-item" key={att.id || name}>
+                                    {showImg ? (
+                                      <a
+                                        className="ticket-detail-evidence-thumb-link"
+                                        href={preview.url}
+                                        rel="noreferrer"
+                                        target="_blank"
+                                      >
+                                        <img alt={name} className="ticket-detail-evidence-img" src={preview.url} />
+                                      </a>
+                                    ) : preview?.url ? (
+                                      <a className="ticket-detail-evidence-file" download={name} href={preview.url}>
+                                        {name}
+                                      </a>
+                                    ) : att.id ? (
+                                      <span className="ticket-detail-evidence-loading">{name}</span>
+                                    ) : (
+                                      <span className="ticket-detail-evidence-file">{name}</span>
+                                    )}
+                                  </li>
+                                );
+                              })}
                             </ul>
                           </div>
                         </div>
@@ -530,10 +745,34 @@ function ManageTicketsPage() {
                         <div className="ticket-detail-row ticket-detail-row--block">
                           <div className="ticket-detail-label">Technician evidence</div>
                           <div className="ticket-detail-value">
-                            <ul className="admin-ticket-attachment-list">
-                              {detailTicket.technicianAttachments.map((a) => (
-                                <li key={a.id || a.fileName}>{a.fileName || "File"}</li>
-                              ))}
+                            <ul className="ticket-detail-evidence-list">
+                              {detailTicket.technicianAttachments.map((att) => {
+                                const preview = technicianPreviewById[att.id];
+                                const name = att.fileName || "Attachment";
+                                const showImg = preview?.url && isImageAttachment(preview.mime, name);
+                                return (
+                                  <li className="ticket-detail-evidence-item" key={att.id || name}>
+                                    {showImg ? (
+                                      <a
+                                        className="ticket-detail-evidence-thumb-link"
+                                        href={preview.url}
+                                        rel="noreferrer"
+                                        target="_blank"
+                                      >
+                                        <img alt={name} className="ticket-detail-evidence-img" src={preview.url} />
+                                      </a>
+                                    ) : preview?.url ? (
+                                      <a className="ticket-detail-evidence-file" download={name} href={preview.url}>
+                                        {name}
+                                      </a>
+                                    ) : att.id ? (
+                                      <span className="ticket-detail-evidence-loading">{name}</span>
+                                    ) : (
+                                      <span className="ticket-detail-evidence-file">{name}</span>
+                                    )}
+                                  </li>
+                                );
+                              })}
                             </ul>
                           </div>
                         </div>
@@ -673,7 +912,7 @@ function ManageTicketsPage() {
               ) : null}
               {!assignListLoading && !assignListError && technicians.length === 0 ? (
                 <p className="supporting-text">
-                  No technicians available. Add technician accounts in the system first.
+                  No technicians available. Use <strong>Setup → Technicians</strong> on this page to add accounts.
                 </p>
               ) : null}
               <div className="modal-actions modal-actions--assign">
