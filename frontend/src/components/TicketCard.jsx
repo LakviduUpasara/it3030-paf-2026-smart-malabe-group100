@@ -26,6 +26,13 @@ function TicketCard({ ticket, variant = "list", className = "", onViewDetails, o
       normStatus === "WITHDRAWN"
         ? withdrawalSummary || "No withdrawal details recorded."
         : "";
+    const assignmentLocked = normStatus === "RESOLVED" || normStatus === "WITHDRAWN";
+    const assignmentLockedTitle =
+      normStatus === "RESOLVED"
+        ? "Resolved tickets cannot be reassigned."
+        : normStatus === "WITHDRAWN"
+          ? "Withdrawn tickets cannot be reassigned."
+          : "";
     return (
       <article className={`list-row align-start admin-ticket-card ${className}`.trim()}>
         <div className="admin-ticket-card-main">
@@ -77,9 +84,15 @@ function TicketCard({ ticket, variant = "list", className = "", onViewDetails, o
           >
             View details
           </Button>
-          <Button type="button" variant="primary" onClick={() => onAssigned?.(ticket)}>
-            {hasTechnician ? "Assigned" : "Assign"}
-          </Button>
+          {assignmentLocked ? (
+            <span className="admin-ticket-assign-locked" title={assignmentLockedTitle || undefined}>
+              Assignment closed
+            </span>
+          ) : (
+            <Button type="button" variant="primary" onClick={() => onAssigned?.(ticket)}>
+              {hasTechnician ? "Assigned" : "Assign"}
+            </Button>
+          )}
         </div>
       </article>
     );

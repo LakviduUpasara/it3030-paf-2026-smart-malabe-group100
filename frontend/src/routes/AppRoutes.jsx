@@ -114,6 +114,14 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/technician/resolved"
+        element={
+          <ProtectedRoute allowedRoles={[ROLES.TECHNICIAN]}>
+            <TechnicianDashboardPage />
+          </ProtectedRoute>
+        }
+      />
 
       <Route
         path="/admin"
@@ -161,6 +169,14 @@ function AppRoutes() {
         element={
           <AdminRoute>
             <Navigate replace to="/admin/tickets?section=categories" />
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/admin/technicians"
+        element={
+          <AdminRoute>
+            <Navigate replace to="/admin/tickets?section=technicians" />
           </AdminRoute>
         }
       />

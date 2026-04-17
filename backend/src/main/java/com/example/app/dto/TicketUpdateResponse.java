@@ -1,17 +1,9 @@
-package com.example.app.entity;
-
-import org.springframework.data.annotation.Id;
+package com.example.app.dto;
 
 import java.time.LocalDateTime;
 
-/**
- * Embedded subdocument within {@link Ticket#updates}.
- * {@code @Id} maps the Java {@code id} property to MongoDB's {@code _id} in each embedded document
- * (same pattern as {@link Attachment}).
- */
-public class TicketUpdate {
+public class TicketUpdateResponse {
 
-    @Id
     private String id;
     private String message;
     private String updatedBy;

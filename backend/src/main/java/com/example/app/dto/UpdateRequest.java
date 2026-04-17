@@ -1,14 +1,19 @@
 package com.example.app.dto;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+
 public class UpdateRequest {
 
+    @NotBlank(message = "Message is required.")
+    @Size(max = 8000, message = "Message is too long.")
     private String message;
-    private String updatedBy;
 
-    // getters & setters
-    public String getMessage() { return message; }
-    public void setMessage(String message) { this.message = message; }
+    public String getMessage() {
+        return message;
+    }
 
-    public String getUpdatedBy() { return updatedBy; }
-    public void setUpdatedBy(String updatedBy) { this.updatedBy = updatedBy; }
+    public void setMessage(String message) {
+        this.message = message;
+    }
 }

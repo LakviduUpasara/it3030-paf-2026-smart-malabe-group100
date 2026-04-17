@@ -20,6 +20,8 @@ public class TicketResponse {
     private String subCategoryId;
     private List<String> suggestions = new ArrayList<>();
     private List<AttachmentResponse> attachments = new ArrayList<>();
+    private List<AttachmentResponse> technicianAttachments = new ArrayList<>();
+    private List<TicketUpdateResponse> updates = new ArrayList<>();
 
     private String withdrawalReasonCode;
     private String withdrawalReasonNote;
@@ -69,6 +71,22 @@ public class TicketResponse {
 
     public void setAttachments(List<AttachmentResponse> attachments) {
         this.attachments = attachments != null ? attachments : new ArrayList<>();
+    }
+
+    public List<AttachmentResponse> getTechnicianAttachments() {
+        return technicianAttachments;
+    }
+
+    public void setTechnicianAttachments(List<AttachmentResponse> technicianAttachments) {
+        this.technicianAttachments = technicianAttachments != null ? technicianAttachments : new ArrayList<>();
+    }
+
+    public List<TicketUpdateResponse> getUpdates() {
+        return updates;
+    }
+
+    public void setUpdates(List<TicketUpdateResponse> updates) {
+        this.updates = updates != null ? updates : new ArrayList<>();
     }
 
     public String getWithdrawalReasonCode() { return withdrawalReasonCode; }

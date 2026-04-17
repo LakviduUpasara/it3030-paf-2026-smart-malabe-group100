@@ -159,6 +159,7 @@ function Navbar() {
             <NavLink
               key={item.path}
               className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}
+              end={item.path === "/technician"}
               to={item.path}
             >
               {item.label}
