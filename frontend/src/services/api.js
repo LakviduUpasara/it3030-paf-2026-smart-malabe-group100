@@ -1,8 +1,6 @@
 import axios from "axios";
 import { readStorageValue, STORAGE_KEYS } from "../utils/storage";
 
-const USER_STORAGE_KEY = "smart-campus-user";
-
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:18080/api/v1",
   timeout: 8000,
@@ -10,12 +8,15 @@ const api = axios.create({
 
 function readStoredSessionToken() {
   try {
-    const raw = localStorage.getItem(USER_STORAGE_KEY);
-    if (!raw) {
-      return null;
+    // AuthContext persists session token separately from the user profile.
+    const sessionToken = readStorageValue(STORAGE_KEYS.SESSION);
+    if (typeof sessionToken === "string" && sessionToken.trim()) {
+      return sessionToken.trim();
     }
-    const parsed = JSON.parse(raw);
-    return parsed?.token || parsed?.user?.token || null;
+
+    // Backward-compatibility fallback for older local storage layouts.
+    const legacyUser = readStorageValue(STORAGE_KEYS.USER);
+    return legacyUser?.token || legacyUser?.user?.token || null;
   } catch {
     return null;
   }

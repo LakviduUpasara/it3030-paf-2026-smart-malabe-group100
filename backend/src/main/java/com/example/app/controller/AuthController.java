@@ -60,6 +60,11 @@ public class AuthController {
         return ResponseEntity.ok(authService.loginWithApple(request));
     }
 
+    @PostMapping("/dev-login")
+    public ResponseEntity<AuthFlowResponse> devLogin(@Valid @RequestBody GoogleLoginRequest request) {
+        return ResponseEntity.ok(authService.devLogin(request.getEmail()));
+    }
+
     @PostMapping("/verify-2fa")
     public ResponseEntity<AuthFlowResponse> verifyTwoFactor(@Valid @RequestBody VerifyTwoFactorRequest request) {
         return ResponseEntity.ok(authService.verifyTwoFactor(request));
