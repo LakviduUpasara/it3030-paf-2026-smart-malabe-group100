@@ -5,7 +5,6 @@ import ResourceAvailabilityPage from './pages/ResourceAvailabilityPage';
 import CreateBookingPage from './pages/CreateBookingPage';
 import MyBookingsPage from './pages/MyBookingsPage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
-import './index.css';
 
 function App() {
   return (
