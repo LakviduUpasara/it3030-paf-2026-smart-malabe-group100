@@ -1,6 +1,4 @@
 import React, { useState } from 'react';
-import Card from '../components/Card';
-import Button from '../components/Button';
 import Notification from '../components/Notification';
 import { bookingAPI } from '../services/api';
 
@@ -29,8 +27,14 @@ const CreateBookingPage = () => {
     return new Date(y, m - 1, d, h, min, 0);
   };
 
-  const formatDateTimeWithOffset = (date) => {
-    return date.toISOString().slice(0, 19);
+  const formatDateTimeLocal = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
   };
 
   const handleSubmit = async (e) => {
@@ -50,8 +54,8 @@ const CreateBookingPage = () => {
       const payload = {
         resourceId: Number(formData.resourceId),
         userId: Number(formData.userId),
-        startTime: formatDateTimeWithOffset(safeStart),
-        endTime: formatDateTimeWithOffset(safeEnd),
+        startTime: formatDateTimeLocal(safeStart),
+        endTime: formatDateTimeLocal(safeEnd),
         purpose: formData.purpose,
       };
 
@@ -108,13 +112,14 @@ const CreateBookingPage = () => {
   };
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <h1 className="text-3xl font-bold mb-8 text-white">Create Booking</h1>
+    <div className="min-h-screen bg-gray-50 py-12 px-4">
+      <div className="bg-white rounded-xl shadow-md p-8 max-w-2xl mx-auto">
+        <h1 className="text-3xl font-bold mb-8 text-gray-900 text-center">Create Booking</h1>
 
-      <Card>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="mb-4">
-            <label className="block text-sm font-semibold mb-2 text-gray-300">Resource ID</label>
+          {/* Resource ID */}
+          <div>
+            <label className="text-gray-600 text-sm font-medium mb-1 block">Resource ID</label>
             <input
               type="number"
               name="resourceId"
@@ -122,12 +127,13 @@ const CreateBookingPage = () => {
               onChange={handleChange}
               placeholder="Enter resource ID"
               required
-              className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
-          <div className="mb-4">
-            <label className="block text-sm font-semibold mb-2 text-gray-300">User ID</label>
+          {/* User ID */}
+          <div>
+            <label className="text-gray-600 text-sm font-medium mb-1 block">User ID</label>
             <input
               type="number"
               name="userId"
@@ -135,36 +141,39 @@ const CreateBookingPage = () => {
               onChange={handleChange}
               placeholder="Enter user ID"
               required
-              className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
-          <div className="mb-4">
-            <label className="block text-sm font-semibold mb-2 text-gray-300">Start Time</label>
+          {/* Start Time */}
+          <div>
+            <label className="text-gray-600 text-sm font-medium mb-1 block">Start Time</label>
             <input
               type="datetime-local"
               name="startTime"
               value={formData.startTime}
               onChange={handleChange}
               required
-              className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:border-blue-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
-          <div className="mb-4">
-            <label className="block text-sm font-semibold mb-2 text-gray-300">End Time</label>
+          {/* End Time */}
+          <div>
+            <label className="text-gray-600 text-sm font-medium mb-1 block">End Time</label>
             <input
               type="datetime-local"
               name="endTime"
               value={formData.endTime}
               onChange={handleChange}
               required
-              className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:border-blue-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
-          <div className="mb-4">
-            <label className="block text-sm font-semibold mb-2 text-gray-300">Purpose</label>
+          {/* Purpose */}
+          <div>
+            <label className="text-gray-600 text-sm font-medium mb-1 block">Purpose</label>
             <textarea
               name="purpose"
               value={formData.purpose}
@@ -172,20 +181,29 @@ const CreateBookingPage = () => {
               placeholder="Enter booking purpose"
               required
               rows="4"
-              className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
             />
           </div>
 
-          <div className="flex gap-3 pt-4">
-            <Button type="submit" disabled={loading}>
+          {/* Button Group */}
+          <div className="flex gap-4 mt-6">
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-6 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white font-semibold rounded-lg transition-colors"
+            >
               {loading ? 'Creating...' : 'Create Booking'}
-            </Button>
-            <Button variant="secondary" onClick={() => window.history.back()}>
+            </button>
+            <button
+              type="button"
+              onClick={() => window.history.back()}
+              className="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded-lg transition-colors"
+            >
               Cancel
-            </Button>
+            </button>
           </div>
         </form>
-      </Card>
+      </div>
 
       {notification && (
         <Notification
