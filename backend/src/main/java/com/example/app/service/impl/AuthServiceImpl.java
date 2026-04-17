@@ -584,6 +584,11 @@ public class AuthServiceImpl implements AuthService {
         UserAccount reloaded = userAccountRepository
                 .findById(userAccount.getId())
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "Account not found."));
+
+        if (appProperties.isDeveloperMode()) {
+            return authenticatedResponse(reloaded, "Developer mode: 2FA method saved, second factor is disabled.");
+        }
+
         boolean enrollmentStep = request.getMethod() == TwoFactorMethod.AUTHENTICATOR_APP;
         return buildTwoFactorChallenge(reloaded, enrollmentStep);
     }
