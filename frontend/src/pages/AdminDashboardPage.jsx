@@ -10,6 +10,9 @@ const AdminDashboardPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [notification, setNotification] = useState(null);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [selectedBookingId, setSelectedBookingId] = useState(null);
+  const [rejectionReason, setRejectionReason] = useState('');
 
   useEffect(() => {
     fetchAllBookings();
@@ -46,14 +49,35 @@ const AdminDashboardPage = () => {
     }
   };
 
-  const handleReject = async (bookingId) => {
+  const handleOpenRejectModal = (bookingId) => {
+    setSelectedBookingId(bookingId);
+    setRejectionReason('');
+    setShowRejectModal(true);
+  };
+
+  const handleCloseRejectModal = () => {
+    setShowRejectModal(false);
+    setSelectedBookingId(null);
+    setRejectionReason('');
+  };
+
+  const handleConfirmReject = async () => {
+    if (!rejectionReason.trim()) {
+      setNotification({ type: 'warning', message: 'Please enter a rejection reason' });
+      return;
+    }
+
     try {
-      await bookingAPI.rejectBooking(bookingId);
+      await bookingAPI.rejectBooking(selectedBookingId, { reason: rejectionReason });
       setNotification({ type: 'success', message: 'Booking rejected' });
+      handleCloseRejectModal();
       fetchAllBookings();
     } catch (error) {
       console.error('Error rejecting booking:', error);
-      setNotification({ type: 'error', message: 'Failed to reject booking' });
+      setNotification({
+        type: 'error',
+        message: error.response?.data?.message || 'Failed to reject booking',
+      });
     }
   };
 
@@ -171,7 +195,7 @@ const AdminDashboardPage = () => {
                           <FiCheckCircle className="inline mr-1" /> Approve
                         </button>
                         <button
-                          onClick={() => handleReject(booking.id)}
+                          onClick={() => handleOpenRejectModal(booking.id)}
                           className="px-3 py-1 rounded text-sm font-semibold bg-red-500 hover:bg-red-600 text-white transition-colors"
                         >
                           <FiXCircle className="inline mr-1" /> Reject
@@ -187,6 +211,38 @@ const AdminDashboardPage = () => {
             </tbody>
           </table>
         </Card>
+      )}
+
+      {/* Reject Modal */}
+      {showRejectModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg p-6 max-w-md w-full mx-4">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Reject Booking</h2>
+            
+            <textarea
+              value={rejectionReason}
+              onChange={(e) => setRejectionReason(e.target.value)}
+              placeholder="Enter rejection reason..."
+              rows="5"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+            />
+            
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={handleConfirmReject}
+                className="flex-1 px-4 py-2 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-lg transition-colors"
+              >
+                Confirm Reject
+              </button>
+              <button
+                onClick={handleCloseRejectModal}
+                className="flex-1 px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-700 font-semibold rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {notification && (
