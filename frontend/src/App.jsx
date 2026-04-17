@@ -12,6 +12,7 @@ function AppLayout() {
     isAuthenticated &&
     (location.pathname === "/tickets" ||
       location.pathname === "/technician" ||
+      location.pathname === "/technician/resolved" ||
       location.pathname === "/admin/tickets");
   const isAdminTicketsPage = isAuthenticated && location.pathname === "/admin/tickets";
 

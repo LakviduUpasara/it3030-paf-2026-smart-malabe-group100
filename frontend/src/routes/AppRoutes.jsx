@@ -114,6 +114,14 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/technician/resolved"
+        element={
+          <ProtectedRoute allowedRoles={[ROLES.TECHNICIAN]}>
+            <TechnicianDashboardPage />
+          </ProtectedRoute>
+        }
+      />
 
       <Route
         path="/admin"

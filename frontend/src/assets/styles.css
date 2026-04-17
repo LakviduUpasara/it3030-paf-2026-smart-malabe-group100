@@ -3967,6 +3967,15 @@ a {
   gap: 1.25rem;
 }
 
+/* Shared with My Tickets filter styles (my-tickets-filters) */
+.technician-page-card .technician-filters {
+  margin-bottom: 0;
+}
+
+.technician-filter-empty {
+  margin: 0;
+}
+
 .technician-ticket-stack {
   display: flex;
   flex-direction: column;
@@ -4088,6 +4097,10 @@ a {
   color: var(--muted);
 }
 
+.technician-ticket-resolved-reopen {
+  margin-top: 0.75rem;
+}
+
 .technician-ticket-section {
   padding: 1rem 1.25rem 1.15rem;
   border-top: 1px solid var(--border);
@@ -4114,6 +4127,10 @@ a {
   flex-wrap: wrap;
   align-items: flex-end;
   gap: 1rem;
+}
+
+.technician-ticket-toolbar--single {
+  align-items: center;
 }
 
 .technician-ticket-toolbar-buttons {
@@ -4300,7 +4317,8 @@ a {
 
 .technician-table-actions {
   display: inline-flex;
-  gap: 0.4rem;
+  flex-wrap: wrap;
+  gap: 5rem;
   align-items: center;
   justify-content: flex-end;
 }
@@ -4313,16 +4331,31 @@ a {
   margin-top: 1.5rem;
 }
 
-.technician-select--sm {
-  min-height: 2.1rem;
-  font-size: 0.9rem;
+.technician-modal-detail-body {
+  padding-top: 0.75rem;
 }
 
-@media (max-width: 768px) {
-  .technician-table th:nth-child(2),
-  .technician-table td:nth-child(2) {
-    display: none;
-  }
+.technician-modal-detail-body .technician-ticket-panel {
+  margin: 0;
+  max-width: none;
+}
+
+.technician-evidence-block {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(15, 40, 67, 0.1);
+}
+
+.technician-evidence-heading {
+  margin-bottom: 0.35rem;
+}
+
+.technician-evidence-hint {
+  margin-bottom: 0.65rem;
+}
+
+.technician-evidence-list {
+  margin: 0;
 }
 
 @media (max-width: 640px) {

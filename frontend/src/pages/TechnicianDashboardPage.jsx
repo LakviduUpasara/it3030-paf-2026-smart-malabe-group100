@@ -1,19 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import Button from "../components/Button";
 import Card from "../components/Card";
 import LoadingSpinner from "../components/LoadingSpinner";
 import { useAuth } from "../hooks/useAuth";
-import { addUpdate, getMyTickets, updateStatus, uploadFile } from "../services/ticketService";
+import { addUpdate, fetchAttachmentPreview, getMyTickets, updateStatus, uploadFile } from "../services/ticketService";
 import { toToken } from "../utils/formatters";
 import { parseTicketDescription } from "../utils/ticketDescription";
 import { ROLES } from "../utils/roleUtils";
-
-/** Backend and admin views use RESOLVED (not CLOSED). */
-const STATUS_OPTIONS = [
-  { value: "OPEN", label: "Open" },
-  { value: "IN_PROGRESS", label: "In progress" },
-  { value: "RESOLVED", label: "Resolved" },
-];
 
 function normalizeStatusForPicker(status) {
   const raw = String(status || "OPEN")
@@ -23,6 +17,21 @@ function normalizeStatusForPicker(status) {
   if (raw === "CLOSED") return "RESOLVED";
   if (raw === "OPEN" || raw === "IN_PROGRESS" || raw === "RESOLVED") return raw;
   return "OPEN";
+}
+
+function normalizeAttachmentFromApi(att) {
+  if (att == null || typeof att !== "object") return null;
+  const rawId = att.id ?? att._id;
+  return {
+    ...att,
+    id: rawId != null && rawId !== "" ? String(rawId) : null,
+    fileName: att.fileName ?? att.file_name ?? "",
+  };
+}
+
+function isImageEvidence(mime, fileName) {
+  if (mime && String(mime).startsWith("image/")) return true;
+  return /\.(png|jpe?g|gif|webp|bmp)$/i.test(fileName || "");
 }
 
 function formatTicketStatusLabel(status) {
@@ -41,22 +50,89 @@ function formatTicketStatusLabel(status) {
 
 function TechnicianTicketPanel({
   ticket,
-  statusDraftById,
-  setStatusDraftById,
   messagesById,
   setMessagesById,
   filesById,
   setFilesById,
   pendingKey,
-  onApplyStatus,
   onMarkResolved,
+  onReopenInProgress,
   onAddUpdate,
   onUploadFile,
+  notesFocusSerial = 0,
 }) {
+  const notesSectionRef = useRef(null);
+
   const parsed = parseTicketDescription(ticket.description);
   const isResolved = normalizeStatusForPicker(ticket.status) === "RESOLVED";
   const creator = ticket.createdByUsername?.trim();
   const statusToken = toToken(ticket.status || "unknown");
+
+  const normalizedAttachments = useMemo(() => {
+    const raw = ticket?.attachments;
+    const list = Array.isArray(raw) ? raw : [];
+    return list.map(normalizeAttachmentFromApi).filter(Boolean);
+  }, [ticket?.attachments]);
+
+  const evidenceAttachmentKey = useMemo(
+    () => normalizedAttachments.map((a) => a?.id).join("|"),
+    [normalizedAttachments],
+  );
+
+  const [evidencePreviewById, setEvidencePreviewById] = useState({});
+
+  useEffect(() => {
+    if (!ticket?.id || normalizedAttachments.length === 0) {
+      setEvidencePreviewById((prev) => {
+        Object.values(prev).forEach((entry) => {
+          if (entry?.url) URL.revokeObjectURL(entry.url);
+        });
+        return {};
+      });
+      return undefined;
+    }
+
+    let cancelled = false;
+    async function loadEvidence() {
+      const next = {};
+      for (const att of normalizedAttachments) {
+        if (!att?.id) continue;
+        try {
+          const preview = await fetchAttachmentPreview(ticket.id, att.id);
+          if (!cancelled) {
+            next[att.id] = { ...preview, fileName: att.fileName || "" };
+          }
+        } catch {
+          /* skip failed preview */
+        }
+      }
+      if (!cancelled) {
+        setEvidencePreviewById((prev) => {
+          Object.values(prev).forEach((entry) => {
+            if (entry?.url) URL.revokeObjectURL(entry.url);
+          });
+          return next;
+        });
+      }
+    }
+
+    loadEvidence();
+    return () => {
+      cancelled = true;
+    };
+  }, [ticket.id, evidenceAttachmentKey]);
+
+  useEffect(() => {
+    if (!notesFocusSerial || !ticket?.id) return undefined;
+    const timer = window.setTimeout(() => {
+      notesSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      const ta = notesSectionRef.current?.querySelector("textarea");
+      if (ta && typeof ta.focus === "function") {
+        ta.focus();
+      }
+    }, 200);
+    return () => window.clearTimeout(timer);
+  }, [notesFocusSerial, ticket?.id]);
 
   return (
     <article className="technician-ticket-panel">
@@ -110,6 +186,44 @@ function TechnicianTicketPanel({
             </dd>
           </div>
         </dl>
+
+        {normalizedAttachments.length > 0 ? (
+          <div className="technician-evidence-block" aria-label="Requester evidence">
+            <h4 className="technician-ticket-section-title technician-evidence-heading">Evidence</h4>
+            <p className="technician-ticket-section-hint technician-evidence-hint">
+              Photos or files submitted with this request.
+            </p>
+            <ul className="ticket-detail-evidence-list technician-evidence-list">
+              {normalizedAttachments.map((att) => {
+                const preview = evidencePreviewById[att.id];
+                const name = att.fileName || "Attachment";
+                const showImg = preview?.url && isImageEvidence(preview.mime, name);
+                return (
+                  <li className="ticket-detail-evidence-item" key={att.id || name}>
+                    {showImg ? (
+                      <a
+                        className="ticket-detail-evidence-thumb-link"
+                        href={preview.url}
+                        rel="noreferrer"
+                        target="_blank"
+                      >
+                        <img alt={name} className="ticket-detail-evidence-img" src={preview.url} />
+                      </a>
+                    ) : preview?.url ? (
+                      <a className="ticket-detail-evidence-file" download={name} href={preview.url}>
+                        {name}
+                      </a>
+                    ) : att.id ? (
+                      <span className="ticket-detail-evidence-loading">{name}</span>
+                    ) : (
+                      <span className="ticket-detail-evidence-file">{name}</span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ) : null}
       </div>
 
       {isResolved ? (
@@ -119,60 +233,42 @@ function TechnicianTicketPanel({
             This ticket is complete. Change status to <em>In progress</em> if you need to add more
             work, notes, or attachments.
           </p>
+          {typeof onReopenInProgress === "function" ? (
+            <div className="technician-ticket-toolbar technician-ticket-toolbar--single technician-ticket-resolved-reopen">
+              <Button
+                type="button"
+                onClick={() => onReopenInProgress(ticket.id)}
+                disabled={pendingKey === `${ticket.id}-reopen`}
+              >
+                Mark in progress
+              </Button>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
-      <section className="technician-ticket-section" aria-labelledby={`tech-status-${ticket.id}`}>
-        <h4 id={`tech-status-${ticket.id}`} className="technician-ticket-section-title">
-          Status
-        </h4>
-        <p className="technician-ticket-section-hint">
-          Update when you start work or finish the request.
-        </p>
-        <div className="technician-ticket-toolbar">
-          <label className="technician-field">
-            <span className="technician-field-label">Set status</span>
-            <select
-              aria-label="Ticket status"
-              className="technician-select"
-              value={statusDraftById[ticket.id] ?? "OPEN"}
-              onChange={(e) =>
-                setStatusDraftById((prev) => ({
-                  ...prev,
-                  [ticket.id]: e.target.value,
-                }))
-              }
-            >
-              {STATUS_OPTIONS.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="technician-ticket-toolbar-buttons">
+      {!isResolved ? (
+        <section className="technician-ticket-section" aria-labelledby={`tech-status-${ticket.id}`}>
+          <h4 id={`tech-status-${ticket.id}`} className="technician-ticket-section-title">
+            Status
+          </h4>
+          <p className="technician-ticket-section-hint">
+            When the work is finished, mark this ticket as resolved.
+          </p>
+          <div className="technician-ticket-toolbar technician-ticket-toolbar--single">
             <Button
               type="button"
-              onClick={() => onApplyStatus(ticket.id)}
-              disabled={pendingKey === `${ticket.id}-status`}
+              onClick={() => onMarkResolved(ticket.id)}
+              disabled={pendingKey === `${ticket.id}-resolved`}
             >
-              Apply status
+              Mark as resolved
             </Button>
-            {!isResolved ? (
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => onMarkResolved(ticket.id)}
-                disabled={pendingKey === `${ticket.id}-resolved`}
-              >
-                Mark as resolved
-              </Button>
-            ) : null}
           </div>
-        </div>
-      </section>
+        </section>
+      ) : null}
 
       <section
+        ref={notesSectionRef}
         className={`technician-ticket-section${isResolved ? " technician-ticket-section--muted" : ""}`}
         aria-labelledby={`tech-notes-${ticket.id}`}
       >
@@ -254,15 +350,42 @@ function TechnicianTicketPanel({
 
 function TechnicianDashboardPage() {
   const { user } = useAuth();
+  const location = useLocation();
+  const isResolvedView = location.pathname === "/technician/resolved";
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [feedback, setFeedback] = useState({ type: "", text: "" });
   const [pendingKey, setPendingKey] = useState(null);
-  const [statusDraftById, setStatusDraftById] = useState({});
   const [messagesById, setMessagesById] = useState({});
   const [filesById, setFilesById] = useState({});
   const [activeTicketId, setActiveTicketId] = useState(null);
+  /** Increment when opening the modal via "Add comment" so the notes section scrolls into view. */
+  const [notesFocusSerial, setNotesFocusSerial] = useState(0);
+  const [filterQuery, setFilterQuery] = useState("");
+  const [filterPriority, setFilterPriority] = useState("");
+
+  const closeDetailModal = () => {
+    setActiveTicketId(null);
+  };
+
+  useEffect(() => {
+    if (!activeTicketId) {
+      return undefined;
+    }
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKeyDown = (event) => {
+      if (event.key === "Escape" && pendingKey == null) {
+        closeDetailModal();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [activeTicketId, pendingKey]);
 
   useEffect(() => {
     let active = true;
@@ -284,12 +407,6 @@ function TechnicianDashboardPage() {
             );
           }
           setTickets(list);
-
-          const draft = {};
-          list.forEach((t) => {
-            draft[t.id] = normalizeStatusForPicker(t.status);
-          });
-          setStatusDraftById(draft);
         }
       } catch (err) {
         if (active) {
@@ -304,22 +421,17 @@ function TechnicianDashboardPage() {
     return () => (active = false);
   }, [user?.id, user?.role]);
 
-  const handleApplyStatus = async (ticketId) => {
-    const nextStatus = statusDraftById[ticketId];
-
-    setPendingKey(`${ticketId}-status`);
+  const handleMarkResolved = async (ticketId) => {
+    setPendingKey(`${ticketId}-resolved`);
     setFeedback({});
 
     try {
-      await updateStatus(ticketId, nextStatus);
-
+      await updateStatus(ticketId, "RESOLVED");
       setTickets((prev) =>
-        prev.map((t) =>
-          t.id === ticketId ? { ...t, status: nextStatus } : t,
-        ),
+        prev.map((t) => (t.id === ticketId ? { ...t, status: "RESOLVED" } : t)),
       );
-
-      setFeedback({ type: "success", text: "Status updated." });
+      setFeedback({ type: "success", text: "Ticket marked as resolved." });
+      setActiveTicketId(null);
     } catch (err) {
       setFeedback({ type: "error", text: err.message });
     } finally {
@@ -327,17 +439,17 @@ function TechnicianDashboardPage() {
     }
   };
 
-  const handleMarkResolved = async (ticketId) => {
-    setPendingKey(`${ticketId}-resolved`);
+  const handleReopenInProgress = async (ticketId) => {
+    setPendingKey(`${ticketId}-reopen`);
     setFeedback({});
 
     try {
-      await updateStatus(ticketId, "RESOLVED");
-      setStatusDraftById((prev) => ({ ...prev, [ticketId]: "RESOLVED" }));
+      await updateStatus(ticketId, "IN_PROGRESS");
       setTickets((prev) =>
-        prev.map((t) => (t.id === ticketId ? { ...t, status: "RESOLVED" } : t)),
+        prev.map((t) => (t.id === ticketId ? { ...t, status: "IN_PROGRESS" } : t)),
       );
-      setFeedback({ type: "success", text: "Ticket marked as resolved." });
+      setFeedback({ type: "success", text: "Ticket moved back to In progress." });
+      setActiveTicketId(null);
     } catch (err) {
       setFeedback({ type: "error", text: err.message });
     } finally {
@@ -391,13 +503,57 @@ function TechnicianDashboardPage() {
     }
   };
 
+  const baseVisibleTickets = useMemo(() => {
+    return tickets.filter((t) => {
+      const resolved = normalizeStatusForPicker(t.status) === "RESOLVED";
+      return isResolvedView ? resolved : !resolved;
+    });
+  }, [tickets, isResolvedView]);
+
+  const filteredTickets = useMemo(() => {
+    const q = filterQuery.trim().toLowerCase();
+    return baseVisibleTickets.filter((ticket) => {
+      const parsed = parseTicketDescription(ticket.description);
+      const priority = (parsed.priority || "Normal").trim();
+      if (filterPriority && priority.toLowerCase() !== filterPriority.toLowerCase()) {
+        return false;
+      }
+      if (q) {
+        const title = (ticket.title || "").toLowerCase();
+        const id = String(ticket.id || "").toLowerCase();
+        const content = (parsed.content || "").toLowerCase();
+        if (!title.includes(q) && !id.includes(q) && !content.includes(q)) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [baseVisibleTickets, filterQuery, filterPriority]);
+
+  const hasActiveTechnicianFilters =
+    Boolean(filterQuery.trim()) || Boolean(filterPriority);
+
+  const clearTechnicianFilters = () => {
+    setFilterQuery("");
+    setFilterPriority("");
+  };
+
   if (loading) return <LoadingSpinner label="Loading your tickets…" />;
 
+  const detailTicket = activeTicketId
+    ? tickets.find((t) => t.id === activeTicketId)
+    : null;
+
   return (
+    <>
     <div className="technician-page">
       <Card
-        title="Technician Dashboard"
-        subtitle="Tickets assigned to you. Use the table to quickly scan and update status."
+        title={isResolvedView ? "Resolved tickets" : "Technician Dashboard"}
+        subtitle={
+          isResolvedView
+            ? "Work you have marked complete. Open a row for full details."
+            : "Active assignments. Mark tickets resolved when finished—they move to the Resolved page."
+        }
         className="technician-page-card"
       >
         {error ? <p className="alert alert-error">{error}</p> : null}
@@ -417,130 +573,207 @@ function TechnicianDashboardPage() {
               When an administrator assigns a ticket to you, it will show up here.
             </p>
           </div>
+        ) : baseVisibleTickets.length === 0 ? (
+          <div className="technician-empty">
+            <p className="technician-empty-title">
+              {isResolvedView ? "No resolved tickets yet" : "Nothing in your active queue"}
+            </p>
+            <p className="technician-empty-text">
+              {isResolvedView
+                ? "When you mark a ticket as resolved from Technician Desk, it will appear here."
+                : "All of your assigned tickets are resolved. Open the Resolved tab to review them."}
+            </p>
+          </div>
         ) : (
-          <div className="technician-table-wrapper" role="region" aria-label="Assigned tickets">
-            <table className="technician-table">
-              <thead>
-                <tr>
-                  <th scope="col">Ticket</th>
-                  <th scope="col">Location</th>
-                  <th scope="col">Priority</th>
-                  <th scope="col">Status</th>
-                  <th scope="col" className="technician-table-actions-header">
-                    Quick actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {tickets.map((ticket) => {
-                  const parsed = parseTicketDescription(ticket.description);
-                  const isResolved = normalizeStatusForPicker(ticket.status) === "RESOLVED";
-                  const statusToken = toToken(ticket.status || "unknown");
-                  return (
-                    <tr key={ticket.id}>
-                      <td>
-                        <div className="technician-table-title">
-                          <span className="technician-table-ticket-title">
-                            {ticket.title?.trim() || "Untitled request"}
-                          </span>
-                          <span className="technician-table-ticket-id">
-                            ID: {ticket.id ?? "—"}
-                          </span>
-                        </div>
-                      </td>
-                      <td>{parsed.location?.trim() || "—"}</td>
-                      <td>{parsed.priority?.trim() || "Normal"}</td>
-                      <td>
-                        <span
-                          className={`status-badge ${statusToken}`}
-                          title={formatTicketStatusLabel(ticket.status)}
-                        >
-                          {formatTicketStatusLabel(ticket.status)}
-                        </span>
-                      </td>
-                      <td className="technician-table-actions-cell">
-                        <div className="technician-table-actions">
-                          <select
-                            aria-label="Ticket status"
-                            className="technician-select technician-select--sm"
-                            value={statusDraftById[ticket.id] ?? "OPEN"}
-                            onChange={(e) =>
-                              setStatusDraftById((prev) => ({
-                                ...prev,
-                                [ticket.id]: e.target.value,
-                              }))
-                            }
-                          >
-                            {STATUS_OPTIONS.map((s) => (
-                              <option key={s.value} value={s.value}>
-                                {s.label}
-                              </option>
-                            ))}
-                          </select>
-                          <Button
-                            type="button"
-                            onClick={() => handleApplyStatus(ticket.id)}
-                            disabled={pendingKey === `${ticket.id}-status`}
-                          >
-                            Apply
-                          </Button>
-                          {!isResolved ? (
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              onClick={() => handleMarkResolved(ticket.id)}
-                              disabled={pendingKey === `${ticket.id}-resolved`}
-                            >
-                              Mark resolved
-                            </Button>
-                          ) : null}
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            className="technician-see-details-button"
-                            onClick={() =>
-                              setActiveTicketId((prev) =>
-                                prev === ticket.id ? null : ticket.id,
-                              )
-                            }
-                          >
-                            {activeTicketId === ticket.id ? "Hide details" : "See details"}
-                          </Button>
-                        </div>
-                      </td>
+          <>
+            <div className="technician-filters my-tickets-filters" aria-label="Search and filter tickets">
+              <div className="my-tickets-filters-search-row">
+                <label className="my-tickets-filters-search">
+                  <span>Search</span>
+                  <input
+                    autoComplete="off"
+                    type="search"
+                    placeholder="Title, description text, or ticket ID"
+                    value={filterQuery}
+                    onChange={(e) => setFilterQuery(e.target.value)}
+                  />
+                </label>
+              </div>
+              <div className="my-tickets-filters-controls">
+                <label className="my-tickets-filter-field">
+                  <span>Priority</span>
+                  <select
+                    value={filterPriority}
+                    onChange={(e) => setFilterPriority(e.target.value)}
+                  >
+                    <option value="">All priorities</option>
+                    <option value="Low">Low</option>
+                    <option value="Normal">Normal</option>
+                    <option value="High">High</option>
+                    <option value="Critical">Critical</option>
+                  </select>
+                </label>
+                {hasActiveTechnicianFilters ? (
+                  <Button type="button" variant="ghost" onClick={clearTechnicianFilters}>
+                    Clear filters
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+
+            {filteredTickets.length === 0 ? (
+              <p className="supporting-text technician-filter-empty" role="status">
+                No tickets match your search or filters. Try adjusting or{" "}
+                <button className="link-button" type="button" onClick={clearTechnicianFilters}>
+                  clear filters
+                </button>
+                .
+              </p>
+            ) : (
+              <div
+                className="technician-table-wrapper"
+                role="region"
+                aria-label={isResolvedView ? "Resolved tickets" : "Active assigned tickets"}
+              >
+                <table className="technician-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Ticket</th>
+                      <th scope="col">Priority</th>
+                      <th scope="col">Status</th>
+                      <th scope="col" className="technician-table-actions-header">
+                        Quick actions
+                      </th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-        {activeTicketId && (
-          <div className="technician-details-panel">
-            {(() => {
-              const activeTicket = tickets.find((t) => t.id === activeTicketId);
-              if (!activeTicket) return null;
-              return (
-                <TechnicianTicketPanel
-                  ticket={activeTicket}
-                  statusDraftById={statusDraftById}
-                  setStatusDraftById={setStatusDraftById}
-                  messagesById={messagesById}
-                  setMessagesById={setMessagesById}
-                  filesById={filesById}
-                  setFilesById={setFilesById}
-                  pendingKey={pendingKey}
-                  onApplyStatus={handleApplyStatus}
-                  onMarkResolved={handleMarkResolved}
-                  onAddUpdate={handleAddUpdate}
-                  onUploadFile={handleUploadAttachment}
-                />
-              );
-            })()}
-          </div>
+                  </thead>
+                  <tbody>
+                    {filteredTickets.map((ticket) => {
+                      const parsed = parseTicketDescription(ticket.description);
+                      const isResolved = normalizeStatusForPicker(ticket.status) === "RESOLVED";
+                      const statusToken = toToken(ticket.status || "unknown");
+                      return (
+                        <tr key={ticket.id}>
+                          <td>
+                            <div className="technician-table-title">
+                              <span className="technician-table-ticket-title">
+                                {ticket.title?.trim() || "Untitled request"}
+                              </span>
+                              <span className="technician-table-ticket-id">
+                                ID: {ticket.id ?? "—"}
+                              </span>
+                            </div>
+                          </td>
+                          <td>{parsed.priority?.trim() || "Normal"}</td>
+                          <td>
+                            <span
+                              className={`status-badge ${statusToken}`}
+                              title={formatTicketStatusLabel(ticket.status)}
+                            >
+                              {formatTicketStatusLabel(ticket.status)}
+                            </span>
+                          </td>
+                          <td className="technician-table-actions-cell">
+                            <div className="technician-table-actions">
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                className="technician-see-details-button"
+                                onClick={() => {
+                                  setActiveTicketId(ticket.id);
+                                }}
+                              >
+                                See details
+                              </Button>
+                              {isResolvedView ? (
+                                <Button
+                                  type="button"
+                                  onClick={() => handleReopenInProgress(ticket.id)}
+                                  disabled={pendingKey === `${ticket.id}-reopen`}
+                                >
+                                  Mark in progress
+                                </Button>
+                              ) : null}
+                              {!isResolvedView && !isResolved ? (
+                                <Button
+                                  type="button"
+                                  onClick={() => handleMarkResolved(ticket.id)}
+                                  disabled={pendingKey === `${ticket.id}-resolved`}
+                                >
+                                  Mark as resolved
+                                </Button>
+                              ) : null}
+                              {!isResolvedView && !isResolved ? (
+                                <Button
+                                  type="button"
+                                  variant="secondary"
+                                  onClick={() => {
+                                    setActiveTicketId(ticket.id);
+                                    setNotesFocusSerial((n) => n + 1);
+                                  }}
+                                >
+                                  Add comment
+                                </Button>
+                              ) : null}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
         )}
       </Card>
     </div>
+
+    {detailTicket ? (
+      <div
+        className="modal-backdrop"
+        onClick={() => {
+          if (pendingKey == null) closeDetailModal();
+        }}
+        role="presentation"
+      >
+        <div
+          className="modal-panel modal-panel--ticket-detail"
+          onClick={(event) => event.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="technician-detail-title"
+        >
+          <div className="modal-header">
+            <h3 id="technician-detail-title">Ticket details</h3>
+            <button
+              type="button"
+              className="modal-close"
+              disabled={pendingKey != null}
+              onClick={closeDetailModal}
+              aria-label="Close"
+            >
+              ×
+            </button>
+          </div>
+          <div className="modal-content technician-modal-detail-body">
+            <TechnicianTicketPanel
+              ticket={detailTicket}
+              messagesById={messagesById}
+              setMessagesById={setMessagesById}
+              filesById={filesById}
+              setFilesById={setFilesById}
+              pendingKey={pendingKey}
+              notesFocusSerial={notesFocusSerial}
+              onMarkResolved={handleMarkResolved}
+              onReopenInProgress={handleReopenInProgress}
+              onAddUpdate={handleAddUpdate}
+              onUploadFile={handleUploadAttachment}
+            />
+          </div>
+        </div>
+      </div>
+    ) : null}
+    </>
   );
 }
 
