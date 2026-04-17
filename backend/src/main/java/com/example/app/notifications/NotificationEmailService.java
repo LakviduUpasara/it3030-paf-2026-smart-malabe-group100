@@ -42,6 +42,7 @@ public class NotificationEmailService {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Email is not configured (no mail host)");
         }
         String from = appProperties.getNotifications().getEmail().getFromAddress();
+        log.info("Sending notification email from {} to {} recipient(s)", from, clean.size());
         try {
             MimeMessage message = sender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
@@ -50,9 +51,9 @@ public class NotificationEmailService {
             helper.setSubject(subject != null ? subject : "Notification");
             helper.setText(htmlBody != null ? htmlBody : "", true);
             sender.send(message);
-            log.info("Sent notification email to {} recipient(s)", clean.size());
+            log.info("Notification email sent successfully to {} recipient(s)", clean.size());
         } catch (Exception e) {
-            log.warn("Failed to send notification email: {}", e.getMessage());
+            log.error("Failed to send notification email: {}", e.getMessage(), e);
             throw new ApiException(HttpStatus.BAD_REQUEST, "Failed to send email: " + e.getMessage());
         }
     }

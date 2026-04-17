@@ -8,6 +8,7 @@ import com.example.app.dto.auth.GoogleSignupSessionResponse;
 import com.example.app.dto.auth.LoginRequest;
 import com.example.app.dto.auth.PendingApprovalResponse;
 import com.example.app.dto.auth.RegisterRequest;
+import com.example.app.dto.auth.ResendEmailOtpRequest;
 import com.example.app.dto.auth.SelectFirstLoginTwoFactorRequest;
 import com.example.app.dto.auth.VerifyTwoFactorRequest;
 import com.example.app.security.AuthenticatedUser;
@@ -30,6 +31,11 @@ public interface AuthService {
     AuthFlowResponse loginWithApple(GoogleLoginRequest request);
 
     AuthFlowResponse verifyTwoFactor(VerifyTwoFactorRequest request);
+
+    /**
+     * Sends a new email OTP for an existing challenge (rate-limited). Public — same as verify-2fa.
+     */
+    AuthFlowResponse resendEmailOtp(ResendEmailOtpRequest request);
 
     AuthFlowResponse changeFirstLoginPassword(ChangeFirstLoginPasswordRequest request, AuthenticatedUser user, String authorizationHeader);
 

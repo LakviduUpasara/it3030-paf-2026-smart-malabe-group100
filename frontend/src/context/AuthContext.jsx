@@ -182,6 +182,12 @@ export function AuthProvider({ children }) {
       "Unable to verify the second-factor code.",
     );
 
+  const resendEmailOtp = async (payload) =>
+    performAuthAction(
+      () => authService.resendEmailOtp(payload),
+      "Unable to resend the verification code.",
+    );
+
   const changeFirstLoginPassword = async (payload) =>
     performAuthAction(
       () => authService.changeFirstLoginPassword(payload),
@@ -260,6 +266,7 @@ export function AuthProvider({ children }) {
     loginWithGoogle,
     loginWithApple,
     verifyTwoFactor,
+    resendEmailOtp,
     changeFirstLoginPassword,
     selectFirstLoginTwoFactorMethod,
     refreshPendingApproval,

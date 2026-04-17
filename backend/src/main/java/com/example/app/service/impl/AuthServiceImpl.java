@@ -11,6 +11,7 @@ import com.example.app.dto.auth.GoogleSignupSessionResponse;
 import com.example.app.dto.auth.LoginRequest;
 import com.example.app.dto.auth.PendingApprovalResponse;
 import com.example.app.dto.auth.RegisterRequest;
+import com.example.app.dto.auth.ResendEmailOtpRequest;
 import com.example.app.dto.auth.TwoFactorChallengeResponse;
 import com.example.app.dto.auth.VerifyTwoFactorRequest;
 import com.example.app.entity.GoogleSignupSession;
@@ -74,10 +75,13 @@ public class AuthServiceImpl implements AuthService {
     @Value("${app.auth.challenge-minutes:10}")
     private long challengeMinutes;
 
+    @Value("${app.auth.otp-resend-cooldown-seconds:60}")
+    private long otpResendCooldownSeconds;
+
     @Value("${app.auth.first-login-setup-hours:4}")
     private long firstLoginSetupHours;
 
-    @Value("${app.auth.dev-expose-otp:true}")
+    @Value("${app.auth.dev-expose-otp:false}")
     private boolean exposeDevelopmentOtp;
 
     @Value("${app.auth.google.signup-session-minutes:15}")
@@ -341,8 +345,10 @@ public class AuthServiceImpl implements AuthService {
 
         if (challenge.getMethod() == TwoFactorMethod.EMAIL_OTP) {
             if (!normalizedCode.equals(challenge.getOtpCode())) {
+                log.warn("Invalid email OTP for challenge {} (user {})", challenge.getId(), challenge.getUserId());
                 throw new ApiException(HttpStatus.BAD_REQUEST, "The email verification code is incorrect.");
             }
+            log.info("Email OTP verified for user {}", userAccount.getId());
         } else {
             int verificationCode;
             try {
@@ -367,6 +373,66 @@ public class AuthServiceImpl implements AuthService {
         twoFactorChallengeRepository.save(challenge);
 
         return authenticatedResponse(userAccount, "2-step verification completed successfully.");
+    }
+
+    @Override
+    public AuthFlowResponse resendEmailOtp(ResendEmailOtpRequest request) {
+        TwoFactorChallenge challenge = twoFactorChallengeRepository
+                .findById(request.getChallengeId().trim())
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Verification challenge was not found."));
+
+        if (challenge.isUsed()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "This verification step was already completed.");
+        }
+
+        if (challenge.getMethod() != TwoFactorMethod.EMAIL_OTP) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Resend is only available for email verification codes.");
+        }
+
+        if (challenge.getExpiresAt() != null && challenge.getExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "This code has expired. Please sign in again.");
+        }
+
+        LocalDateTime last =
+                challenge.getLastOtpSentAt() != null ? challenge.getLastOtpSentAt() : challenge.getCreatedAt();
+        if (last != null) {
+            LocalDateTime nextAllowed = last.plusSeconds(otpResendCooldownSeconds);
+            if (LocalDateTime.now().isBefore(nextAllowed)) {
+                throw new ApiException(
+                        HttpStatus.TOO_MANY_REQUESTS,
+                        "Please wait before requesting another code."
+                );
+            }
+        }
+
+        UserAccount userAccount = userAccountRepository
+                .findById(challenge.getUserId())
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Account not found."));
+
+        if (appProperties.isDeveloperMode()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Developer mode is on: email OTP resend is not used.");
+        }
+
+        String otpCode = generateOtpCode();
+        challenge.setOtpCode(otpCode);
+        challenge.setExpiresAt(LocalDateTime.now().plusMinutes(challengeMinutes));
+        challenge.setLastOtpSentAt(LocalDateTime.now());
+
+        TwoFactorChallenge saved = twoFactorChallengeRepository.save(challenge);
+        try {
+            authEmailOtpNotifier.sendSignInOtp(userAccount.getEmail(), otpCode);
+        } catch (RuntimeException ex) {
+            twoFactorChallengeRepository.deleteById(saved.getId());
+            throw ex;
+        }
+
+        log.info("Email OTP resent for user {} challenge {}", userAccount.getId(), saved.getId());
+
+        return AuthFlowResponse.builder()
+                .authStatus(AuthFlowStatus.TWO_FACTOR_REQUIRED)
+                .message("A new verification code was sent to your email.")
+                .twoFactorChallenge(toTwoFactorResponse(saved, userAccount, AuthFlowStatus.TWO_FACTOR_REQUIRED))
+                .build();
     }
 
     @Override
@@ -620,22 +686,48 @@ public class AuthServiceImpl implements AuthService {
         if (method == TwoFactorMethod.EMAIL_OTP) {
             String otpCode = generateOtpCode();
             challenge.setOtpCode(otpCode);
-            authEmailOtpNotifier.sendSignInOtp(userAccount.getEmail(), otpCode);
+            challenge.setLastOtpSentAt(LocalDateTime.now());
             if (userAccount.getPreferredTwoFactorMethod() == TwoFactorMethod.AUTHENTICATOR_APP) {
                 message =
                         "We sent a one-time code to your email. Use it to sign in. If you have not finished linking Google Authenticator, you can complete that later from your account settings.";
             }
-        } else {
-            if (userAccount.getAuthenticatorSecret() == null || userAccount.getAuthenticatorSecret().isBlank()) {
-                log.warn("Effective method was AUTHENTICATOR_APP but secret missing for user {}", userAccount.getId());
-                String otpCode = generateOtpCode();
-                challenge.setMethod(TwoFactorMethod.EMAIL_OTP);
-                challenge.setOtpCode(otpCode);
+            TwoFactorChallenge saved = twoFactorChallengeRepository.save(challenge);
+            try {
                 authEmailOtpNotifier.sendSignInOtp(userAccount.getEmail(), otpCode);
-            } else if (!userAccount.isAuthenticatorConfirmed()) {
-                authFlowStatus = AuthFlowStatus.AUTHENTICATOR_SETUP_REQUIRED;
-                message = "Set up your authenticator app with the provided key and enter the generated code.";
+            } catch (RuntimeException ex) {
+                twoFactorChallengeRepository.deleteById(saved.getId());
+                throw ex;
             }
+            return AuthFlowResponse.builder()
+                    .authStatus(authFlowStatus)
+                    .message(message)
+                    .twoFactorChallenge(toTwoFactorResponse(saved, userAccount, authFlowStatus))
+                    .build();
+        }
+
+        if (userAccount.getAuthenticatorSecret() == null || userAccount.getAuthenticatorSecret().isBlank()) {
+            log.warn("Effective method was AUTHENTICATOR_APP but secret missing for user {}", userAccount.getId());
+            String otpCode = generateOtpCode();
+            challenge.setMethod(TwoFactorMethod.EMAIL_OTP);
+            challenge.setOtpCode(otpCode);
+            challenge.setLastOtpSentAt(LocalDateTime.now());
+            TwoFactorChallenge saved = twoFactorChallengeRepository.save(challenge);
+            try {
+                authEmailOtpNotifier.sendSignInOtp(userAccount.getEmail(), otpCode);
+            } catch (RuntimeException ex) {
+                twoFactorChallengeRepository.deleteById(saved.getId());
+                throw ex;
+            }
+            return AuthFlowResponse.builder()
+                    .authStatus(authFlowStatus)
+                    .message(message)
+                    .twoFactorChallenge(toTwoFactorResponse(saved, userAccount, authFlowStatus))
+                    .build();
+        }
+
+        if (!userAccount.isAuthenticatorConfirmed()) {
+            authFlowStatus = AuthFlowStatus.AUTHENTICATOR_SETUP_REQUIRED;
+            message = "Set up your authenticator app with the provided key and enter the generated code.";
         }
 
         TwoFactorChallenge savedChallenge = twoFactorChallengeRepository.save(challenge);
@@ -726,15 +818,26 @@ public class AuthServiceImpl implements AuthService {
         );
     }
 
+    private LocalDateTime computeNextResendAt(TwoFactorChallenge challenge) {
+        LocalDateTime last = challenge.getLastOtpSentAt() != null ? challenge.getLastOtpSentAt() : challenge.getCreatedAt();
+        if (last == null) {
+            return null;
+        }
+        return last.plusSeconds(otpResendCooldownSeconds);
+    }
+
     private TwoFactorChallengeResponse toTwoFactorResponse(
             TwoFactorChallenge challenge,
             UserAccount userAccount,
             AuthFlowStatus authFlowStatus
     ) {
+        boolean emailOtp = challenge.getMethod() == TwoFactorMethod.EMAIL_OTP;
         return TwoFactorChallengeResponse.builder()
                 .challengeId(challenge.getId())
                 .method(challenge.getMethod())
                 .expiresAt(challenge.getExpiresAt())
+                .nextResendAt(emailOtp ? computeNextResendAt(challenge) : null)
+                .resendCooldownSeconds(emailOtp ? (int) otpResendCooldownSeconds : null)
                 .message(authFlowStatus == AuthFlowStatus.AUTHENTICATOR_SETUP_REQUIRED
                         ? "Complete your authenticator app setup to finish sign-in."
                         : "Complete your second verification step to finish sign-in.")

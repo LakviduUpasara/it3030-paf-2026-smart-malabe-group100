@@ -124,6 +124,20 @@ export async function verifyTwoFactor({ challengeId, code }) {
   }
 }
 
+export async function resendEmailOtp({ challengeId }) {
+  if (!challengeId?.trim()) {
+    throw new Error("Verification session is missing.");
+  }
+  try {
+    const response = await api.post("/auth/resend-email-otp", {
+      challengeId: challengeId.trim(),
+    });
+    return response.data;
+  } catch (error) {
+    throw createServiceError(error, "Unable to resend the verification code.");
+  }
+}
+
 export async function changeFirstLoginPassword({ currentPassword, newPassword }) {
   if (!currentPassword?.trim() || !newPassword?.trim()) {
     throw new Error("Enter your current password and a new password.");

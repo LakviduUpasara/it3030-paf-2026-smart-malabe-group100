@@ -9,6 +9,7 @@ import com.example.app.dto.auth.GoogleSignupSessionResponse;
 import com.example.app.dto.auth.LoginRequest;
 import com.example.app.dto.auth.PendingApprovalResponse;
 import com.example.app.dto.auth.RegisterRequest;
+import com.example.app.dto.auth.ResendEmailOtpRequest;
 import com.example.app.dto.auth.SelectFirstLoginTwoFactorRequest;
 import com.example.app.dto.auth.VerifyTwoFactorRequest;
 import com.example.app.exception.ApiException;
@@ -75,6 +76,11 @@ public class AuthController {
     @PostMapping("/verify-2fa")
     public ResponseEntity<AuthFlowResponse> verifyTwoFactor(@Valid @RequestBody VerifyTwoFactorRequest request) {
         return ResponseEntity.ok(authService.verifyTwoFactor(request));
+    }
+
+    @PostMapping("/resend-email-otp")
+    public ResponseEntity<AuthFlowResponse> resendEmailOtp(@Valid @RequestBody ResendEmailOtpRequest request) {
+        return ResponseEntity.ok(authService.resendEmailOtp(request));
     }
 
     @PostMapping("/first-login/change-password")

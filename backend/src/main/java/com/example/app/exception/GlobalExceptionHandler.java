@@ -10,11 +10,14 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.mongodb.UncategorizedMongoDbException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.mail.MailException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @RestControllerAdvice
+@Slf4j
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(DuplicateKeyException.class)
@@ -31,12 +34,22 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<Map<String, Object>> handleApiException(ApiException ex) {
+        if (ex.getCause() != null && ex.getStatus().is5xxServerError()) {
+            log.error("API error ({}): {}", ex.getStatus(), ex.getMessage(), ex);
+        }
         Map<String, Object> response = new HashMap<>();
         response.put("timestamp", LocalDateTime.now());
         response.put("status", ex.getStatus().value());
         response.put("message", ex.getMessage());
 
         return ResponseEntity.status(ex.getStatus()).body(response);
+    }
+
+    @ExceptionHandler(MailException.class)
+    public ResponseEntity<Map<String, Object>> handleMailException(MailException ex) {
+        log.error("Outbound mail failed: {}", ex.getMessage(), ex);
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(buildErrorResponse("Email delivery failed: " + ex.getMessage(), HttpStatus.SERVICE_UNAVAILABLE));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

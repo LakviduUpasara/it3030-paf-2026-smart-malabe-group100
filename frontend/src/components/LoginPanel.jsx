@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import QRCode from "qrcode";
 import { FaApple } from "react-icons/fa6";
 import { HiOutlineEye, HiOutlineEyeSlash } from "react-icons/hi2";
@@ -8,6 +8,12 @@ import GoogleIdentityButton from "./GoogleIdentityButton";
 import LoadingSpinner from "./LoadingSpinner";
 import { useAuth } from "../hooks/useAuth";
 import { getDefaultRouteForRole, normalizeRole, ROLES } from "../utils/roleUtils";
+import { formatCountdownMs, parseBackendDateTime } from "../utils/dateTimeParse";
+
+/** Fallback if API omits timing fields (should match backend app.auth.challenge-minutes). */
+const OTP_CHALLENGE_MINUTES_FALLBACK = Number(
+  String(import.meta.env.VITE_AUTH_CHALLENGE_MINUTES ?? "10").trim() || "10",
+);
 
 const DEMO_LOCAL_ADMIN_EMAIL = "admin@smartcampus.edu";
 const DEMO_LOCAL_ADMIN_PASSWORD = "Admin@12345";
@@ -38,6 +44,7 @@ function LoginPanel({ showHeading = true }) {
     loginWithGoogle,
     loginWithApple,
     verifyTwoFactor,
+    resendEmailOtp,
     changeFirstLoginPassword,
     selectFirstLoginTwoFactorMethod,
     clearError,
@@ -88,6 +95,38 @@ function LoginPanel({ showHeading = true }) {
       isMounted = false;
     };
   }, [twoFactorChallenge]);
+
+  const [otpClockTick, setOtpClockTick] = useState(0);
+
+  useEffect(() => {
+    if (!twoFactorChallenge || twoFactorChallenge.method !== "EMAIL_OTP") {
+      return;
+    }
+    const id = setInterval(() => setOtpClockTick((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, [twoFactorChallenge?.challengeId, twoFactorChallenge?.method]);
+
+  const emailOtpTiming = useMemo(() => {
+    void otpClockTick;
+    if (!twoFactorChallenge || twoFactorChallenge.method !== "EMAIL_OTP") {
+      return {
+        expireMs: 0,
+        resendWaitMs: 0,
+        canResend: false,
+        showExpiryCountdown: false,
+        expired: false,
+      };
+    }
+    const now = Date.now();
+    const expiresAt = parseBackendDateTime(twoFactorChallenge.expiresAt);
+    const nextResendAt = parseBackendDateTime(twoFactorChallenge.nextResendAt);
+    const showExpiryCountdown = Boolean(expiresAt);
+    const expireMs = showExpiryCountdown ? expiresAt.getTime() - now : 0;
+    const expired = showExpiryCountdown && expireMs <= 0;
+    const resendWaitMs = nextResendAt ? nextResendAt.getTime() - now : 0;
+    const canResend = !expired && resendWaitMs <= 0;
+    return { expireMs, resendWaitMs, canResend, showExpiryCountdown, expired };
+  }, [twoFactorChallenge, otpClockTick]);
 
   useEffect(() => {
     if (!developerMode) {
@@ -280,6 +319,20 @@ function LoginPanel({ showHeading = true }) {
     }
   };
 
+  const handleResendEmailOtp = async () => {
+    if (!twoFactorChallenge?.challengeId) {
+      return;
+    }
+    setLocalError("");
+    clearError();
+    try {
+      await resendEmailOtp({ challengeId: twoFactorChallenge.challengeId });
+      setVerificationCode("");
+    } catch (resendError) {
+      return resendError;
+    }
+  };
+
   const handleBackToLogin = async () => {
     setVerificationCode("");
     setQrCodeDataUrl("");
@@ -432,6 +485,42 @@ function LoginPanel({ showHeading = true }) {
           <div className="auth-help-panel">
             <p className="supporting-text">{twoFactorChallenge.deliveryHint}</p>
 
+            {twoFactorChallenge.method === "EMAIL_OTP" ? (
+              <div className="auth-otp-meta-row" aria-live="polite">
+                <span>
+                  {emailOtpTiming.showExpiryCountdown ? (
+                    <strong>
+                      {emailOtpTiming.expired
+                        ? "This code has expired."
+                        : `Code expires in ${formatCountdownMs(emailOtpTiming.expireMs)}`}
+                    </strong>
+                  ) : (
+                    <span className="auth-otp-static-hint">
+                      Use the code from your email within about {OTP_CHALLENGE_MINUTES_FALLBACK} minutes.
+                    </span>
+                  )}
+                </span>
+                <span className="auth-otp-resend-wrap">
+                  {emailOtpTiming.expired ? (
+                    <span className="auth-otp-expired-hint">Sign in again to request a new code.</span>
+                  ) : emailOtpTiming.resendWaitMs > 0 ? (
+                    <span>
+                      Resend available in <strong>{formatCountdownMs(emailOtpTiming.resendWaitMs)}</strong>
+                    </span>
+                  ) : (
+                    <button
+                      className="auth-resend-btn"
+                      disabled={isLoading || !emailOtpTiming.canResend}
+                      onClick={handleResendEmailOtp}
+                      type="button"
+                    >
+                      Resend code
+                    </button>
+                  )}
+                </span>
+              </div>
+            ) : null}
+
             {qrCodeDataUrl ? (
               <div className="authenticator-setup-card">
                 <div className="authenticator-setup-qr">
@@ -448,12 +537,6 @@ function LoginPanel({ showHeading = true }) {
                   </p>
                 </div>
               </div>
-            ) : null}
-
-            {twoFactorChallenge.debugCode ? (
-              <p className="auth-inline-code">
-                Demo email verification code: <strong>{twoFactorChallenge.debugCode}</strong>
-              </p>
             ) : null}
 
             {twoFactorChallenge.manualEntryKey ? (
@@ -511,7 +594,15 @@ function LoginPanel({ showHeading = true }) {
           {activeError ? <p className="alert alert-error">{activeError}</p> : null}
 
           <div className="auth-actions-row signup-form-actions">
-            <Button className="signup-submit" disabled={isLoading} type="submit" variant="primary">
+            <Button
+              className="signup-submit"
+              disabled={
+                isLoading ||
+                (twoFactorChallenge?.method === "EMAIL_OTP" && emailOtpTiming.expired)
+              }
+              type="submit"
+              variant="primary"
+            >
               Verify and Continue
             </Button>
             <Button
