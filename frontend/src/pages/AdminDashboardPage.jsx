@@ -2,7 +2,11 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
+  CalendarCheck,
+  CalendarClock,
+  CalendarX,
   ClipboardCheck,
+  ListOrdered,
   MapPin,
   Package,
 } from "lucide-react";
@@ -13,16 +17,17 @@ import AdminPageHeader from "../components/admin/AdminPageHeader";
 import AdminStatTile from "../components/admin/AdminStatTile";
 import LoadingSpinner from "../components/LoadingSpinner";
 import { useAuth } from "../hooks/useAuth";
-import { getPendingBookings } from "../services/bookingService";
+import { getAdminBookingSummary, getAdminBookings, getPendingBookings } from "../services/bookingService";
 import { getResources } from "../services/resourceService";
 import { getManagedTickets } from "../services/ticketService";
-import { LMS_ROLES, resolveAdminConsoleRole } from "../utils/roleUtils";
+import { LMS_ROLES, normalizeRole, resolveAdminConsoleRole, ROLES } from "../utils/roleUtils";
 import { toToken } from "../utils/formatters";
 
 const initialSummary = {
   resources: [],
   bookings: [],
   tickets: [],
+  bookingStats: null,
 };
 
 function resourceIsAvailable(resource) {
@@ -43,6 +48,7 @@ function AdminDashboardPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const consoleRole = resolveAdminConsoleRole(user?.role);
+  const isPlatformAdmin = normalizeRole(user?.role) === ROLES.ADMIN;
   const showCampusAssignmentModules =
     consoleRole === LMS_ROLES.SUPER_ADMIN || consoleRole === LMS_ROLES.MANAGER;
   const [summary, setSummary] = useState(initialSummary);
@@ -57,17 +63,40 @@ function AdminDashboardPage() {
       setError("");
 
       try {
-        const [resources, bookings, tickets] = await Promise.all([
-          getResources(),
-          getPendingBookings(),
-          getManagedTickets(),
-        ]);
+        const resources = await getResources();
+        const tickets = await getManagedTickets();
+
+        let bookings = [];
+        let bookingStats = null;
+        if (isPlatformAdmin) {
+          const [stats, pendingPage] = await Promise.all([
+            getAdminBookingSummary(),
+            getAdminBookings({ page: 0, size: 5, status: "PENDING" }),
+          ]);
+          bookingStats = stats;
+          const content = Array.isArray(pendingPage?.content) ? pendingPage.content : [];
+          bookings = content.map((row) => ({
+            id: row.id,
+            facility: row.resourceName || row.resourceId,
+            requestedBy: row.userFullName || row.userEmail || row.userId,
+            date: row.startTime ? new Date(row.startTime).toLocaleDateString() : "—",
+            time:
+              row.startTime && row.endTime
+                ? `${new Date(row.startTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} – ${new Date(row.endTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                : "—",
+            attendees: 0,
+            status: row.status?.name || row.status || "PENDING",
+          }));
+        } else {
+          bookings = await getPendingBookings();
+        }
 
         if (active) {
           setSummary({
             resources,
             bookings,
             tickets,
+            bookingStats,
           });
         }
       } catch (loadError) {
@@ -86,7 +115,7 @@ function AdminDashboardPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [user?.role]);
 
   const availableResources = summary.resources.filter(resourceIsAvailable).length;
   const maintenanceResources = summary.resources.filter(resourceIsMaintenance).length;
@@ -98,6 +127,9 @@ function AdminDashboardPage() {
     (total, booking) => total + Number(booking.attendees || 0),
     0,
   );
+  const pendingApprovalCount = isPlatformAdmin
+    ? Number(summary.bookingStats?.pending ?? 0)
+    : summary.bookings.length;
   const trackedLocations = new Set(summary.resources.map((resource) => resource.location)).size;
 
   const availPct = summary.resources.length
@@ -193,6 +225,40 @@ function AdminDashboardPage() {
         </section>
       ) : null}
 
+      {isPlatformAdmin && summary.bookingStats ? (
+        <section className="mb-6" aria-label="Booking counts from database">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.12em] text-text/60">
+            Booking summary (live from MongoDB)
+          </p>
+          <AdminKpiGrid>
+            <AdminStatTile
+              detail="All booking documents"
+              icon={ListOrdered}
+              label="Total bookings"
+              value={Number(summary.bookingStats.totalBookings ?? 0)}
+            />
+            <AdminStatTile
+              detail="Confirmed"
+              icon={CalendarCheck}
+              label="Approved"
+              value={Number(summary.bookingStats.approved ?? 0)}
+            />
+            <AdminStatTile
+              detail="Awaiting decision"
+              icon={CalendarClock}
+              label="Pending"
+              value={Number(summary.bookingStats.pending ?? 0)}
+            />
+            <AdminStatTile
+              detail="With reason stored"
+              icon={CalendarX}
+              label="Rejected"
+              value={Number(summary.bookingStats.rejected ?? 0)}
+            />
+          </AdminKpiGrid>
+        </section>
+      ) : null}
+
       <AdminKpiGrid>
         <AdminStatTile
           detail={`${availableResources} ready for booking`}
@@ -201,10 +267,14 @@ function AdminDashboardPage() {
           value={summary.resources.length}
         />
         <AdminStatTile
-          detail={`${pendingAttendees} attendees waiting`}
+          detail={
+            isPlatformAdmin
+              ? `${pendingApprovalCount} pending in database`
+              : `${pendingAttendees} attendees waiting`
+          }
           icon={ClipboardCheck}
           label="Pending approvals"
-          value={summary.bookings.length}
+          value={pendingApprovalCount}
         />
         <AdminStatTile
           detail={`${urgentTickets} need rapid attention`}
@@ -240,7 +310,7 @@ function AdminDashboardPage() {
                   </p>
                 </div>
                 <span className="inline-flex w-fit rounded-full border border-border bg-tint px-2.5 py-1 text-xs font-semibold text-text">
-                  {summary.bookings.length} approval items
+                  {pendingApprovalCount} approval items
                 </span>
               </div>
               <div className="mt-6 grid gap-4 sm:grid-cols-3">
