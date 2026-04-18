@@ -15,6 +15,7 @@ import com.example.app.exception.ApiException;
 import com.example.app.security.AuthenticatedUser;
 import com.example.app.service.AuthService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -28,10 +29,12 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.validation.annotation.Validated;
 
 @RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
+@Validated
 public class AuthController {
 
     private final AuthService authService;
@@ -130,5 +133,30 @@ public class AuthController {
             @RequestParam String email
     ) {
         return ResponseEntity.ok(authService.getSignupRequestStatus(requestId, email));
+    }
+
+    /**
+     * Public: applicant opens their workspace after an administrator has approved the signup request.
+     * Returns the same {@link AuthFlowResponse} shapes as login (password change, 2FA method selection, 2FA challenge, or authenticated).
+     * <p>GET is supported so direct browser or link access to this URL does not 404 (SPA still uses POST from the client).
+     */
+    @PostMapping("/signup-requests/{requestId}/activate")
+    public ResponseEntity<AuthFlowResponse> activateApprovedSignupPost(
+            @PathVariable String requestId,
+            @RequestParam("email") @NotBlank(message = "email is required") String email
+    ) {
+        return activateApprovedSignup(requestId, email);
+    }
+
+    @GetMapping("/signup-requests/{requestId}/activate")
+    public ResponseEntity<AuthFlowResponse> activateApprovedSignupGet(
+            @PathVariable String requestId,
+            @RequestParam("email") @NotBlank(message = "email is required") String email
+    ) {
+        return activateApprovedSignup(requestId, email);
+    }
+
+    private ResponseEntity<AuthFlowResponse> activateApprovedSignup(String requestId, String email) {
+        return ResponseEntity.ok(authService.activateApprovedSignup(requestId, email.trim()));
     }
 }

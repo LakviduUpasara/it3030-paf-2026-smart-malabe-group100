@@ -1,32 +1,24 @@
-package com.example.app.entity;
+package com.example.app.dto.admin;
 
+import com.example.app.entity.BookingStatus;
 import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Getter;
+import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
-import org.springframework.data.annotation.Id;
-import org.springframework.data.mongodb.core.index.Indexed;
-import org.springframework.data.mongodb.core.mapping.Document;
 
-@Document(collection = "bookings")
-@Getter
-@Setter
+@Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
-public class Booking {
+public class AdminBookingRowResponse {
 
-    @Id
     private String id;
-
-    @Indexed
     private String resourceId;
-
-    @Indexed
+    private String resourceName;
     private String userId;
-
+    private String userEmail;
+    private String userFullName;
     private LocalDateTime startTime;
     private LocalDateTime endTime;
     private String purpose;
