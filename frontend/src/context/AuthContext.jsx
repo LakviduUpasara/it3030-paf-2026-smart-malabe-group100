@@ -83,6 +83,7 @@ export function AuthProvider({ children }) {
         setUser(response.user);
         setSessionToken(response.token);
         setPendingApproval(null);
+        clearStorage(STORAGE_KEYS.PENDING_APPROVAL);
         setTwoFactorChallenge(null);
         setSessionPhase(null);
         clearStorage(STORAGE_KEYS.SESSION_PHASE);
