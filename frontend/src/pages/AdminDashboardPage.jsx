@@ -63,13 +63,10 @@ function AdminDashboardPage() {
       setError("");
 
       try {
-        const [resources, bookings, ticketsRes] = await Promise.all([
+        const [resources, ticketsRes] = await Promise.all([
           getResources(),
-          getPendingBookings(),
           getManagedTickets(),
         ]);
-        const resources = await getResources();
-        const tickets = await getManagedTickets();
 
         let bookings = [];
         let bookingStats = null;
@@ -97,12 +94,15 @@ function AdminDashboardPage() {
         }
 
         if (active) {
-          const ticketRows = ticketsRes?.data;
+          const ticketRows = Array.isArray(ticketsRes)
+            ? ticketsRes
+            : Array.isArray(ticketsRes?.data)
+              ? ticketsRes.data
+              : [];
           setSummary({
-            resources,
+            resources: Array.isArray(resources) ? resources : [],
             bookings,
-            tickets: Array.isArray(ticketRows) ? ticketRows : [],
-            tickets,
+            tickets: ticketRows,
             bookingStats,
           });
         }
