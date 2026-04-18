@@ -1,34 +1,55 @@
 import React, { useEffect, useState } from 'react';
 import Notification from '../components/Notification';
+import { useAuth } from '../hooks/useAuth';
 import { bookingAPI } from '../services/api';
+import { createBooking } from '../services/bookingService';
+import { getResources } from '../services/resourceService';
 
 const CreateBookingPage = () => {
-  const resources = [
-    { id: 1, name: 'Lab A', type: 'Computer Lab' },
-    { id: 2, name: 'Lab B', type: 'Computer Lab' },
-    { id: 3, name: 'Meeting Room 1', type: 'Room' },
-    { id: 4, name: 'Projector 1', type: 'Equipment' },
-  ];
+  const { user, isAuthenticated } = useAuth();
+  const [resources, setResources] = useState([]);
+  const [resourcesError, setResourcesError] = useState('');
 
   const [formData, setFormData] = useState({
     resourceId: '',
-    userId: '',
     startTime: '',
     endTime: '',
     purpose: '',
+    expectedAttendees: '',
   });
 
   const [prefilledFromAvailability, setPrefilledFromAvailability] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [checkingAvailability, setCheckingAvailability] = useState(false);
   const [notification, setNotification] = useState(null);
 
   const emptyFormState = {
     resourceId: '',
-    userId: '',
     startTime: '',
     endTime: '',
     purpose: '',
+    expectedAttendees: '',
   };
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await getResources({ status: 'ACTIVE' });
+        if (!cancelled) {
+          setResources(Array.isArray(list) ? list : []);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setResourcesError(e.message || 'Could not load resources.');
+          setResources([]);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const savedBookingData = sessionStorage.getItem('bookingData');
@@ -98,6 +119,14 @@ const CreateBookingPage = () => {
     setLoading(true);
 
     try {
+      if (!isAuthenticated || !user?.id) {
+        setNotification({
+          type: 'warning',
+          message: 'Please sign in to request a booking.',
+        });
+        return;
+      }
+
       if (!formData.resourceId) {
         setNotification({
           type: 'warning',
@@ -115,39 +144,24 @@ const CreateBookingPage = () => {
       const safeStart = selectedStart < minTime ? minTime : selectedStart;
       const safeEnd = selectedEnd < safeStart ? new Date(safeStart.getTime() + 60 * 60 * 1000) : selectedEnd;
 
+      const attendeesNum = formData.expectedAttendees === '' ? 0 : Number(formData.expectedAttendees);
+      if (Number.isNaN(attendeesNum) || attendeesNum < 0) {
+        setNotification({ type: 'warning', message: 'Enter a valid expected attendee count (0 or more).' });
+        return;
+      }
+
       const payload = {
         resourceId: Number(formData.resourceId),
-        userId: Number(formData.userId),
         startTime: formatDateTimeLocal(safeStart),
         endTime: formatDateTimeLocal(safeEnd),
-        purpose: formData.purpose,
+        purpose: formData.purpose.trim(),
+        expectedAttendees: attendeesNum,
       };
 
-      console.log('═══════════════════════════════════');
-      console.log('BOOKING CREATION DEBUG INFO');
-      console.log('═══════════════════════════════════');
-      console.log('NOW:', now.toISOString(), '|', now.toString());
-      console.log('MIN TIME (NOW + 5 min):', minTime.toISOString(), '|', minTime.toString());
-      console.log('Selected Start:', selectedStart?.toISOString());
-      console.log('Safe Start:', safeStart.toISOString());
-      console.log('Selected End:', selectedEnd?.toISOString());
-      console.log('Safe End:', safeEnd.toISOString());
-      console.log('TIME CHECK: Safe Start > Now?', safeStart > now);
-      console.log('═══════════════════════════════════');
-      console.log('FINAL PAYLOAD (Local Time):');
-      console.log(JSON.stringify(payload, null, 2));
-      console.log('═══════════════════════════════════');
-      console.log('ISO Payload:');
-      console.log(JSON.stringify(payload, null, 2));
-      console.log('═══════════════════════════════════');
-      console.log('Payload Format Check:');
-      console.log('  startTime format:', payload.startTime, '✓ (UTC format: YYYY-MM-DDTHH:mm:ss)');
-      console.log('  endTime format:', payload.endTime, '✓ (UTC format: YYYY-MM-DDTHH:mm:ss)');
-      console.log('═══════════════════════════════════');
 
-      await bookingAPI.createBooking(payload);
+      await createBooking(payload);
 
-      setNotification({ type: 'success', message: 'Booking created successfully!' });
+      setNotification({ type: 'success', message: 'Booking request submitted (pending approval).' });
       setFormData(emptyFormState);
       setPrefilledFromAvailability(false);
       sessionStorage.removeItem('bookingData');
@@ -156,19 +170,10 @@ const CreateBookingPage = () => {
         window.location.href = '/bookings';
       }, 2000);
     } catch (error) {
-      console.error('═══════════════════════════════════');
-      console.error('BOOKING CREATION FAILED');
-      console.error('═══════════════════════════════════');
-      console.error('FULL ERROR:', error.response?.data);
-      console.error('Error Status:', error.response?.status);
-      console.error('Error Message:', error.message);
-      console.error('═══════════════════════════════════');
-
       setNotification({
         type: 'error',
         message:
           error.response?.data?.message ||
-          JSON.stringify(error.response?.data) ||
           error.message ||
           'Failed to create booking',
       });
@@ -186,28 +191,76 @@ const CreateBookingPage = () => {
   };
 
   const getGroupLabel = (type) => {
+    const t = typeof type === 'string' ? type : type?.name || String(type || '');
     const labels = {
+      LAB: 'Labs',
+      LECTURE_HALL: 'Lecture halls',
+      MEETING_ROOM: 'Meeting rooms',
+      EQUIPMENT: 'Equipment',
       'Computer Lab': 'Labs',
       Room: 'Rooms',
       Equipment: 'Equipment',
     };
 
-    return labels[type] || type;
+    return labels[t] || t || 'Resources';
   };
 
   const groupedResources = resources.reduce((acc, resource) => {
-    if (!acc[resource.type]) {
-      acc[resource.type] = [];
+    const typeKey = typeof resource.type === 'string' ? resource.type : resource.type?.name || 'OTHER';
+    if (!acc[typeKey]) {
+      acc[typeKey] = [];
     }
 
-    acc[resource.type].push(resource);
+    acc[typeKey].push(resource);
     return acc;
   }, {});
+
+  const handleCheckAvailability = async () => {
+    if (!formData.resourceId || !formData.startTime || !formData.endTime) {
+      setNotification({ type: 'warning', message: 'Select resource, start, and end first.' });
+      return;
+    }
+    const selectedStart = parseLocalDateTime(formData.startTime);
+    const selectedEnd = parseLocalDateTime(formData.endTime);
+    if (!selectedStart || !selectedEnd || selectedEnd <= selectedStart) {
+      setNotification({ type: 'warning', message: 'Enter a valid start and end time range.' });
+      return;
+    }
+    setCheckingAvailability(true);
+    try {
+      const startIso = formatDateTimeLocal(selectedStart);
+      const endIso = formatDateTimeLocal(selectedEnd);
+      const res = await bookingAPI.checkAvailability(Number(formData.resourceId), startIso, endIso);
+      const data = res?.data?.data ?? res?.data;
+      const ok = data?.available === true;
+      setNotification({
+        type: ok ? 'success' : 'warning',
+        message: data?.message || (ok ? 'Slot appears available (approved bookings only).' : 'Slot not available.'),
+      });
+    } catch (err) {
+      setNotification({
+        type: 'error',
+        message: err.response?.data?.message || err.message || 'Availability check failed.',
+      });
+    } finally {
+      setCheckingAvailability(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4">
       <div className="bg-white rounded-xl shadow-md p-8 max-w-2xl mx-auto">
         <h1 className="text-3xl font-bold mb-8 text-gray-900 text-center">Create Booking</h1>
+        {resourcesError ? (
+          <p className="mb-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{resourcesError}</p>
+        ) : null}
+        {!isAuthenticated ? (
+          <p className="mb-4 text-center text-sm text-red-600">Sign in to submit a booking request.</p>
+        ) : (
+          <p className="mb-4 text-center text-sm text-gray-600">
+            Signed in as <strong>{user?.email || user?.fullName || user?.id}</strong>
+          </p>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Resource */}
@@ -226,7 +279,7 @@ const CreateBookingPage = () => {
                 <optgroup key={type} label={`${getGroupLabel(type)} (${resourcesInGroup.length})`}>
                   {resourcesInGroup.map((resource) => (
                     <option key={resource.id} value={resource.id}>
-                      {resource.name}
+                      {resource.name} — {resource.location} (cap. {resource.capacity})
                     </option>
                   ))}
                 </optgroup>
@@ -237,20 +290,6 @@ const CreateBookingPage = () => {
                 Resource is locked to the selection from Availability.
               </p>
             )}
-          </div>
-
-          {/* User ID */}
-          <div>
-            <label className="text-gray-600 text-sm font-medium mb-1 block">User ID</label>
-            <input
-              type="number"
-              name="userId"
-              value={formData.userId}
-              onChange={handleChange}
-              placeholder="Enter user ID"
-              required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
           </div>
 
           {/* Start Time */}
@@ -293,14 +332,37 @@ const CreateBookingPage = () => {
             />
           </div>
 
+          <div>
+            <label className="text-gray-600 text-sm font-medium mb-1 block">
+              Expected attendees (optional)
+            </label>
+            <input
+              type="number"
+              name="expectedAttendees"
+              min={0}
+              value={formData.expectedAttendees}
+              onChange={handleChange}
+              placeholder="0"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
           {/* Button Group */}
-          <div className="flex gap-4 mt-6">
+          <div className="flex flex-wrap gap-4 mt-6">
+            <button
+              type="button"
+              disabled={checkingAvailability}
+              onClick={handleCheckAvailability}
+              className="px-6 py-2 bg-slate-600 hover:bg-slate-700 disabled:bg-gray-400 text-white font-semibold rounded-lg transition-colors"
+            >
+              {checkingAvailability ? 'Checking…' : 'Check availability'}
+            </button>
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || !isAuthenticated}
               className="px-6 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white font-semibold rounded-lg transition-colors"
             >
-              {loading ? 'Creating...' : 'Create Booking'}
+              {loading ? 'Submitting...' : 'Submit request'}
             </button>
             <button
               type="button"

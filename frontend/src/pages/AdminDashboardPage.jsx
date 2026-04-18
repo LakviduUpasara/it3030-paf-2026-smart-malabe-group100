@@ -18,6 +18,7 @@ import { getResources } from "../services/resourceService";
 import { getManagedTickets } from "../services/ticketService";
 import { LMS_ROLES, resolveAdminConsoleRole } from "../utils/roleUtils";
 import { toToken } from "../utils/formatters";
+import { normalizeBookingQueueRow } from "../utils/bookingDisplay";
 
 const initialSummary = {
   resources: [],
@@ -94,7 +95,8 @@ function AdminDashboardPage() {
   const urgentTickets = summary.tickets.filter(
     (ticket) => ["High", "Critical"].includes(ticket.priority) && ticket.status !== "Resolved",
   ).length;
-  const pendingAttendees = summary.bookings.reduce(
+  const bookingsUi = summary.bookings.map(normalizeBookingQueueRow);
+  const pendingAttendees = bookingsUi.reduce(
     (total, booking) => total + Number(booking.attendees || 0),
     0,
   );
@@ -239,11 +241,11 @@ function AdminDashboardPage() {
                     Booking queue
                   </p>
                   <p className="mt-2 font-semibold text-heading">
-                    {summary.bookings[0]?.facility || "No pending requests"}
+                    {bookingsUi[0]?.facility || "No pending requests"}
                   </p>
                   <p className="mt-1 text-sm text-text/72">
-                    {summary.bookings[0]
-                      ? `${summary.bookings[0].requestedBy} • ${summary.bookings[0].time}`
+                    {bookingsUi[0]
+                      ? `${bookingsUi[0].requestedBy} • ${bookingsUi[0].date} • ${bookingsUi[0].time}`
                       : "All booking requests are up to date."}
                   </p>
                 </article>
@@ -277,7 +279,7 @@ function AdminDashboardPage() {
             <div className="grid gap-6 lg:grid-cols-2">
               <Card title="Pending booking approvals" subtitle="Next decisions">
                 <div className="space-y-3">
-                  {summary.bookings.slice(0, 3).map((booking) => (
+                  {bookingsUi.slice(0, 3).map((booking) => (
                     <div
                       key={booking.id}
                       className="flex items-start justify-between gap-3 rounded-2xl border border-border bg-tint/80 px-4 py-3"
@@ -293,7 +295,7 @@ function AdminDashboardPage() {
                       </span>
                     </div>
                   ))}
-                  {!summary.bookings.length ? (
+                  {!bookingsUi.length ? (
                     <p className="text-sm text-text/70">No pending booking approvals.</p>
                   ) : null}
                 </div>

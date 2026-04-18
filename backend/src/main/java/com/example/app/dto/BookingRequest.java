@@ -1,6 +1,9 @@
 package com.example.app.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.validation.constraints.FutureOrPresent;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.time.LocalDateTime;
@@ -15,13 +18,14 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class BookingRequest {
 
     @NotNull(message = "resourceId is required")
     private Long resourceId;
 
-    @NotNull(message = "userId is required")
-    private Long userId;
+    /** Set by API from the signed-in user; ignored if sent by client. */
+    private String userId;
 
     @NotNull(message = "startTime is required")
     @FutureOrPresent(message = "startTime must be in the present or future")
@@ -34,14 +38,7 @@ public class BookingRequest {
     @NotBlank(message = "purpose is required")
     private String purpose;
 
-    public Long getResourceId() { return resourceId; }
-    public void setResourceId(Long resourceId) { this.resourceId = resourceId; }
-    public Long getUserId() { return userId; }
-    public void setUserId(Long userId) { this.userId = userId; }
-    public LocalDateTime getStartTime() { return startTime; }
-    public void setStartTime(LocalDateTime startTime) { this.startTime = startTime; }
-    public LocalDateTime getEndTime() { return endTime; }
-    public void setEndTime(LocalDateTime endTime) { this.endTime = endTime; }
-    public String getPurpose() { return purpose; }
-    public void setPurpose(String purpose) { this.purpose = purpose; }
+    @Min(value = 0, message = "expectedAttendees cannot be negative")
+    @Max(value = 50_000, message = "expectedAttendees is unrealistically large")
+    private Integer expectedAttendees;
 }

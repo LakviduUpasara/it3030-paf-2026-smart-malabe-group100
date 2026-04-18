@@ -11,16 +11,18 @@ import org.springframework.data.repository.query.Param;
 
 public interface BookingRepository extends JpaRepository<Booking, Long>, JpaSpecificationExecutor<Booking> {
 
-    @Query("SELECT CASE WHEN COUNT(b) > 0 THEN true ELSE false END FROM Booking b " +
-           "WHERE b.resourceId = :resourceId " +
-           "AND b.status = :status " +
-           "AND b.startTime < :endTime " +
-           "AND b.endTime > :startTime")
+    @Query("SELECT CASE WHEN COUNT(b) > 0 THEN true ELSE false END FROM Booking b "
+            + "WHERE b.resourceId = :resourceId "
+            + "AND b.status = :status "
+            + "AND b.startTime < :endTime "
+            + "AND b.endTime > :startTime")
     boolean existsApprovedBookingConflict(
             @Param("resourceId") Long resourceId,
             @Param("status") BookingStatus status,
             @Param("startTime") LocalDateTime startTime,
             @Param("endTime") LocalDateTime endTime);
 
-    List<Booking> findByUserIdOrderByStartTimeDesc(Long userId);
+    List<Booking> findByUserIdOrderByStartTimeDesc(String userId);
+
+    List<Booking> findByStatusOrderByStartTimeAsc(BookingStatus status);
 }
