@@ -24,7 +24,7 @@ function NotificationBell({ pollMs = 30_000 }) {
   const isAdminConsole = location.pathname.startsWith("/admin");
   const notificationsPath = isAdminConsole
     ? "/admin/notifications?tab=inbox"
-    : "/notifications";
+    : "/notifications?tab=system";
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState([]);
   const [unread, setUnread] = useState(0);

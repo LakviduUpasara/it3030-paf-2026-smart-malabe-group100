@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Notification from '../components/Notification';
 import { bookingAPI } from '../services/api';
 import { getResources } from '../services/resourceService';
@@ -16,6 +17,7 @@ function normalizeTypeLabel(type) {
 
 const CreateBookingPage = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [resources, setResources] = useState([]);
   const [resourcesLoading, setResourcesLoading] = useState(true);
   const [resourcesError, setResourcesError] = useState(null);
@@ -169,14 +171,17 @@ const CreateBookingPage = () => {
 
       await bookingAPI.createBooking(payload);
 
-      setNotification({ type: 'success', message: 'Booking created successfully!' });
+      setNotification({
+        type: 'success',
+        message: 'Booking created successfully! Redirecting to My Bookings…',
+      });
       setFormData(emptyFormState);
       setPrefilledFromAvailability(false);
       sessionStorage.removeItem('bookingData');
 
       setTimeout(() => {
-        window.location.href = '/bookings';
-      }, 2000);
+        navigate('/bookings', { replace: true });
+      }, 1200);
     } catch (error) {
       setNotification({
         type: 'error',
