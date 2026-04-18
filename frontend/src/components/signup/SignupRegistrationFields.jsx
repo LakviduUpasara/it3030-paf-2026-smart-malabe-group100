@@ -279,7 +279,7 @@ function SignupRegistrationFields({ requestedRole, draft, onDraftChange, primary
     );
   }
 
-  if (["USER", "MANAGER", "TECHNICIAN", "ADMIN"].includes(requestedRole) && draft.kind === "CONSOLE") {
+  if (["USER", "TECHNICIAN", "ADMIN"].includes(requestedRole) && draft.kind === "CONSOLE") {
     return (
       <div className="flex flex-col gap-4 text-left">
         <label className="flex flex-col gap-1.5">
@@ -313,7 +313,15 @@ function SignupRegistrationFields({ requestedRole, draft, onDraftChange, primary
         </label>
         <label className="flex flex-col gap-1.5">
           <span className="text-xs font-semibold text-text/70">Requested role</span>
-          <input className={`${inpCls()} opacity-80`} readOnly value={requestedRole.replaceAll("_", " ")} />
+          <input
+            className={`${inpCls()} opacity-80`}
+            readOnly
+            value={
+              requestedRole
+                ? requestedRole.charAt(0) + requestedRole.slice(1).toLowerCase()
+                : ""
+            }
+          />
         </label>
         <label className="flex flex-col gap-1.5">
           <span className="text-xs font-semibold text-text/70">Status</span>

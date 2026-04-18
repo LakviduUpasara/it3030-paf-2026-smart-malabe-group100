@@ -66,7 +66,20 @@ const PROVIDER_ACCOUNT_CHOICES = {
 };
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /** Roles applicants may request (platform roles are assigned only after review). */
-const REQUESTABLE_ROLES = ["USER", "STUDENT", "LECTURER", "LAB_ASSISTANT", "TECHNICIAN", "MANAGER", "ADMIN"];
+const REQUESTABLE_ROLES = ["USER", "TECHNICIAN", "ADMIN"];
+
+function formatRequestedRoleLabel(role) {
+  const r = String(role || "").trim();
+  if (!r) {
+    return "";
+  }
+  return r.charAt(0) + r.slice(1).toLowerCase();
+}
+
+function sanitizeRequestedRole(role) {
+  const s = String(role ?? "USER").trim().toUpperCase();
+  return REQUESTABLE_ROLES.includes(s) ? s : "USER";
+}
 
 /** Persists Google sign-up token + step across refresh so submit still sends a valid session id. */
 const GOOGLE_SIGNUP_STORAGE_KEY = "paf_google_signup_draft";
@@ -78,8 +91,6 @@ const initialForm = {
   confirmPassword: "",
   reasonForAccess: "",
   requestedRole: "USER",
-  /** Matches backend TwoFactorMethod — required by API validation; user picks on step 3. */
-  preferredTwoFactorMethod: "EMAIL_OTP",
 };
 
 function SignupPage() {
@@ -160,17 +171,16 @@ function SignupPage() {
       googleSessionExpiresAtRef.current = meta.expiresAt ?? null;
       setSocialSignupToken(meta.signupToken);
       setProvider(AUTH_PROVIDERS.GOOGLE);
+      const restoredRole = sanitizeRequestedRole(meta.requestedRole);
       setFormState((prev) => ({
         ...prev,
         fullName: meta.fullName || "",
         email: meta.email || "",
-        requestedRole: meta.requestedRole || "USER",
+        requestedRole: restoredRole,
         password: "",
         confirmPassword: "",
       }));
-      setRegistrationDraft(
-        buildInitialDraft(meta.requestedRole || "USER", meta.fullName || "", meta.email || ""),
-      );
+      setRegistrationDraft(buildInitialDraft(restoredRole, meta.fullName || "", meta.email || ""));
       setStep(typeof meta.step === "number" && meta.step >= 1 && meta.step <= 3 ? meta.step : 2);
     } catch {
       try {
@@ -221,10 +231,7 @@ function SignupPage() {
       password: String(data.get("password") || formState.password || ""),
       confirmPassword: String(data.get("confirmPassword") || formState.confirmPassword || ""),
       reasonForAccess: String(data.get("reasonForAccess") || formState.reasonForAccess || ""),
-      requestedRole: String(data.get("requestedRole") || formState.requestedRole || "USER"),
-      preferredTwoFactorMethod: String(
-        data.get("preferredTwoFactorMethod") || formState.preferredTwoFactorMethod || "EMAIL_OTP",
-      ),
+      requestedRole: sanitizeRequestedRole(String(data.get("requestedRole") || formState.requestedRole || "USER")),
     };
     setFormState(next);
     return next;
@@ -425,15 +432,13 @@ function SignupPage() {
     }
     const primitives = deriveRegisterPayloadPrimitives(current.requestedRole, registrationDraft, identity.email);
     try {
-      const twoFa =
-        current.preferredTwoFactorMethod === "AUTHENTICATOR_APP" ? "AUTHENTICATOR_APP" : "EMAIL_OTP";
       const response = await register({
         fullName: identity.fullName,
         email: identity.email,
         password: current.password,
         requestedRole: current.requestedRole || "USER",
         reasonForAccess: current.reasonForAccess.trim(),
-        preferredTwoFactorMethod: twoFa,
+        preferredTwoFactorMethod: "EMAIL_OTP",
         authProvider: provider,
         socialSignupToken,
         campusId: primitives.campusId,
@@ -661,7 +666,7 @@ function SignupPage() {
                     >
                       {REQUESTABLE_ROLES.map((r) => (
                         <option key={r} value={r}>
-                          {r.replaceAll("_", " ")}
+                          {formatRequestedRoleLabel(r)}
                         </option>
                       ))}
                     </select>
@@ -687,7 +692,7 @@ function SignupPage() {
                 <div className="field-full rounded-2xl border border-border bg-tint/40 p-4 text-sm text-text/80">
                   <p className="text-xs font-semibold uppercase tracking-[0.08em] text-text/55">Summary</p>
                   <p className="mt-2">
-                    <strong>Role:</strong> {String(formState.requestedRole).replaceAll("_", " ")}
+                    <strong>Role:</strong> {formatRequestedRoleLabel(formState.requestedRole)}
                   </p>
                   <p className="mt-1">
                     <strong>Email:</strong> {formState.email}
@@ -707,23 +712,6 @@ function SignupPage() {
                     rows={4}
                     value={formState.reasonForAccess}
                   />
-                </label>
-                <label className="field field-annotated field-full">
-                  <span>Preferred 2-step verification *</span>
-                  <div className="input-shell">
-                    <select
-                      className="login-input"
-                      name="preferredTwoFactorMethod"
-                      onChange={handleChange}
-                      value={formState.preferredTwoFactorMethod}
-                    >
-                      <option value="EMAIL_OTP">Email verification code</option>
-                      <option value="AUTHENTICATOR_APP">Authenticator app</option>
-                    </select>
-                  </div>
-                  <p className="supporting-text mt-1 text-xs text-text/60">
-                    Applied after your request is approved (you can change this at first sign-in).
-                  </p>
                 </label>
                 <label className="field field-annotated field-full flex flex-row items-start gap-3 !space-y-0">
                   <input

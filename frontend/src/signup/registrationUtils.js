@@ -125,10 +125,7 @@ export function validateRegistrationDraft(requestedRole, draft) {
     }
     return "";
   }
-  if (
-    ["USER", "MANAGER", "TECHNICIAN", "ADMIN"].includes(requestedRole) &&
-    draft.kind === "CONSOLE"
-  ) {
+  if (["USER", "TECHNICIAN", "ADMIN"].includes(requestedRole) && draft.kind === "CONSOLE") {
     if (!draft.fullName?.trim()) {
       return "Full name is required.";
     }
