@@ -7,7 +7,7 @@ import Button from "./Button";
 import GoogleIdentityButton from "./GoogleIdentityButton";
 import LoadingSpinner from "./LoadingSpinner";
 import { useAuth } from "../hooks/useAuth";
-import { normalizeAuthStatus } from "../services/authService";
+import { getAuthSecurityHints, normalizeAuthStatus } from "../services/authService";
 import { getDefaultRouteForRole, normalizeRole, ROLES } from "../utils/roleUtils";
 import { formatCountdownMs, parseBackendDateTime } from "../utils/dateTimeParse";
 
@@ -16,22 +16,14 @@ const OTP_CHALLENGE_MINUTES_FALLBACK = Number(
   String(import.meta.env.VITE_AUTH_CHALLENGE_MINUTES ?? "10").trim() || "10",
 );
 
-const DEMO_LOCAL_ADMIN_EMAIL = "admin@smartcampus.edu";
-const DEMO_LOCAL_ADMIN_PASSWORD = "Admin@12345";
-const DEMO_LOCAL_STUDENT_EMAIL = "user@smartcampus.edu";
-const DEMO_LOCAL_TECHNICIAN_EMAIL = "technician@smartcampus.edu";
-
-const viteDeveloperFlag = String(import.meta.env.VITE_DEVELOPER_MODE ?? "")
-  .trim()
-  .toLowerCase() === "true";
-
 const initialCredentials = {
-  email: viteDeveloperFlag ? DEMO_LOCAL_ADMIN_EMAIL : "",
-  password: viteDeveloperFlag ? DEMO_LOCAL_ADMIN_PASSWORD : "",
+  email: "",
+  password: "",
 };
 
 function LoginPanel({ showHeading = true }) {
   const [credentials, setCredentials] = useState(initialCredentials);
+  const [allowSkipFirstLogin2fa, setAllowSkipFirstLogin2fa] = useState(true);
   const [verificationCode, setVerificationCode] = useState("");
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState("");
   const [localError, setLocalError] = useState("");
@@ -133,21 +125,26 @@ function LoginPanel({ showHeading = true }) {
   }, [twoFactorChallenge, otpClockTick]);
 
   useEffect(() => {
-    if (!developerMode) {
-      return;
+    if (sessionPhase !== "TWO_FACTOR_METHOD_SELECTION") {
+      return undefined;
     }
-
-    setCredentials((previous) => {
-      if (previous.email.trim() || previous.password.trim()) {
-        return previous;
+    let cancelled = false;
+    (async () => {
+      try {
+        const hints = await getAuthSecurityHints();
+        if (!cancelled) {
+          setAllowSkipFirstLogin2fa(Boolean(hints?.allowSkippingFirstLoginTwoFactorSetup));
+        }
+      } catch {
+        if (!cancelled) {
+          setAllowSkipFirstLogin2fa(true);
+        }
       }
-
-      return {
-        email: DEMO_LOCAL_ADMIN_EMAIL,
-        password: DEMO_LOCAL_ADMIN_PASSWORD,
-      };
-    });
-  }, [developerMode]);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionPhase]);
 
   const redirectToWorkspace = (authenticatedUser) => {
     const role = normalizeRole(authenticatedUser?.role);
@@ -225,40 +222,6 @@ function LoginPanel({ showHeading = true }) {
 
     try {
       const response = await devLogin(normalizedEmail);
-      handleAuthResponse(response);
-    } catch (quickLoginError) {
-      return quickLoginError;
-    }
-  };
-
-  const handleDevStudentLogin = async (event) => {
-    event.preventDefault();
-    setLocalError("");
-    clearError();
-
-    try {
-      setCredentials((currentCredentials) => ({
-        ...currentCredentials,
-        email: DEMO_LOCAL_STUDENT_EMAIL,
-      }));
-      const response = await devLogin(DEMO_LOCAL_STUDENT_EMAIL);
-      handleAuthResponse(response);
-    } catch (quickLoginError) {
-      return quickLoginError;
-    }
-  };
-
-  const handleDevTechnicianLogin = async (event) => {
-    event.preventDefault();
-    setLocalError("");
-    clearError();
-
-    try {
-      setCredentials((currentCredentials) => ({
-        ...currentCredentials,
-        email: DEMO_LOCAL_TECHNICIAN_EMAIL,
-      }));
-      const response = await devLogin(DEMO_LOCAL_TECHNICIAN_EMAIL);
       handleAuthResponse(response);
     } catch (quickLoginError) {
       return quickLoginError;
@@ -519,24 +482,30 @@ function LoginPanel({ showHeading = true }) {
             >
               Back
             </Button>
-            <Button
-              className="login-secondary-action"
-              disabled={isLoading}
-              onClick={async () => {
-                setLocalError("");
-                clearError();
-                try {
-                  const response = await skipFirstLoginTwoFactor();
-                  handleAuthResponse(response);
-                } catch {
-                  /* error surfaced via context */
-                }
-              }}
-              type="button"
-              variant="secondary"
-            >
-              Skip for now
-            </Button>
+            {allowSkipFirstLogin2fa ? (
+              <Button
+                className="login-secondary-action"
+                disabled={isLoading}
+                onClick={async () => {
+                  setLocalError("");
+                  clearError();
+                  try {
+                    const response = await skipFirstLoginTwoFactor();
+                    handleAuthResponse(response);
+                  } catch {
+                    /* error surfaced via context */
+                  }
+                }}
+                type="button"
+                variant="secondary"
+              >
+                Skip for now
+              </Button>
+            ) : (
+              <p className="supporting-text text-sm">
+                Your organization requires 2-step verification. Choose email or authenticator to continue.
+              </p>
+            )}
           </div>
         </div>
       ) : twoFactorChallenge ? (
@@ -693,24 +662,6 @@ function LoginPanel({ showHeading = true }) {
                   variant="primary"
                 >
                   Quick sign-in (email only)
-                </Button>
-                <Button
-                  className="login-secondary-action"
-                  disabled={isLoading}
-                  onClick={handleDevStudentLogin}
-                  type="button"
-                  variant="secondary"
-                >
-                  Sign in as Student
-                </Button>
-                <Button
-                  className="login-secondary-action"
-                  disabled={isLoading}
-                  onClick={handleDevTechnicianLogin}
-                  type="button"
-                  variant="secondary"
-                >
-                  Sign in as Technician
                 </Button>
               </div>
               <div className="auth-divider">

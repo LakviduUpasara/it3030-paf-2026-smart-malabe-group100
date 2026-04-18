@@ -10,9 +10,11 @@ import com.example.app.entity.enums.AuthProvider;
 import com.example.app.entity.enums.Role;
 import com.example.app.entity.enums.TwoFactorMethod;
 import com.example.app.exception.ApiException;
+import com.example.app.entity.PlatformSecuritySettings;
 import com.example.app.repository.TicketRepository;
 import com.example.app.repository.UserAccountRepository;
 import com.example.app.service.AdminTechnicianService;
+import com.example.app.service.PlatformSecurityService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -40,6 +42,7 @@ public class AdminTechnicianServiceImpl implements AdminTechnicianService {
         if (userAccountRepository.existsByEmailIgnoreCase(email)) {
             throw new ApiException(HttpStatus.CONFLICT, "An account with this email already exists.");
         }
+        PlatformSecuritySettings policy = platformSecurityService.getOrCreateDefault();
         UserAccount user = UserAccount.builder()
                 .fullName(request.getFullName().trim())
                 .email(email)
@@ -47,6 +50,8 @@ public class AdminTechnicianServiceImpl implements AdminTechnicianService {
                 .role(Role.TECHNICIAN)
                 .status(AccountStatus.ACTIVE)
                 .provider(AuthProvider.LOCAL)
+                .twoFactorEnabled(policy.isNewUsersMustEnableTwoFactor() ? Boolean.TRUE : Boolean.FALSE)
+                .mustChangePassword(policy.isRequirePasswordChangeOnFirstLoginForLocalUsers())
                 .preferredTwoFactorMethod(TwoFactorMethod.EMAIL_OTP)
                 .authenticatorConfirmed(false)
                 .build();

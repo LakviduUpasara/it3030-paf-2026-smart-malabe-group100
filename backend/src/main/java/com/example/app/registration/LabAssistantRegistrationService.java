@@ -11,6 +11,7 @@ import com.example.app.registration.dto.LabAssistantCreateRequest;
 import com.example.app.registration.dto.LabAssistantResponse;
 import com.example.app.registration.repository.LabAssistantRepository;
 import com.example.app.repository.UserAccountRepository;
+import com.example.app.service.PlatformSecurityService;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -39,6 +40,7 @@ public class LabAssistantRegistrationService {
     private final PasswordEncoder passwordEncoder;
     private final ModuleOfferingSyncService moduleOfferingSyncService;
     private final MongoTemplate mongoTemplate;
+    private final PlatformSecurityService platformSecurityService;
 
     @Value("${app.registration.lab-assistant-email-domain:lab.smartcampus.local}")
     private String labAssistantEmailDomain;
@@ -105,6 +107,7 @@ public class LabAssistantRegistrationService {
             }
 
             try {
+                var policy = platformSecurityService.getOrCreateDefault();
                 UserAccount user = UserAccount.builder()
                         .fullName(fullName)
                         .email(loginEmail.toLowerCase(Locale.ROOT))
@@ -112,8 +115,8 @@ public class LabAssistantRegistrationService {
                         .role(Role.LAB_ASSISTANT)
                         .status(mapUserStatus(status))
                         .provider(AuthProvider.LOCAL)
-                        .twoFactorEnabled(false)
-                        .mustChangePassword(true)
+                        .twoFactorEnabled(policy.isNewUsersMustEnableTwoFactor() ? Boolean.TRUE : Boolean.FALSE)
+                        .mustChangePassword(policy.isRequirePasswordChangeOnFirstLoginForLocalUsers())
                         .labAssistantRef(labAssistant.getId())
                         .build();
                 userAccountRepository.save(user);

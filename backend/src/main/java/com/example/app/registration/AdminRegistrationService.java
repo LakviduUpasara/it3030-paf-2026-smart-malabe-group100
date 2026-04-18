@@ -10,6 +10,7 @@ import com.example.app.registration.dto.AdminCreateResponse;
 import com.example.app.registration.dto.AdminUpdateRequest;
 import com.example.app.registration.dto.AdminUserResponse;
 import com.example.app.repository.UserAccountRepository;
+import com.example.app.service.PlatformSecurityService;
 import com.example.app.security.AuthenticatedUser;
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -81,6 +82,7 @@ public class AdminRegistrationService {
             throw new ApiException(HttpStatus.CONFLICT, "Username already exists");
         }
 
+        var policy = platformSecurityService.getOrCreateDefault();
         UserAccount user = UserAccount.builder()
                 .fullName(fullName)
                 .email(normalizedEmail)
@@ -89,8 +91,8 @@ public class AdminRegistrationService {
                 .role(role)
                 .status(status)
                 .provider(AuthProvider.LOCAL)
-                .twoFactorEnabled(false)
-                .mustChangePassword(true)
+                .twoFactorEnabled(policy.isNewUsersMustEnableTwoFactor() ? Boolean.TRUE : Boolean.FALSE)
+                .mustChangePassword(policy.isRequirePasswordChangeOnFirstLoginForLocalUsers())
                 .build();
 
         try {

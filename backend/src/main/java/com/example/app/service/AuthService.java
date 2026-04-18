@@ -1,6 +1,7 @@
 package com.example.app.service;
 
 import com.example.app.dto.auth.AuthFlowResponse;
+import com.example.app.dto.auth.AuthSecurityHintsResponse;
 import com.example.app.dto.auth.ChangeFirstLoginPasswordRequest;
 import com.example.app.dto.auth.GoogleCredentialRequest;
 import com.example.app.dto.auth.GoogleLoginRequest;
@@ -38,6 +39,8 @@ public interface AuthService {
 
     AuthFlowResponse selectFirstLoginTwoFactor(SelectFirstLoginTwoFactorRequest request, AuthenticatedUser user, String authorizationHeader);
 
+    AuthFlowResponse skipFirstLoginTwoFactor(AuthenticatedUser user, String authorizationHeader);
+
     void logout(String bearerToken);
 
     PendingApprovalResponse getSignupRequestStatus(String requestId, String email);
@@ -45,4 +48,6 @@ public interface AuthService {
     AuthFlowResponse activateApprovedSignup(String requestId, String email);
 
     AuthFlowResponse getCurrentSession(AuthenticatedUser authenticatedUser, String authorizationHeader);
+
+    AuthSecurityHintsResponse getPublicSecurityHints();
 }

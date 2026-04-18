@@ -8,6 +8,7 @@ import CatalogModulesAdminPage from "../pages/admin/CatalogModulesAdminPage";
 import DegreeProgramsAdminPage from "../pages/admin/DegreeProgramsAdminPage";
 import FacultiesAdminPage from "../pages/admin/FacultiesAdminPage";
 import AdminsAdminPage from "../pages/admin/AdminsAdminPage";
+import PlatformSecurityAdminPage from "../pages/admin/PlatformSecurityAdminPage";
 import StaffRegistrationPage from "../pages/admin/StaffRegistrationPage";
 import StudentsAdminPage from "../pages/admin/StudentsAdminPage";
 import IntakesAdminPage from "../pages/admin/IntakesAdminPage";
@@ -228,7 +229,7 @@ function AppRoutes() {
           {/* Administration */}
           <Route path="administration/system-settings" element={<SystemSettingsPage />} />
           <Route path="administration/audit-logs" element={<AdminScaffoldPage />} />
-          <Route path="administration/security-settings" element={<AdminScaffoldPage />} />
+          <Route path="administration/security-settings" element={<PlatformSecurityAdminPage />} />
           <Route path="administration/backup-management" element={<AdminScaffoldPage />} />
         </Route>
 

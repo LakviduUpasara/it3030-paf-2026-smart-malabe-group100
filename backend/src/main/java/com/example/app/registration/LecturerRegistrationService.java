@@ -11,6 +11,7 @@ import com.example.app.registration.dto.LecturerCreateRequest;
 import com.example.app.registration.dto.LecturerResponse;
 import com.example.app.registration.repository.LecturerRepository;
 import com.example.app.repository.UserAccountRepository;
+import com.example.app.service.PlatformSecurityService;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -39,6 +40,7 @@ public class LecturerRegistrationService {
     private final PasswordEncoder passwordEncoder;
     private final ModuleOfferingSyncService moduleOfferingSyncService;
     private final MongoTemplate mongoTemplate;
+    private final PlatformSecurityService platformSecurityService;
 
     @Value("${app.registration.lecturer-email-domain:lecturer.smartcampus.local}")
     private String lecturerEmailDomain;
@@ -97,6 +99,7 @@ public class LecturerRegistrationService {
             }
 
             try {
+                var policy = platformSecurityService.getOrCreateDefault();
                 UserAccount user = UserAccount.builder()
                         .fullName(fullName)
                         .email(loginEmail.toLowerCase(Locale.ROOT))
@@ -104,8 +107,8 @@ public class LecturerRegistrationService {
                         .role(Role.LECTURER)
                         .status(mapUserStatus(status))
                         .provider(AuthProvider.LOCAL)
-                        .twoFactorEnabled(false)
-                        .mustChangePassword(true)
+                        .twoFactorEnabled(policy.isNewUsersMustEnableTwoFactor() ? Boolean.TRUE : Boolean.FALSE)
+                        .mustChangePassword(policy.isRequirePasswordChangeOnFirstLoginForLocalUsers())
                         .lecturerRef(lecturer.getId())
                         .build();
                 userAccountRepository.save(user);

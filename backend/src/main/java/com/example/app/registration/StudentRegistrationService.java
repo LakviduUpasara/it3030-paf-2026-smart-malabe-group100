@@ -21,6 +21,7 @@ import com.example.app.registration.repository.EnrollmentRepository;
 import com.example.app.registration.repository.IntakeRepository;
 import com.example.app.registration.repository.StudentRepository;
 import com.example.app.repository.UserAccountRepository;
+import com.example.app.service.PlatformSecurityService;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -60,6 +61,7 @@ public class StudentRegistrationService {
     private final IntakeRepository intakeRepository;
     private final PasswordEncoder passwordEncoder;
     private final MongoTemplate mongoTemplate;
+    private final PlatformSecurityService platformSecurityService;
 
     @Value("${app.registration.student-email-domain:student.smartcampus.local}")
     private String studentEmailDomain;
@@ -147,6 +149,7 @@ public class StudentRegistrationService {
         }
 
         String email = student.getStudentId().toLowerCase(Locale.ROOT) + "@" + studentEmailDomain.toLowerCase(Locale.ROOT);
+        var policy = platformSecurityService.getOrCreateDefault();
         UserAccount user = null;
         try {
             user = UserAccount.builder()
@@ -157,8 +160,8 @@ public class StudentRegistrationService {
                     .role(Role.STUDENT)
                     .status(mapUserStatus(profileStatus))
                     .provider(AuthProvider.LOCAL)
-                    .twoFactorEnabled(false)
-                    .mustChangePassword(true)
+                    .twoFactorEnabled(policy.isNewUsersMustEnableTwoFactor() ? Boolean.TRUE : Boolean.FALSE)
+                    .mustChangePassword(policy.isRequirePasswordChangeOnFirstLoginForLocalUsers())
                     .studentRef(student.getId())
                     .build();
             user = userAccountRepository.save(user);

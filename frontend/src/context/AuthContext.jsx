@@ -210,7 +210,7 @@ export function AuthProvider({ children }) {
 
   const skipFirstLoginTwoFactor = async () =>
     performAuthAction(
-      () => authService.selectFirstLoginTwoFactor({ skipTwoFactor: true }),
+      () => authService.skipFirstLoginTwoFactorExplicit(),
       "Unable to skip 2-step verification.",
     );
 

@@ -155,6 +155,12 @@ export const ADMIN_NAV_SECTIONS = [
     defaultOpen: false,
     items: [
       { id: "system-settings", label: "System Settings", href: "/admin/administration/system-settings", matchHrefs: ["/admin/settings"], allowedRoles: [LMS_ROLES.SUPER_ADMIN] },
+      {
+        id: "platform-security",
+        label: "Platform security policy",
+        href: "/admin/administration/security-settings",
+        allowedRoles: [LMS_ROLES.SUPER_ADMIN],
+      },
     ],
   },
 ];

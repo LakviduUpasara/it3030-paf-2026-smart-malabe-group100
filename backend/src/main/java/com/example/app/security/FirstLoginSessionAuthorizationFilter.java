@@ -75,6 +75,7 @@ public class FirstLoginSessionAuthorizationFilter extends OncePerRequestFilter {
                     || (method.equals("POST") && path.endsWith("/auth/logout"));
             case TWO_FACTOR_METHOD_SELECTION -> (method.equals("GET") && path.endsWith("/auth/me"))
                     || (method.equals("POST") && path.endsWith("/auth/first-login/select-2fa-method"))
+                    || (method.equals("POST") && path.endsWith("/auth/first-login/skip-2fa"))
                     || (method.equals("POST") && path.endsWith("/auth/logout"));
             case FULL -> true;
         };

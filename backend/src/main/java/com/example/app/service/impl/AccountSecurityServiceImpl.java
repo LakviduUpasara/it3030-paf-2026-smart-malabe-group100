@@ -127,6 +127,7 @@ public class AccountSecurityServiceImpl implements AccountSecurityService {
     public void dismissGoogleTwoFactorPrompt(AuthenticatedUser user) {
         UserAccount account = loadAccount(user);
         account.setGoogleTwoFactorPromptDismissed(true);
+        account.setFirstLoginTwoFactorSetupSkipped(true);
         userAccountRepository.save(account);
     }
 
@@ -140,13 +141,8 @@ public class AccountSecurityServiceImpl implements AccountSecurityService {
                 && StringUtils.hasText(account.getAuthenticatorSecret())
                 && !account.isAuthenticatorConfirmed();
 
-        Boolean twoFactorEnabled = account.getTwoFactorEnabled();
-        if (twoFactorEnabled == null) {
-            twoFactorEnabled = Boolean.TRUE;
-        }
-
         SecuritySettingsResponse.SecuritySettingsResponseBuilder b = SecuritySettingsResponse.builder()
-                .twoFactorEnabled(twoFactorEnabled)
+                .twoFactorEnabled(account.getTwoFactorEnabled())
                 .preferredTwoFactorMethod(account.getPreferredTwoFactorMethod())
                 .authenticatorConfigured(
                         account.getPreferredTwoFactorMethod() == TwoFactorMethod.AUTHENTICATOR_APP

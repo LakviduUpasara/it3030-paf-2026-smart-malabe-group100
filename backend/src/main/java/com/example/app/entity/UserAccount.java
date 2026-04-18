@@ -76,6 +76,10 @@ public class UserAccount {
     @Builder.Default
     private boolean googleTwoFactorPromptDismissed = false;
 
+    /** Local (and other) users: optional first-login 2FA wizard was skipped; avoids re-prompting. */
+    @Builder.Default
+    private boolean firstLoginTwoFactorSetupSkipped = false;
+
     @Builder.Default
     private boolean emailNotificationsEnabled = true;
 
@@ -89,18 +93,20 @@ public class UserAccount {
     private LocalDateTime updatedAt;
 
     /**
-     * Legacy {@code twoFactorEnabled == null} keeps requiring a second factor at sign-in (previous product behavior).
+     * Per-user 2FA requirement at sign-in (before global platform overrides).
+     *
+     * @param treatLegacyNullAsOptional when {@code true}, {@code twoFactorEnabled == null} means optional (off).
      */
-    public boolean requiresTwoFactorAtLogin() {
+    public boolean requiresTwoFactorAtLogin(boolean treatLegacyNullAsOptional) {
         if (twoFactorEnabled == null) {
-            return true;
+            return !treatLegacyNullAsOptional;
         }
         return Boolean.TRUE.equals(twoFactorEnabled);
     }
 
     /** True when 2FA is on and the chosen method is ready to use at sign-in (TOTP confirmed or email OTP). */
-    public boolean isTwoFactorFullyConfigured() {
-        if (!requiresTwoFactorAtLogin()) {
+    public boolean isTwoFactorFullyConfigured(boolean treatLegacyNullAsOptional) {
+        if (!requiresTwoFactorAtLogin(treatLegacyNullAsOptional)) {
             return true;
         }
         TwoFactorMethod m = preferredTwoFactorMethod;

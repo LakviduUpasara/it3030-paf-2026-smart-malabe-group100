@@ -1,6 +1,7 @@
 package com.example.app.service.impl;
 
 import com.example.app.dto.auth.AuthFlowResponse;
+import com.example.app.dto.auth.AuthSecurityHintsResponse;
 import com.example.app.dto.auth.AuthFlowStatus;
 import com.example.app.dto.auth.AuthenticatedUserResponse;
 import com.example.app.dto.auth.ChangeFirstLoginPasswordRequest;
@@ -15,6 +16,7 @@ import com.example.app.dto.auth.ResendEmailOtpRequest;
 import com.example.app.dto.auth.TwoFactorChallengeResponse;
 import com.example.app.dto.auth.VerifyTwoFactorRequest;
 import com.example.app.entity.GoogleSignupSession;
+import com.example.app.entity.PlatformSecuritySettings;
 import com.example.app.entity.SessionPhase;
 import com.example.app.entity.SessionToken;
 import com.example.app.entity.SignupRequest;
@@ -37,6 +39,7 @@ import com.example.app.security.GoogleIdentityVerifier;
 import com.example.app.security.VerifiedGoogleAccount;
 import com.example.app.service.AuthEmailOtpNotifier;
 import com.example.app.service.AuthService;
+import com.example.app.service.PlatformSecurityService;
 import com.warrenstrange.googleauth.GoogleAuthenticator;
 import com.warrenstrange.googleauth.GoogleAuthenticatorKey;
 import java.net.URLEncoder;
@@ -68,6 +71,7 @@ public class AuthServiceImpl implements AuthService {
     private final GoogleIdentityVerifier googleIdentityVerifier;
     private final AppProperties appProperties;
     private final AuthEmailOtpNotifier authEmailOtpNotifier;
+    private final PlatformSecurityService platformSecurityService;
 
     @Value("${app.auth.session-hours:12}")
     private long sessionHours;
@@ -86,6 +90,14 @@ public class AuthServiceImpl implements AuthService {
 
     @Value("${app.auth.google.signup-session-minutes:15}")
     private long googleSignupSessionMinutes;
+
+    private boolean mustVerifySecondFactorAtLogin(UserAccount userAccount) {
+        PlatformSecuritySettings policy = platformSecurityService.getOrCreateDefault();
+        if (policy.isForceTwoFactorForAllUsers()) {
+            return true;
+        }
+        return userAccount.requiresTwoFactorAtLogin(policy.isTreatLegacyUnknownTwoFactorAsOptional());
+    }
 
     @Override
     public AuthFlowResponse register(RegisterRequest request) {
@@ -201,7 +213,7 @@ public class AuthServiceImpl implements AuthService {
             return passwordChangeRequiredResponse(userAccount);
         }
 
-        if (!userAccount.requiresTwoFactorAtLogin()) {
+        if (!mustVerifySecondFactorAtLogin(userAccount)) {
             return authenticatedResponse(userAccount, "Signed in successfully.");
         }
 
@@ -319,7 +331,7 @@ public class AuthServiceImpl implements AuthService {
             userAccountRepository.save(userAccount);
         }
 
-        if (!userAccount.requiresTwoFactorAtLogin()) {
+        if (!mustVerifySecondFactorAtLogin(userAccount)) {
             return authenticatedResponse(userAccount, "Signed in with Google successfully.");
         }
 
@@ -493,7 +505,7 @@ public class AuthServiceImpl implements AuthService {
             return passwordChangeRequiredResponse(userAccount);
         }
 
-        if (!userAccount.requiresTwoFactorAtLogin()) {
+        if (!mustVerifySecondFactorAtLogin(userAccount)) {
             return authenticatedResponse(userAccount, "Your workspace is ready.");
         }
 
@@ -588,9 +600,16 @@ public class AuthServiceImpl implements AuthService {
             if (request.getMethod() != null) {
                 throw new ApiException(HttpStatus.BAD_REQUEST, "Do not send a method when skipping 2-step verification.");
             }
+            PlatformSecuritySettings policy = platformSecurityService.getOrCreateDefault();
+            if (!policy.isAllowSkippingFirstLoginTwoFactorSetup()) {
+                throw new ApiException(
+                        HttpStatus.FORBIDDEN,
+                        "Your organization requires 2-step verification. Choose email or authenticator to continue.");
+            }
             userAccount.setTwoFactorEnabled(false);
             userAccount.setAuthenticatorSecret(null);
             userAccount.setAuthenticatorConfirmed(false);
+            userAccount.setFirstLoginTwoFactorSetupSkipped(true);
             userAccountRepository.save(userAccount);
 
             sessionTokenRepository.deleteById(tokenValue.trim());
@@ -613,6 +632,7 @@ public class AuthServiceImpl implements AuthService {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Choose a verification method or skip 2-step verification.");
         }
 
+        userAccount.setFirstLoginTwoFactorSetupSkipped(false);
         userAccount.setTwoFactorEnabled(true);
         userAccount.setPreferredTwoFactorMethod(method);
         if (method == TwoFactorMethod.EMAIL_OTP) {
@@ -637,6 +657,13 @@ public class AuthServiceImpl implements AuthService {
 
         boolean enrollmentStep = method == TwoFactorMethod.AUTHENTICATOR_APP;
         return buildTwoFactorChallenge(reloaded, enrollmentStep);
+    }
+
+    @Override
+    public AuthFlowResponse skipFirstLoginTwoFactor(AuthenticatedUser user, String authorizationHeader) {
+        SelectFirstLoginTwoFactorRequest req = new SelectFirstLoginTwoFactorRequest();
+        req.setSkipTwoFactor(true);
+        return selectFirstLoginTwoFactor(req, user, authorizationHeader);
     }
 
     @Override
@@ -720,7 +747,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private AuthFlowResponse buildTwoFactorChallenge(UserAccount userAccount, boolean authenticatorEnrollmentStep) {
-        if (!userAccount.requiresTwoFactorAtLogin()) {
+        if (!mustVerifySecondFactorAtLogin(userAccount)) {
             throw new ApiException(
                     HttpStatus.BAD_REQUEST,
                     "2-step verification is turned off for this account. Sign in again without a verification step."
@@ -1019,6 +1046,14 @@ public class AuthServiceImpl implements AuthService {
         return signupSession;
     }
 
+    @Override
+    public AuthSecurityHintsResponse getPublicSecurityHints() {
+        PlatformSecuritySettings p = platformSecurityService.getOrCreateDefault();
+        return AuthSecurityHintsResponse.builder()
+                .allowSkippingFirstLoginTwoFactorSetup(p.isAllowSkippingFirstLoginTwoFactorSetup())
+                .build();
+    }
+
     private AuthFlowResponse loginWithSocialProvider(
             GoogleLoginRequest request,
             AuthProvider authProvider,
@@ -1053,7 +1088,7 @@ public class AuthServiceImpl implements AuthService {
             userAccountRepository.save(userAccount);
         }
 
-        if (!userAccount.requiresTwoFactorAtLogin()) {
+        if (!mustVerifySecondFactorAtLogin(userAccount)) {
             return authenticatedResponse(userAccount, "Signed in successfully.");
         }
 

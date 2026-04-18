@@ -29,6 +29,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/h2-console/**").permitAll()
                         .requestMatchers("/api/health/**", "/api/v1/health/**").permitAll()
+                        // Stricter auth routes must be declared before the broad /api/v1/auth/** permit.
+                        .requestMatchers("/api/v1/auth/2fa/**").authenticated()
+                        .requestMatchers("/api/v1/settings/**").authenticated()
                         .requestMatchers("/api/v1/health/**", "/api/v1/auth/**").permitAll()
                         // Public sign-up: load the same faculty/degree/intake/module metadata as the admin console forms.
                         .requestMatchers(HttpMethod.GET, "/api/v1/faculties", "/api/v1/faculties/**")

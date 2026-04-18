@@ -167,6 +167,24 @@ export async function changeFirstLoginPassword({ currentPassword, newPassword })
   }
 }
 
+export async function getAuthSecurityHints() {
+  try {
+    const response = await api.get("/auth/security-hints");
+    return response.data;
+  } catch (error) {
+    throw createServiceError(error, "Unable to load security options.");
+  }
+}
+
+export async function skipFirstLoginTwoFactorExplicit() {
+  try {
+    const response = await api.post("/auth/first-login/skip-2fa");
+    return response.data;
+  } catch (error) {
+    throw createServiceError(error, "Unable to skip 2-step verification.");
+  }
+}
+
 export async function selectFirstLoginTwoFactor({ method, skipTwoFactor }) {
   if (skipTwoFactor) {
     try {

@@ -3,6 +3,7 @@ package com.example.app.service.impl;
 import com.example.app.dto.admin.SignupRequestDecisionRequest;
 import com.example.app.dto.admin.SignupRequestRejectRequest;
 import com.example.app.dto.admin.SignupRequestSummaryResponse;
+import com.example.app.entity.PlatformSecuritySettings;
 import com.example.app.entity.SignupRequest;
 import com.example.app.entity.UserAccount;
 import com.example.app.entity.enums.AccountStatus;
@@ -14,6 +15,7 @@ import com.example.app.repository.SignupRequestRepository;
 import com.example.app.repository.UserAccountRepository;
 import com.example.app.security.AuthenticatedUser;
 import com.example.app.service.AdminSignupRequestService;
+import com.example.app.service.PlatformSecurityService;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
@@ -28,6 +30,7 @@ public class AdminSignupRequestServiceImpl implements AdminSignupRequestService 
 
     private final SignupRequestRepository signupRequestRepository;
     private final UserAccountRepository userAccountRepository;
+    private final PlatformSecurityService platformSecurityService;
 
     @Override
     public List<SignupRequestSummaryResponse> getPendingRequests() {
@@ -55,21 +58,24 @@ public class AdminSignupRequestServiceImpl implements AdminSignupRequestService 
         }
 
         String username = allocateUsernameForEmail(signupRequest.getEmail());
+        PlatformSecuritySettings policy = platformSecurityService.getOrCreateDefault();
+        AuthProvider provider = signupRequest.getAuthProvider() == null ? AuthProvider.LOCAL : signupRequest.getAuthProvider();
+        boolean local = provider == AuthProvider.LOCAL;
         // Applicant’s preferred 2FA from the pending request; OTP / authenticator enrollment runs at first sign-in only.
         UserAccount userAccount = UserAccount.builder()
                 .fullName(signupRequest.getFullName())
                 .email(signupRequest.getEmail())
                 .username(username)
                 .providerSubject(signupRequest.getProviderSubject())
-                .passwordHash(signupRequest.getAuthProvider() == AuthProvider.LOCAL ? signupRequest.getPasswordHash() : null)
+                .passwordHash(local ? signupRequest.getPasswordHash() : null)
                 .role(request.getAssignedRole())
                 .status(AccountStatus.ACTIVE)
-                .provider(signupRequest.getAuthProvider() == null ? AuthProvider.LOCAL : signupRequest.getAuthProvider())
-                .twoFactorEnabled(false)
+                .provider(provider)
+                .twoFactorEnabled(policy.isNewUsersMustEnableTwoFactor() ? Boolean.TRUE : Boolean.FALSE)
                 .preferredTwoFactorMethod(signupRequest.getPreferredTwoFactorMethod())
                 .authenticatorConfirmed(false)
-                .googleTwoFactorPromptDismissed(signupRequest.getAuthProvider() == AuthProvider.GOOGLE ? false : true)
-                .mustChangePassword(signupRequest.getAuthProvider() == AuthProvider.LOCAL)
+                .googleTwoFactorPromptDismissed(provider == AuthProvider.GOOGLE ? false : true)
+                .mustChangePassword(local && policy.isRequirePasswordChangeOnFirstLoginForLocalUsers())
                 .build();
         userAccountRepository.save(userAccount);
 

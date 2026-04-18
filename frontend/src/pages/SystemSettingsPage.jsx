@@ -56,7 +56,7 @@ function SystemSettingsPage() {
     };
   }, [settings?.qrCodeUri]);
 
-  const twoFactorOn = Boolean(settings?.twoFactorEnabled);
+  const twoFactorOn = settings?.twoFactorEnabled === true;
   const method = settings?.preferredTwoFactorMethod || "EMAIL_OTP";
 
   const handleSaveNotifications = async () => {
@@ -212,6 +212,12 @@ function SystemSettingsPage() {
         <p className="mt-2 text-sm text-text/72">
           Optional. When enabled, sign-in requires your email code or authenticator app according to your selection.
         </p>
+        {settings.twoFactorEnabled == null ? (
+          <p className="mt-2 text-sm text-amber-800/90">
+            Your account has not opted in yet—sign-in stays single-step unless an administrator enforces organization-wide
+            2FA.
+          </p>
+        ) : null}
 
         <label className="mt-6 flex cursor-pointer items-center gap-3">
           <input
