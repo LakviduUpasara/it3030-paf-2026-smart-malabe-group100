@@ -19,8 +19,12 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
+/**
+ * Legacy JPA/file-backed ticket API (assignments, attachments, technician updates).
+ * Campus incident reporting uses {@link CampusTicketController} at {@code POST /api/v1/tickets}.
+ */
 @RestController
-@RequestMapping("/api/v1/tickets")
+@RequestMapping("/api/v1/legacy/tickets")
 @CrossOrigin
 public class TicketController {
 

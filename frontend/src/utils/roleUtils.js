@@ -18,7 +18,7 @@ export const ROLES = Object.freeze({
  */
 export function resolveAdminConsoleRole(apiRole) {
   const r = normalizeRole(apiRole);
-  if (r === ROLES.ADMIN) {
+  if (r === ROLES.ADMIN || r === ROLES.LOST_ITEM_ADMIN) {
     return LMS_ROLES.SUPER_ADMIN;
   }
   if (r === ROLES.LECTURER || r === "TEACHER") {

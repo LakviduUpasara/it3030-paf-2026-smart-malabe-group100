@@ -48,6 +48,9 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/admins", "/api/v1/admins/**")
                                 .hasAnyRole("ADMIN", "LOST_ITEM_ADMIN")
                         .requestMatchers("/api/v1/technician/**").hasRole("TECHNICIAN")
+                        // Incident desk: campus managers may triage alongside platform admins.
+                        .requestMatchers("/api/v1/admin/tickets", "/api/v1/admin/tickets/**")
+                                .hasAnyRole("ADMIN", "LOST_ITEM_ADMIN", "MANAGER")
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/lecturers", "/api/v1/lecturers/**")
                                 .hasAnyRole("ADMIN", "LOST_ITEM_ADMIN", "MANAGER")

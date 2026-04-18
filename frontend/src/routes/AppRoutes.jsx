@@ -36,6 +36,7 @@ import TechnicianTicketsPage from "../pages/technician/TechnicianTicketsPage";
 import AdminConsoleLayout from "../components/admin/AdminConsoleLayout";
 import AdminRoute from "./AdminRoute";
 import RequireSuperAdmin from "./RequireSuperAdmin";
+import RequireCampusOperator from "./RequireCampusOperator";
 import RequireUserRegistrar from "./RequireUserRegistrar";
 import ProtectedRoute from "./ProtectedRoute";
 import { getDefaultRouteForRole, ROLES } from "../utils/roleUtils";
@@ -220,8 +221,10 @@ function AppRoutes() {
           <Route path="administration/audit-logs" element={<AdminScaffoldPage />} />
           <Route path="administration/security-settings" element={<AdminScaffoldPage />} />
           <Route path="administration/backup-management" element={<AdminScaffoldPage />} />
+        </Route>
 
-          {/* Campus operations (legacy Smart Campus) */}
+        <Route element={<RequireCampusOperator />}>
+          {/* Module A — bookable resources; Module B — approvals; Module C — ticketing (admin desk) */}
           <Route path="campus/resources" element={<ManageResourcesPage />} />
           <Route path="bookings" element={<ApproveBookingsPage />} />
           <Route path="tickets" element={<ManageTicketsPage />} />

@@ -1,4 +1,6 @@
 import {
+  Building2,
+  GraduationCap,
   LayoutDashboard,
   Megaphone,
   Settings,
@@ -32,6 +34,81 @@ export const ADMIN_NAV_SECTIONS = [
         end: true,
         matchHrefs: ["/admin"],
         allowedRoles: [LMS_ROLES.SUPER_ADMIN, LMS_ROLES.LECTURER, LMS_ROLES.MANAGER],
+      },
+    ],
+  },
+  {
+    id: "academic-catalogue",
+    label: "Academic catalogue",
+    icon: GraduationCap,
+    allowedRoles: [LMS_ROLES.SUPER_ADMIN],
+    defaultOpen: false,
+    items: [
+      {
+        id: "academics-faculties",
+        label: "Faculties",
+        href: "/admin/academics/faculties",
+        allowedRoles: [LMS_ROLES.SUPER_ADMIN],
+      },
+      {
+        id: "academics-programs",
+        label: "Degree programs",
+        href: "/admin/academics/degree-programs",
+        allowedRoles: [LMS_ROLES.SUPER_ADMIN],
+      },
+      {
+        id: "academics-modules",
+        label: "Module catalog",
+        href: "/admin/academics/modules",
+        allowedRoles: [LMS_ROLES.SUPER_ADMIN],
+      },
+      {
+        id: "academics-intakes",
+        label: "Intakes",
+        href: "/admin/academics/intakes",
+        allowedRoles: [LMS_ROLES.SUPER_ADMIN],
+      },
+      {
+        id: "academics-subgroups",
+        label: "Subgroups",
+        href: "/admin/academics/subgroups",
+        allowedRoles: [LMS_ROLES.SUPER_ADMIN],
+      },
+      {
+        id: "academics-offerings",
+        label: "Module offerings",
+        href: "/admin/academics/module-offerings",
+        allowedRoles: [LMS_ROLES.SUPER_ADMIN],
+      },
+    ],
+  },
+  {
+    id: "facilities-operations",
+    label: "Facilities & operations",
+    icon: Building2,
+    allowedRoles: [LMS_ROLES.SUPER_ADMIN, LMS_ROLES.MANAGER],
+    defaultOpen: true,
+    items: [
+      {
+        id: "resources-catalogue",
+        label: "Resources catalogue",
+        href: "/admin/campus/resources",
+        matchHrefs: ["/admin/campus/resources"],
+        allowedRoles: [LMS_ROLES.SUPER_ADMIN, LMS_ROLES.MANAGER],
+      },
+      {
+        id: "booking-management",
+        label: "Booking management",
+        href: "/admin/bookings",
+        matchHrefs: ["/admin/bookings"],
+        allowedRoles: [LMS_ROLES.SUPER_ADMIN, LMS_ROLES.MANAGER],
+      },
+      {
+        id: "incident-ticketing",
+        label: "Incident ticketing",
+        href: "/admin/tickets",
+        matchHrefs: ["/admin/tickets"],
+        allowedRoles: [LMS_ROLES.SUPER_ADMIN, LMS_ROLES.MANAGER],
       },
     ],
   },
@@ -84,6 +161,9 @@ export const ADMIN_OPTIONAL_PATHS = [
   "/admin/groups/add-students",
   "/admin/announcements",
   "/admin/communication/messages",
+  "/admin/campus/resources",
+  "/admin/bookings",
+  "/admin/tickets",
 ];
 
 export function filterNavSectionsForRole(consoleRole, sections = ADMIN_NAV_SECTIONS) {

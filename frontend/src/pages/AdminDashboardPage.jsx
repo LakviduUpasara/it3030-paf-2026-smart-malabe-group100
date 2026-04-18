@@ -12,9 +12,11 @@ import AdminKpiGrid from "../components/admin/AdminKpiGrid";
 import AdminPageHeader from "../components/admin/AdminPageHeader";
 import AdminStatTile from "../components/admin/AdminStatTile";
 import LoadingSpinner from "../components/LoadingSpinner";
+import { useAuth } from "../hooks/useAuth";
 import { getPendingBookings } from "../services/bookingService";
 import { getResources } from "../services/resourceService";
 import { getManagedTickets } from "../services/ticketService";
+import { LMS_ROLES, resolveAdminConsoleRole } from "../utils/roleUtils";
 import { toToken } from "../utils/formatters";
 
 const initialSummary = {
@@ -39,6 +41,10 @@ function resourceIsMaintenance(resource) {
 
 function AdminDashboardPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const consoleRole = resolveAdminConsoleRole(user?.role);
+  const showCampusAssignmentModules =
+    consoleRole === LMS_ROLES.SUPER_ADMIN || consoleRole === LMS_ROLES.MANAGER;
   const [summary, setSummary] = useState(initialSummary);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -117,6 +123,55 @@ function AdminDashboardPage() {
         description="Monitor approvals, resource availability, and operational support from one control center."
         title="Campus operations"
       />
+
+      {showCampusAssignmentModules ? (
+        <section
+          className="rounded-3xl border border-border bg-card/80 p-5 shadow-shadow"
+          aria-label="Assignment modules"
+        >
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-text/60">
+            PAF modules in this console
+          </p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            <button
+              type="button"
+              className="rounded-2xl border border-border bg-tint px-4 py-3 text-left transition-colors hover:bg-card"
+              onClick={() => navigate("/admin/campus/resources")}
+            >
+              <p className="text-sm font-semibold text-heading">Module A — Facilities catalogue</p>
+              <p className="mt-1 text-xs text-text/70">
+                Bookable resources, metadata, availability, search and filters.
+              </p>
+            </button>
+            <button
+              type="button"
+              className="rounded-2xl border border-border bg-tint px-4 py-3 text-left transition-colors hover:bg-card"
+              onClick={() => navigate("/admin/bookings")}
+            >
+              <p className="text-sm font-semibold text-heading">Module B — Bookings</p>
+              <p className="mt-1 text-xs text-text/70">
+                Requests, approvals, conflicts, and lifecycle (pending → approved / rejected).
+              </p>
+            </button>
+            <button
+              type="button"
+              className="rounded-2xl border border-border bg-tint px-4 py-3 text-left transition-colors hover:bg-card"
+              onClick={() => navigate("/admin/tickets")}
+            >
+              <p className="text-sm font-semibold text-heading">Module C — Incidents</p>
+              <p className="mt-1 text-xs text-text/70">
+                Ticketing workflow, assignments, evidence, and service desk actions.
+              </p>
+            </button>
+          </div>
+          {consoleRole === LMS_ROLES.SUPER_ADMIN ? (
+            <p className="mt-3 text-xs text-text/60">
+              Academic reference data (faculties, programs, module catalog) lives under{" "}
+              <strong className="font-medium text-text/80">Academic catalogue</strong> in the sidebar.
+            </p>
+          ) : null}
+        </section>
+      ) : null}
 
       {error ? (
         <section
