@@ -5,12 +5,18 @@ import Card from "../../components/Card";
 import LoadingSpinner from "../../components/LoadingSpinner";
 import { getTicketById, rejectTicketAssignment } from "../../services/ticketService";
 import { formatDateTime, toToken } from "../../utils/formatters";
-import { isAwaitingTechnicianResponse } from "../../utils/technicianTicketFlow";
+import {
+  canUseRejectFlow,
+  isAcceptedTechnicianWork,
+  isAwaitingTechnicianDecision,
+  labelForAcceptedTechnicianWork,
+  labelForAwaitingTechnicianDecision,
+} from "../../utils/technicianTicketFlow";
 
 const REASON_MAX = 500;
 
 /**
- * Confirm rejection here — ticket returns to the open queue for the desk.
+ * Return ticket to the desk — status becomes {@code OPEN} for reassignment — while assignment is pending or after acceptance.
  */
 function TechnicianTicketRejectPage() {
   const { ticketId } = useParams();
@@ -58,11 +64,18 @@ function TechnicianTicketRejectPage() {
     );
   }
 
-  if (!isAwaitingTechnicianResponse(ticket.status)) {
+  if (!canUseRejectFlow(ticket)) {
     return <Navigate replace to={`/technician/tickets/${ticketId}`} />;
   }
 
   const summaryPath = `/technician/tickets/${ticketId}`;
+  const assignedPhase = isAwaitingTechnicianDecision(ticket);
+  const inProgressPhase = isAcceptedTechnicianWork(ticket);
+
+  const pageTitle = inProgressPhase ? "Return ticket to desk" : "Reject this ticket";
+  const pageSubtitle = inProgressPhase
+    ? "You already accepted, but you can still hand it back if you can’t complete the work — the desk can reassign it."
+    : "Use this only if you cannot take this assignment before you start";
 
   return (
     <div className="page-stack">
@@ -82,10 +95,12 @@ function TechnicianTicketRejectPage() {
             Reject queue
           </Link>
         </div>
-        <span className={`status-badge ${toToken(ticket.status)}`}>Awaiting your response</span>
+        <span className={`status-badge ${toToken(ticket.status)}`}>
+          {assignedPhase ? labelForAwaitingTechnicianDecision(ticket) : labelForAcceptedTechnicianWork(ticket)}
+        </span>
       </div>
 
-      <Card subtitle="Use this only if you cannot handle this ticket" title="Reject this ticket">
+      <Card subtitle={pageSubtitle} title={pageTitle}>
         {error ? <p className="alert alert-error">{error}</p> : null}
 
         <div className="form-grid mb-4">
@@ -97,6 +112,16 @@ function TechnicianTicketRejectPage() {
             <span>Description</span>
             <p className="supporting-text whitespace-pre-wrap">{ticket.description || "—"}</p>
           </div>
+          {inProgressPhase ? (
+            <p className="supporting-text text-sm text-amber-800/90 dark:text-amber-200/90">
+              This removes your assignment and puts the ticket back to <strong>Open</strong> so the desk can assign someone
+              else. Confirm only when you&apos;re sure.
+            </p>
+          ) : (
+            <p className="supporting-text text-sm text-amber-800/90 dark:text-amber-200/90">
+              The desk will see the ticket as <strong>Open</strong> again and can assign another technician.
+            </p>
+          )}
         </div>
 
         <label className="field mb-4">
@@ -105,7 +130,7 @@ function TechnicianTicketRejectPage() {
             className="min-h-[100px] w-full rounded-xl border border-border bg-surface p-3 text-sm"
             maxLength={REASON_MAX}
             onChange={(e) => setReason(e.target.value)}
-            placeholder="e.g. Outside my area / need specialist"
+            placeholder="e.g. Outside my area / need specialist / cannot complete"
             value={reason}
           />
         </label>
@@ -121,7 +146,7 @@ function TechnicianTicketRejectPage() {
                 await rejectTicketAssignment(ticketId, trimmed ? { reason: trimmed } : {});
                 navigate("/technician/reject");
               } catch (e) {
-                setError(e.message || "Could not reject.");
+                setError(e.message || "Could not return ticket.");
               } finally {
                 setBusy(false);
               }
@@ -129,17 +154,26 @@ function TechnicianTicketRejectPage() {
             type="button"
             variant="primary"
           >
-            Confirm — return to queue
+            {inProgressPhase ? "Confirm — return to desk" : "Confirm — return to queue"}
           </Button>
           <Link className="button button-secondary inline-flex items-center justify-center" to={summaryPath}>
-            Back without rejecting
+            Back without returning
           </Link>
-          <Link
-            className="button button-secondary inline-flex items-center justify-center"
-            to={`/technician/tickets/${ticketId}/accept`}
-          >
-            Go to Accept page instead
-          </Link>
+          {assignedPhase ? (
+            <Link
+              className="button button-secondary inline-flex items-center justify-center"
+              to={`/technician/tickets/${ticketId}/accept`}
+            >
+              Go to Accept page instead
+            </Link>
+          ) : (
+            <Link
+              className="button button-secondary inline-flex items-center justify-center"
+              to={`/technician/tickets/${ticketId}/work`}
+            >
+              Back to workspace
+            </Link>
+          )}
         </div>
       </Card>
     </div>

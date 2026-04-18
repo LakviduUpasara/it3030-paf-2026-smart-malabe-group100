@@ -41,6 +41,7 @@ import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -61,7 +62,11 @@ public class TicketServiceImpl implements TicketService {
     private static final int MAX_OTHER_WITHDRAWAL_REASON_LEN = 2000;
 
     private static final Set<String> VALID_TICKET_STATUSES = Set.of(
-            "OPEN", "ASSIGNED", "IN_PROGRESS", "RESOLVED", "WITHDRAWN");
+            "OPEN", "ASSIGNED", "IN_PROGRESS", "ACCEPTED", "REJECTED", "RESOLVED", "WITHDRAWN");
+
+    private static final String TECH_ACCEPT_PENDING = "PENDING";
+    private static final String TECH_ACCEPT_ACCEPTED = "ACCEPTED";
+    private static final String TECH_ACCEPT_REJECTED = "REJECTED";
 
     @Autowired
     private TicketRepository ticketRepo;
@@ -107,7 +112,7 @@ public class TicketServiceImpl implements TicketService {
         if (role == Role.USER) {
             list = ticketRepo.findByCreatedByUserIdOrderByCreatedAtDesc(user.getUserId());
         } else if (role == Role.TECHNICIAN) {
-            list = ticketRepo.findByAssignedTechnicianUserIdOrderByCreatedAtDesc(user.getUserId());
+            list = mergeTechnicianVisibleTickets(user.getUserId());
         } else if (role == Role.ADMIN) {
             list = ticketRepo.findAll(Sort.by(Sort.Direction.DESC, "createdAt"));
         } else {
@@ -122,6 +127,24 @@ public class TicketServiceImpl implements TicketService {
                 : userAccountRepository.findAllById(userIds).stream()
                         .collect(Collectors.toMap(UserAccount::getId, Function.identity()));
         return list.stream().map(t -> mapToResponse(t, usersById)).collect(Collectors.toList());
+    }
+
+    /**
+     * Assigned tickets plus tickets this technician declined (still visible for history until the desk reassigns).
+     */
+    private List<Ticket> mergeTechnicianVisibleTickets(String technicianUserId) {
+        List<Ticket> assigned = ticketRepo.findByAssignedTechnicianUserIdOrderByCreatedAtDesc(technicianUserId);
+        List<Ticket> rejectedByMe = ticketRepo.findByLastRejectedByTechnicianUserIdOrderByCreatedAtDesc(technicianUserId);
+        Map<String, Ticket> merged = new LinkedHashMap<>();
+        for (Ticket t : assigned) {
+            merged.put(t.getId(), t);
+        }
+        for (Ticket t : rejectedByMe) {
+            merged.putIfAbsent(t.getId(), t);
+        }
+        return merged.values().stream()
+                .sorted(Comparator.comparing(Ticket::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())).reversed())
+                .collect(Collectors.toList());
     }
 
     @Override
@@ -139,12 +162,14 @@ public class TicketServiceImpl implements TicketService {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Selected user is not a technician.");
         }
         String status = ticket.getStatus() != null ? ticket.getStatus().trim().toUpperCase() : "OPEN";
-        if ("RESOLVED".equals(status)) {
+        if ("RESOLVED".equals(status) || "WITHDRAWN".equals(status)) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "This ticket can no longer be assigned.");
         }
         ticket.setAssignedTechnicianUserId(techId);
         ticket.setTechnicianAssignmentRejectionNote(null);
-        ticket.setStatus("ASSIGNED");
+        ticket.setLastRejectedByTechnicianUserId(null);
+        ticket.setStatus("IN_PROGRESS");
+        ticket.setTechnicianAcceptance(TECH_ACCEPT_PENDING);
         Ticket saved = ticketRepo.save(ticket);
         return mapToResponse(saved);
     }
@@ -158,11 +183,15 @@ public class TicketServiceImpl implements TicketService {
             throw new ApiException(HttpStatus.FORBIDDEN, "Only technicians can accept assignments.");
         }
         requireAssignedTechnician(ticket, user);
-        String from = normalizeTicketStatus(ticket.getStatus());
-        if (!"ASSIGNED".equals(from)) {
+        if (technicianHasAccepted(ticket)) {
+            return mapToResponse(ticketRepo.findById(ticketId)
+                    .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Ticket not found")));
+        }
+        if (!technicianAwaitingAcceptance(ticket)) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "This ticket is not awaiting acceptance.");
         }
-        ticket.setStatus("IN_PROGRESS");
+        ticket.setStatus("ACCEPTED");
+        ticket.setTechnicianAcceptance(TECH_ACCEPT_ACCEPTED);
         ticket.setTechnicianAssignmentRejectionNote(null);
         ticketRepo.save(ticket);
         Ticket reloaded = ticketRepo.findById(ticketId)
@@ -180,8 +209,9 @@ public class TicketServiceImpl implements TicketService {
         }
         requireAssignedTechnician(ticket, user);
         String from = normalizeTicketStatus(ticket.getStatus());
-        if (!"ASSIGNED".equals(from)) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "This ticket is not awaiting acceptance.");
+        if (!"ASSIGNED".equals(from) && !"IN_PROGRESS".equals(from) && !"ACCEPTED".equals(from)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST,
+                    "Only tickets awaiting acceptance, in progress, or accepted can be returned to the queue.");
         }
         String note = null;
         if (request != null && request.getReason() != null) {
@@ -190,8 +220,11 @@ public class TicketServiceImpl implements TicketService {
                 note = trimmed;
             }
         }
+        // Back to desk queue as OPEN so managers can reassign; history kept via technicianAcceptance + lastRejectedByTechnicianUserId.
         ticket.setStatus("OPEN");
         ticket.setAssignedTechnicianUserId(null);
+        ticket.setTechnicianAcceptance(TECH_ACCEPT_REJECTED);
+        ticket.setLastRejectedByTechnicianUserId(user.getUserId());
         ticket.setTechnicianAssignmentRejectionNote(note);
         ticketRepo.save(ticket);
         Ticket reloaded = ticketRepo.findById(ticketId)
@@ -585,8 +618,7 @@ public class TicketServiceImpl implements TicketService {
         if (assignedId == null || !assignedId.equals(user.getUserId())) {
             throw new ApiException(HttpStatus.FORBIDDEN, "Only the assigned technician can manage ticket updates.");
         }
-        String st = normalizeTicketStatus(ticket.getStatus());
-        if ("ASSIGNED".equals(st)) {
+        if (!technicianHasAccepted(ticket)) {
             throw new ApiException(HttpStatus.BAD_REQUEST,
                     "Accept this assignment before posting updates or uploading evidence.");
         }
@@ -645,9 +677,14 @@ public class TicketServiceImpl implements TicketService {
         }
         if (user.getRole() == Role.TECHNICIAN) {
             String assignedId = ticket.getAssignedTechnicianUserId();
-            if (assignedId == null || !assignedId.equals(user.getUserId())) {
-                throw new ApiException(HttpStatus.NOT_FOUND, "Ticket not found");
+            if (assignedId != null && assignedId.equals(user.getUserId())) {
+                return;
             }
+            String lastReject = ticket.getLastRejectedByTechnicianUserId();
+            if (lastReject != null && lastReject.equals(user.getUserId())) {
+                return;
+            }
+            throw new ApiException(HttpStatus.NOT_FOUND, "Ticket not found");
         }
     }
 
@@ -695,6 +732,7 @@ public class TicketServiceImpl implements TicketService {
         res.setWithdrawalReasonCode(ticket.getWithdrawalReasonCode());
         res.setWithdrawalReasonNote(ticket.getWithdrawalReasonNote());
         res.setTechnicianAssignmentRejectionNote(ticket.getTechnicianAssignmentRejectionNote());
+        res.setTechnicianAcceptance(ticket.getTechnicianAcceptance());
         res.setAttachments(mapAttachments(ticket));
         res.setTechnicianAttachments(mapTechnicianAttachments(ticket));
         res.setUpdates(mapUpdates(ticket));
@@ -833,22 +871,27 @@ public class TicketServiceImpl implements TicketService {
 
     private void assertTechnicianStatusChange(Ticket ticket, String toStatus) {
         String from = normalizeTicketStatus(ticket.getStatus());
-        if ("ASSIGNED".equals(from)) {
+        if (("ASSIGNED".equals(from) || "IN_PROGRESS".equals(from)) && !technicianHasAccepted(ticket)) {
             throw new ApiException(HttpStatus.BAD_REQUEST,
                     "Accept or reject this assignment before changing status.");
         }
-        if ("IN_PROGRESS".equals(from)) {
-            if (!"IN_PROGRESS".equals(toStatus) && !"RESOLVED".equals(toStatus)) {
-                throw new ApiException(HttpStatus.BAD_REQUEST, "You can only mark this ticket as resolved.");
+        boolean activeAcceptedWork = "ACCEPTED".equals(from)
+                || ("IN_PROGRESS".equals(from) && technicianHasAccepted(ticket));
+        if (activeAcceptedWork) {
+            if ("RESOLVED".equals(toStatus) || from.equals(toStatus)) {
+                ensureValidStatusEnum(toStatus);
+                return;
             }
-        } else if ("RESOLVED".equals(from)) {
-            if (!"IN_PROGRESS".equals(toStatus)) {
-                throw new ApiException(HttpStatus.BAD_REQUEST, "Reopen by setting status to In progress.");
-            }
-        } else {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Status cannot be changed from the current state.");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "You can only mark this ticket as resolved.");
         }
-        ensureValidStatusEnum(toStatus);
+        if ("RESOLVED".equals(from)) {
+            if ("ACCEPTED".equals(toStatus) || "IN_PROGRESS".equals(toStatus)) {
+                ensureValidStatusEnum(toStatus);
+                return;
+            }
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Reopen by setting status to Accepted or In progress.");
+        }
+        throw new ApiException(HttpStatus.BAD_REQUEST, "Status cannot be changed from the current state.");
     }
 
     private void ensureValidStatusEnum(String s) {
@@ -862,7 +905,52 @@ public class TicketServiceImpl implements TicketService {
             return "";
         }
         String s = raw.trim().toUpperCase().replace(' ', '_');
-        return s;
+        return switch (s) {
+            case "WITHDRAW" -> "WITHDRAWN";
+            case "REJECT" -> "REJECTED";
+            case "INPROGRESS" -> "IN_PROGRESS";
+            case "ACCEPT" -> "ACCEPTED";
+            default -> s;
+        };
+    }
+
+    /** Legacy {@code ASSIGNED}, or {@code IN_PROGRESS} with explicit {@code PENDING} acceptance. */
+    private boolean technicianAwaitingAcceptance(Ticket ticket) {
+        String from = normalizeTicketStatus(ticket.getStatus());
+        if ("ASSIGNED".equals(from)) {
+            return true;
+        }
+        if (!"IN_PROGRESS".equals(from)) {
+            return false;
+        }
+        String acc = normalizeTechnicianAcceptance(ticket.getTechnicianAcceptance());
+        return TECH_ACCEPT_PENDING.equals(acc);
+    }
+
+    /**
+     * Technician may post updates / resolve: {@code IN_PROGRESS} and accepted, or legacy {@code IN_PROGRESS} rows
+     * with no acceptance field set.
+     */
+    private boolean technicianHasAccepted(Ticket ticket) {
+        String from = normalizeTicketStatus(ticket.getStatus());
+        if ("ACCEPTED".equals(from)) {
+            return true;
+        }
+        if (!"IN_PROGRESS".equals(from)) {
+            return false;
+        }
+        String acc = normalizeTechnicianAcceptance(ticket.getTechnicianAcceptance());
+        if (acc.isEmpty()) {
+            return true;
+        }
+        return TECH_ACCEPT_ACCEPTED.equals(acc);
+    }
+
+    private static String normalizeTechnicianAcceptance(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        return raw.trim().toUpperCase();
     }
 
     private void validateCategoryCombination(String categoryId, String subCategoryId) {

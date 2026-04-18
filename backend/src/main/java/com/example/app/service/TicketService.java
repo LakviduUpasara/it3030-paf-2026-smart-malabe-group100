@@ -58,9 +58,9 @@ public interface TicketService {
     /** Admin assigns a technician to a ticket. */
     TicketResponse assignTechnician(String ticketId, AssignTicketRequest request);
 
-    /** Assigned technician accepts the job (ASSIGNED → IN_PROGRESS). */
+    /** Assigned technician accepts the job (status {@code ACCEPTED}; {@code technicianAcceptance} set to accepted). */
     TicketResponse acceptAssignment(String ticketId);
 
-    /** Assigned technician declines; ticket returns to OPEN for the desk. */
+    /** Assigned technician declines; ticket becomes {@code REJECTED} and is unassigned for the desk. */
     TicketResponse rejectAssignment(String ticketId, TechnicianRejectAssignmentRequest request);
 }

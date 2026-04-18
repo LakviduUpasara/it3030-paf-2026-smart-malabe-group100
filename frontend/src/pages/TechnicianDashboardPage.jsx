@@ -23,6 +23,11 @@ import {
 } from "../utils/ticketNormalize";
 import { parseTicketDescription } from "../utils/ticketDescription";
 import { ROLES } from "../utils/roleUtils";
+import {
+  canOpenAcceptPage,
+  canUseRejectFlow,
+  isAwaitingTechnicianDecision,
+} from "../utils/technicianTicketFlow";
 
 function normalizeStatusForPicker(status) {
   const raw = String(status || "OPEN")
@@ -31,7 +36,15 @@ function normalizeStatusForPicker(status) {
     .replace(/\s+/g, "_");
   if (raw === "CLOSED") return "RESOLVED";
   if (raw === "ASSIGNED") return "ASSIGNED";
-  if (raw === "OPEN" || raw === "IN_PROGRESS" || raw === "RESOLVED") return raw;
+  if (raw === "REJECTED") return "REJECTED";
+  if (
+    raw === "OPEN" ||
+    raw === "IN_PROGRESS" ||
+    raw === "ACCEPTED" ||
+    raw === "RESOLVED"
+  ) {
+    return raw;
+  }
   return "OPEN";
 }
 
@@ -42,17 +55,20 @@ function isImageEvidence(mime, fileName) {
   return /\.(png|jpe?g|gif|webp|bmp)$/i.test(fileName || "");
 }
 
-function formatTicketStatusLabel(status) {
-  const raw = String(status || "OPEN")
+function formatTicketStatusLabelForTicket(ticket) {
+  if (isAwaitingTechnicianDecision(ticket)) return "Awaiting your response";
+  const raw = String(ticket?.status || "OPEN")
     .trim()
     .toUpperCase()
     .replace(/\s+/g, "_");
   if (raw === "IN_PROGRESS") return "In progress";
+  if (raw === "ACCEPTED") return "Accepted";
   if (raw === "ASSIGNED") return "Awaiting your response";
   if (raw === "OPEN") return "Open";
+  if (raw === "REJECTED") return "Rejected";
   if (raw === "RESOLVED") return "Resolved";
   if (raw === "WITHDRAWN") return "Withdrawn";
-  return String(status || "Unknown")
+  return String(ticket?.status || "Unknown")
     .replace(/_/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -94,7 +110,7 @@ function TechnicianTicketPanel({
 
   const parsed = parseTicketDescription(ticket.description);
   const statusPicker = normalizeStatusForPicker(ticket.status);
-  const isPendingAssignment = statusPicker === "ASSIGNED";
+  const isPendingAssignment = isAwaitingTechnicianDecision(ticket);
   const isResolved = statusPicker === "RESOLVED";
   const creator = ticket.createdByUsername?.trim();
   const statusToken = toToken(ticket.status || "unknown");
@@ -233,9 +249,9 @@ function TechnicianTicketPanel({
           </h3>
           <span
             className={`status-badge ${statusToken}`}
-            title={`Status: ${formatTicketStatusLabel(ticket.status)}`}
+            title={`Status: ${formatTicketStatusLabelForTicket(ticket)}`}
           >
-            {formatTicketStatusLabel(ticket.status)}
+            {formatTicketStatusLabelForTicket(ticket)}
           </span>
         </div>
         {creator ? (
@@ -349,7 +365,7 @@ function TechnicianTicketPanel({
         <div className="technician-ticket-resolved-callout" role="status">
           <strong>Resolved</strong>
           <p>
-            This ticket is complete. Change status to <em>In progress</em> if you need to add more
+            This ticket is complete. Change status to <em>Accepted</em> if you need to add more
             work, notes, or attachments.
           </p>
           {typeof onReopenInProgress === "function" ? (
@@ -398,7 +414,7 @@ function TechnicianTicketPanel({
           {isPendingAssignment
             ? "Post updates after you tap I can take this."
             : isResolved
-              ? "Unavailable while the ticket is resolved. Reopen by setting status to In progress."
+              ? "Unavailable while the ticket is resolved. Reopen by setting status to Accepted."
               : "Add a short update for the requester (shown on the ticket). Nothing is saved until you click Post update."}
         </p>
         {normalizedUpdates.length > 0 ? (
@@ -734,11 +750,11 @@ function TechnicianDashboardPage() {
     setFeedback({});
 
     try {
-      await updateStatus(ticketId, "IN_PROGRESS");
+      await updateStatus(ticketId, "ACCEPTED");
       setTickets((prev) =>
-        prev.map((t) => (t.id === ticketId ? { ...t, status: "IN_PROGRESS" } : t)),
+        prev.map((t) => (t.id === ticketId ? { ...t, status: "ACCEPTED" } : t)),
       );
-      setFeedback({ type: "success", text: "Ticket moved back to In progress." });
+      setFeedback({ type: "success", text: "Ticket moved back to Accepted." });
       setActiveTicketId(null);
     } catch (err) {
       setFeedback({ type: "error", text: err.message });
@@ -1138,9 +1154,9 @@ function TechnicianDashboardPage() {
                           <td>
                             <span
                               className={`status-badge ${statusToken}`}
-                              title={formatTicketStatusLabel(ticket.status)}
+                              title={formatTicketStatusLabelForTicket(ticket)}
                             >
-                              {formatTicketStatusLabel(ticket.status)}
+                              {formatTicketStatusLabelForTicket(ticket)}
                             </span>
                           </td>
                           <td className="technician-table-actions-cell">
@@ -1164,13 +1180,21 @@ function TechnicianDashboardPage() {
                                   Mark in progress
                                 </Button>
                               ) : null}
-                              {!isResolvedView && !isResolved ? (
+                              {!isResolvedView && !isResolved && canOpenAcceptPage(ticket) ? (
                                 <Button
                                   type="button"
-                                  onClick={() => handleMarkResolved(ticket.id)}
-                                  disabled={pendingKey === `${ticket.id}-resolved`}
+                                  onClick={() => handleGoToAcceptPage(ticket.id)}
                                 >
-                                  Mark as resolved
+                                  Accept
+                                </Button>
+                              ) : null}
+                              {!isResolvedView && !isResolved && canUseRejectFlow(ticket) ? (
+                                <Button
+                                  type="button"
+                                  variant="secondary"
+                                  onClick={() => handleGoToRejectPage(ticket.id)}
+                                >
+                                  Reject
                                 </Button>
                               ) : null}
                               {!isResolvedView && !isResolved ? (

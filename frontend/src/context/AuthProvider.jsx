@@ -64,6 +64,39 @@ export function AuthProvider({ children }) {
     clearStorage(STORAGE_KEYS.SESSION_PHASE);
   };
 
+  useEffect(() => {
+    const token = typeof sessionToken === "string" ? sessionToken.trim() : "";
+    if (!token) {
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const raw = await authService.getCurrentSession();
+        const payload = raw?.data ?? raw;
+        if (cancelled) {
+          return;
+        }
+        if (payload?.sessionPhase) {
+          setSessionPhase(payload.sessionPhase);
+        } else {
+          setSessionPhase(null);
+          clearStorage(STORAGE_KEYS.SESSION_PHASE);
+        }
+      } catch (err) {
+        if (cancelled) {
+          return;
+        }
+        if (err?.status === 401) {
+          clearSessionState();
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionToken]);
+
   const clearClientState = () => {
     clearSessionState();
     setPendingApproval(null);

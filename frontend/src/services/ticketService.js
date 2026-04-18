@@ -103,7 +103,7 @@ export async function assignTicketToTechnician(ticketId, technicianUserId) {
   }
 }
 
-/** ASSIGNED → IN_PROGRESS (assigned technician only). */
+/** Sets acceptance to accepted (IN_PROGRESS + PENDING → ACCEPTED; legacy ASSIGNED → IN_PROGRESS + ACCEPTED). */
 export async function acceptTicketAssignment(ticketId) {
   try {
     return await api.post(`/tickets/${ticketId}/assignment/accept`);
@@ -112,7 +112,7 @@ export async function acceptTicketAssignment(ticketId) {
   }
 }
 
-/** ASSIGNED → OPEN, unassigned (assigned technician only). */
+/** Returns ticket to OPEN for the desk queue; clears assignee (assigned technician only). */
 export async function rejectTicketAssignment(ticketId, payload) {
   try {
     return await api.post(`/tickets/${ticketId}/assignment/reject`, payload ?? {});

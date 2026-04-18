@@ -18,7 +18,7 @@ function ticketDetailOrWorkspace(ticket) {
     .toUpperCase()
     .replace(/\s+/g, "_");
   if (!ticket?.id) return "/technician/tickets";
-  if (s === "IN_PROGRESS") {
+  if (s === "IN_PROGRESS" || s === "ACCEPTED") {
     return `/technician/tickets/${ticket.id}/work`;
   }
   return `/technician/tickets/${ticket.id}`;
@@ -72,8 +72,14 @@ function TechnicianHomePage() {
   }, []);
 
   const stats = useMemo(() => {
-    const openish = tickets.filter((t) => t.status !== "RESOLVED" && t.status !== "CLOSED").length;
-    const inProgress = tickets.filter((t) => String(t.status || "").toUpperCase() === "IN_PROGRESS").length;
+    const openish = tickets.filter((t) => {
+      const u = String(t.status || "").toUpperCase();
+      return u !== "RESOLVED" && u !== "CLOSED" && u !== "WITHDRAWN";
+    }).length;
+    const inProgress = tickets.filter((t) => {
+      const u = String(t.status || "").toUpperCase();
+      return u === "IN_PROGRESS" || u === "ACCEPTED";
+    }).length;
     const done = tickets.filter((t) => t.status === "RESOLVED" || t.status === "CLOSED").length;
     return { openish, inProgress, done };
   }, [tickets]);

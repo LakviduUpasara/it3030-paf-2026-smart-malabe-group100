@@ -44,6 +44,18 @@ public class Ticket {
      */
     private String technicianAssignmentRejectionNote;
 
+    /**
+     * After admin assigns: {@code PENDING} until the technician accepts or rejects.
+     * {@code ACCEPTED} means they may update the ticket and mark it resolved.
+     * {@code REJECTED} when the assigned technician declined the job (ticket unassigned).
+     */
+    private String technicianAcceptance;
+
+    /**
+     * Set when the assigned technician rejects the job so they can still see the ticket in history until the desk reassigns.
+     */
+    private String lastRejectedByTechnicianUserId;
+
     public String getId() {
         return id;
     }
@@ -170,5 +182,21 @@ public class Ticket {
 
     public void setTechnicianAssignmentRejectionNote(String technicianAssignmentRejectionNote) {
         this.technicianAssignmentRejectionNote = technicianAssignmentRejectionNote;
+    }
+
+    public String getTechnicianAcceptance() {
+        return technicianAcceptance;
+    }
+
+    public void setTechnicianAcceptance(String technicianAcceptance) {
+        this.technicianAcceptance = technicianAcceptance;
+    }
+
+    public String getLastRejectedByTechnicianUserId() {
+        return lastRejectedByTechnicianUserId;
+    }
+
+    public void setLastRejectedByTechnicianUserId(String lastRejectedByTechnicianUserId) {
+        this.lastRejectedByTechnicianUserId = lastRejectedByTechnicianUserId;
     }
 }

@@ -5,10 +5,16 @@ import Card from "../../components/Card";
 import LoadingSpinner from "../../components/LoadingSpinner";
 import { acceptTicketAssignment, getTicketById } from "../../services/ticketService";
 import { formatDateTime, toToken } from "../../utils/formatters";
-import { isAwaitingTechnicianResponse } from "../../utils/technicianTicketFlow";
+import {
+  canOpenAcceptPage,
+  isAcceptedTechnicianWork,
+  isAwaitingTechnicianDecision,
+  labelForAcceptedTechnicianWork,
+  labelForAwaitingTechnicianDecision,
+} from "../../utils/technicianTicketFlow";
 
 /**
- * Confirm acceptance here — only then is the assignment accepted and you are sent to the workspace.
+ * Confirm acceptance, or view status when already accepted (ready for workspace).
  */
 function TechnicianTicketAcceptPage() {
   const { ticketId } = useParams();
@@ -55,12 +61,65 @@ function TechnicianTicketAcceptPage() {
     );
   }
 
-  if (!isAwaitingTechnicianResponse(ticket.status)) {
+  if (!canOpenAcceptPage(ticket)) {
     return <Navigate replace to={`/technician/tickets/${ticketId}`} />;
   }
 
   const workspacePath = `/technician/tickets/${ticketId}/work`;
   const summaryPath = `/technician/tickets/${ticketId}`;
+
+  if (isAcceptedTechnicianWork(ticket)) {
+    return (
+      <div className="page-stack">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap gap-3">
+            <Link
+              className="text-sm font-semibold text-heading underline-offset-2 hover:underline"
+              to={summaryPath}
+            >
+              ← Ticket summary
+            </Link>
+            <span className="text-text/40">·</span>
+            <Link
+              className="text-sm font-semibold text-heading underline-offset-2 hover:underline"
+              to="/technician/accept"
+            >
+              Accept queue
+            </Link>
+          </div>
+          <span className={`status-badge ${toToken(ticket.status)}`}>
+            {labelForAcceptedTechnicianWork(ticket)}
+          </span>
+        </div>
+
+        <Card subtitle="You already confirmed — continue in the workspace" title="Ready to work">
+          <p className="supporting-text mb-4 text-sm">
+            You already confirmed this assignment — status is <strong>{labelForAcceptedTechnicianWork(ticket)}</strong>.
+            Open the workspace to post updates and mark <strong>resolved</strong> when done. If you can&apos;t finish
+            it, use <strong>Reject</strong> to return it to the desk.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={() => navigate(workspacePath)} type="button" variant="primary">
+              Open workspace
+            </Button>
+            <Link
+              className="button button-secondary inline-flex items-center justify-center"
+              to={`/technician/tickets/${ticketId}/reject`}
+            >
+              Return ticket to desk (Reject page)
+            </Link>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!isAwaitingTechnicianDecision(ticket)) {
+    return <Navigate replace to={`/technician/tickets/${ticketId}`} />;
+  }
+
+  const badgeClass = toToken(ticket.status);
+  const awaitingBadge = labelForAwaitingTechnicianDecision(ticket);
 
   return (
     <div className="page-stack">
@@ -80,7 +139,7 @@ function TechnicianTicketAcceptPage() {
             Accept queue
           </Link>
         </div>
-        <span className={`status-badge ${toToken(ticket.status)}`}>Awaiting your response</span>
+        <span className={`status-badge ${badgeClass}`}>{awaitingBadge}</span>
       </div>
 
       <Card subtitle="Review the request, then confirm if you can do the work" title="Accept this ticket">
@@ -102,8 +161,9 @@ function TechnicianTicketAcceptPage() {
         </div>
 
         <p className="supporting-text mb-4 text-sm">
-          After you confirm, the ticket moves to <strong>In progress</strong> and you&apos;ll open the workspace to
-          post updates. Only mark it <strong>resolved</strong> there when the work is fully done.
+          The desk assigned this ticket to you; it is <strong>waiting for your decision</strong>. Confirm below if you
+          can take it — your status becomes <strong>Accepted</strong> and you can use the workspace for updates and{" "}
+          <strong>resolved</strong> when the work is done.
         </p>
 
         <div className="flex flex-wrap gap-2">

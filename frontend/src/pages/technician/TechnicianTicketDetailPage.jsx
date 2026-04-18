@@ -5,23 +5,32 @@ import Card from "../../components/Card";
 import LoadingSpinner from "../../components/LoadingSpinner";
 import { getTicketById } from "../../services/ticketService";
 import { formatDateTime, toToken } from "../../utils/formatters";
+import {
+  isAcceptedTechnicianWork,
+  isAwaitingTechnicianDecision,
+  normalizeTicketStatusKey,
+} from "../../utils/technicianTicketFlow";
 import { isResolvedTicketStatus } from "../../utils/technicianTicketStatus";
 
-function normalizeTicketStatusKey(status) {
-  return String(status || "")
-    .trim()
-    .toUpperCase()
-    .replace(/\s+/g, "_");
-}
-
-function formatTechnicianDetailStatusLabel(status) {
-  const raw = normalizeTicketStatusKey(status);
+function formatTechnicianDetailStatusLabel(ticket) {
+  if (ticket && isAwaitingTechnicianDecision(ticket)) {
+    const raw = normalizeTicketStatusKey(ticket.status);
+    if (raw === "IN_PROGRESS") return "In progress — your decision pending";
+    return "Awaiting your response";
+  }
+  if (ticket && isAcceptedTechnicianWork(ticket)) {
+    const r = normalizeTicketStatusKey(ticket.status);
+    return r === "ACCEPTED" ? "Accepted" : "In progress";
+  }
+  const raw = normalizeTicketStatusKey(ticket?.status);
   if (raw === "ASSIGNED") return "Awaiting your response";
   if (raw === "IN_PROGRESS") return "In progress";
+  if (raw === "ACCEPTED") return "Accepted";
+  if (raw === "REJECTED") return "Rejected";
   if (raw === "RESOLVED") return "Resolved";
   if (raw === "OPEN") return "Open";
   if (raw === "WITHDRAWN") return "Withdrawn";
-  return String(status || "")
+  return String(ticket?.status || "")
     .replace(/_/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -33,7 +42,7 @@ function isTerminalStatus(status) {
 
 /**
  * Summary view: one **Workflow** card always shows the correct next action.
- * Accept / Reject only when status is ASSIGNED; workspace when IN_PROGRESS.
+ * Accept / Reject while assignment is pending; workspace after acceptance (DB: technicianAcceptance).
  */
 function TechnicianTicketDetailPage() {
   const { ticketId } = useParams();
@@ -70,8 +79,8 @@ function TechnicianTicketDetailPage() {
   }, [ticketId]);
 
   const isClosed = ticket && isTerminalStatus(ticket.status);
-  const awaitingAssignment = ticket && normalizeTicketStatusKey(ticket.status) === "ASSIGNED";
-  const inProgressWorking = ticket && normalizeTicketStatusKey(ticket.status) === "IN_PROGRESS";
+  const awaitingAssignment = ticket && isAwaitingTechnicianDecision(ticket);
+  const inProgressWorking = ticket && isAcceptedTechnicianWork(ticket);
   const listPath = ticket && isResolvedTicketStatus(ticket.status) ? "/technician/resolved" : "/technician/tickets";
 
   if (loading) {
@@ -100,7 +109,7 @@ function TechnicianTicketDetailPage() {
           ← {isResolvedTicketStatus(ticket.status) ? "Back to resolved" : "Back to queue"}
         </Link>
         <span className={`status-badge ${toToken(ticket.status)}`}>
-          {formatTechnicianDetailStatusLabel(ticket.status)}
+          {formatTechnicianDetailStatusLabel(ticket)}
         </span>
       </div>
 
@@ -170,26 +179,38 @@ function TechnicianTicketDetailPage() {
           ) : inProgressWorking ? (
             <>
               <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-text/60">
-                Step 2 · Working (you already accepted — or desk set this ticket to in progress)
+                Step 2 · Working
               </p>
               <p className="mb-4 text-sm text-text/85">
-                <strong>Accept</strong> and <strong>Reject</strong> are only for tickets that still say &quot;Awaiting
-                your response.&quot; This ticket is <strong>In progress</strong>: use the workspace to post updates
-                and <strong>mark resolved</strong> when the work is done.
+                Primary: <strong>Open workspace</strong> to add updates and <strong>mark resolved</strong>. You can still
+                open <strong>Accept</strong> (shows you&apos;re already in progress) or <strong>Reject</strong> to return
+                the ticket to the desk if you can&apos;t finish it.
               </p>
-              <div className="rounded-xl border border-border bg-tint/50 p-4">
+              <div className="space-y-4 rounded-xl border border-border bg-tint/50 p-4">
                 <p className="text-sm font-medium text-heading">
                   Status: <span className="text-heading">In progress</span>
                 </p>
-                <div className="mt-4">
+                <div className="flex flex-wrap gap-2">
                   <Button
-                    className="min-h-[44px] w-full sm:w-auto"
+                    className="min-h-[44px] flex-1 sm:flex-none"
                     onClick={() => navigate(workspacePath)}
                     type="button"
                     variant="primary"
                   >
                     Open workspace
                   </Button>
+                  <Link
+                    className="button button-secondary inline-flex min-h-[44px] flex-1 items-center justify-center sm:flex-none"
+                    to={acceptPath}
+                  >
+                    Accept page
+                  </Link>
+                  <Link
+                    className="button button-secondary inline-flex min-h-[44px] flex-1 items-center justify-center sm:flex-none"
+                    to={rejectPath}
+                  >
+                    Reject — return to desk
+                  </Link>
                 </div>
               </div>
             </>

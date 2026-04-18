@@ -4266,6 +4266,7 @@ a {
 }
 
 .status-badge.in-progress,
+.status-badge.accepted,
 .status-badge.reserved {
   background: rgba(15, 124, 130, 0.14);
   color: var(--brand-strong);
@@ -4527,6 +4528,19 @@ a {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+.modal-footer {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 1rem 1.4rem;
+  border-top: 1px solid var(--border);
+  background: var(--surface-strong);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
 }
 
 .modal-header h3 {

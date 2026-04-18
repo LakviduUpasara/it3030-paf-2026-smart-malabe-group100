@@ -5,6 +5,8 @@ import Card from "../../components/Card";
 import LoadingSpinner from "../../components/LoadingSpinner";
 import { addUpdate, getTicketById, updateStatus } from "../../services/ticketService";
 import { formatDateTime, toToken } from "../../utils/formatters";
+import { isAcceptedTechnicianWork, isAwaitingTechnicianDecision } from "../../utils/technicianTicketFlow";
+
 function normalizeTicketStatusKey(status) {
   return String(status || "")
     .trim()
@@ -49,13 +51,13 @@ function TechnicianTicketWorkspacePage() {
 
   const redirect = useMemo(() => {
     if (!ticket || loading) return null;
-    if (statusKey === "ASSIGNED") {
+    if (isAwaitingTechnicianDecision(ticket)) {
       return `/technician/tickets/${ticketId}`;
     }
     if (statusKey === "RESOLVED" || statusKey === "WITHDRAWN") {
       return `/technician/tickets/${ticketId}`;
     }
-    if (statusKey !== "IN_PROGRESS") {
+    if (!isAcceptedTechnicianWork(ticket)) {
       return `/technician/tickets/${ticketId}`;
     }
     return null;
@@ -102,7 +104,9 @@ function TechnicianTicketWorkspacePage() {
             All tickets
           </Link>
         </div>
-        <span className={`status-badge ${toToken(ticket.status)}`}>In progress</span>
+        <span className={`status-badge ${toToken(ticket.status)}`}>
+          {statusKey === "ACCEPTED" ? "Accepted" : "In progress"}
+        </span>
       </div>
 
       <Card
@@ -115,16 +119,25 @@ function TechnicianTicketWorkspacePage() {
           <div className="field">
             <span className="text-sm font-medium text-heading">Workflow</span>
             <p className="supporting-text mt-1">
-              Status stays <strong>In progress</strong> until you <strong>mark resolved</strong> below. Requester:{" "}
+              Status stays <strong>{statusKey === "ACCEPTED" ? "Accepted" : "In progress"}</strong> until you{" "}
+              <strong>mark resolved</strong> below. Requester:{" "}
               {ticket.createdByUsername || "—"}
             </p>
-            <p className="supporting-text mt-2 text-xs text-text/65">
-              Need Accept or Reject instead? That only applies before you&apos;re in progress — open{" "}
-              <Link className="font-medium text-heading underline" to={`/technician/tickets/${ticketId}`}>
-                ticket summary
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Link
+                className="text-sm font-semibold text-heading underline underline-offset-2"
+                to={`/technician/tickets/${ticketId}/accept`}
+              >
+                Accept page
               </Link>
-              . If status is still &quot;Awaiting your response&quot;, you&apos;ll see those actions there.
-            </p>
+              <span className="text-text/40">·</span>
+              <Link
+                className="text-sm font-semibold text-heading underline underline-offset-2"
+                to={`/technician/tickets/${ticketId}/reject`}
+              >
+                Reject / return to desk
+              </Link>
+            </div>
           </div>
         </div>
       </Card>

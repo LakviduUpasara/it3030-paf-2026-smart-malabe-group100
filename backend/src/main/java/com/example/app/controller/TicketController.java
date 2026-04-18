@@ -52,13 +52,13 @@ public class TicketController {
         return ResponseEntity.ok(service.assignTechnician(id, request));
     }
 
-    /** Assigned technician accepts the job (ASSIGNED → IN_PROGRESS). */
+    /** Assigned technician accepts the job (status {@code ACCEPTED}; pending assignment uses {@code IN_PROGRESS}). */
     @PostMapping("/{id}/assignment/accept")
     public ResponseEntity<TicketResponse> acceptAssignment(@PathVariable String id) {
         return ResponseEntity.ok(service.acceptAssignment(id));
     }
 
-    /** Assigned technician declines; ticket returns to OPEN for the desk. */
+    /** Assigned technician declines; ticket becomes {@code OPEN} (unassigned) so the desk can reassign. */
     @PostMapping("/{id}/assignment/reject")
     public ResponseEntity<TicketResponse> rejectAssignment(
             @PathVariable String id,
