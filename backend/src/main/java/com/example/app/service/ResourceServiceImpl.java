@@ -10,6 +10,7 @@ import com.example.app.entity.ResourceStatus;
 import com.example.app.entity.ResourceType;
 import com.example.app.exception.ResourceNotFoundException;
 import com.example.app.repository.ResourceRepository;
+import java.time.DayOfWeek;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -179,6 +180,27 @@ public class ResourceServiceImpl implements ResourceService {
     private boolean windowsOverlap(AvailabilityWindowRequest first, AvailabilityWindowRequest second) {
         return first.getStartTime().isBefore(second.getEndTime())
                 && first.getEndTime().isAfter(second.getStartTime());
+    }
+
+    /**
+     * Derives {@link DayOfWeek} from {@link AvailabilityWindowRequest#getAnchorDate()} when present;
+     * rejects mismatches if the client also sent {@code dayOfWeek}.
+     */
+    private void normalizeAndValidateWindowDays(List<AvailabilityWindowRequest> windows) {
+        for (AvailabilityWindowRequest w : windows) {
+            if (w.getAnchorDate() != null) {
+                DayOfWeek derived = w.getAnchorDate().getDayOfWeek();
+                if (w.getDayOfWeek() != null && w.getDayOfWeek() != derived) {
+                    throw new IllegalArgumentException(String.format(
+                            "dayOfWeek (%s) does not match anchorDate %s (that calendar date is a %s).",
+                            w.getDayOfWeek(), w.getAnchorDate(), derived));
+                }
+                w.setDayOfWeek(derived);
+            } else if (w.getDayOfWeek() == null) {
+                throw new IllegalArgumentException(
+                        "Each availability window must include dayOfWeek and/or anchorDate (calendar day).");
+            }
+        }
     }
 
     private String normalizeRequiredText(String value) {

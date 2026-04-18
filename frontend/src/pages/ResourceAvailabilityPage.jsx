@@ -204,10 +204,11 @@ function ResourceAvailabilityPage() {
           const endIso = formatLocalDateTime(slot.endTime);
           try {
             const payload = await checkResourceAvailability(rid, startIso, endIso);
+            const reason = payload?.reasonCode ? `[${payload.reasonCode}] ` : "";
             return {
               ...slot,
               available: !!payload?.available,
-              message: payload?.message || "",
+              message: `${reason}${payload?.message || ""}`.trim(),
             };
           } catch (err) {
             return {

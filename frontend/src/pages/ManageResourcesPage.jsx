@@ -30,7 +30,9 @@ const initialResourceForm = {
   templateStartTime: "09:00",
   templateEndTime: "17:00",
   calendarPickDate: "",
-  availabilityWindows: [{ dayOfWeek: "MONDAY", startTime: "09:00", endTime: "17:00" }],
+  availabilityWindows: [
+    { dayOfWeek: "MONDAY", startTime: "09:00", endTime: "17:00", anchorDate: "" },
+  ],
 };
 
 const resourceTypes = ["LECTURE_HALL", "LAB", "MEETING_ROOM", "EQUIPMENT"];
@@ -100,8 +102,9 @@ function buildFormState(resource) {
           dayOfWeek: w.dayOfWeek,
           startTime: w.startTime?.slice(0, 5) || "09:00",
           endTime: w.endTime?.slice(0, 5) || "17:00",
+          anchorDate: "",
         }))
-      : [{ dayOfWeek: "MONDAY", startTime: "09:00", endTime: "17:00" }];
+      : [{ dayOfWeek: "MONDAY", startTime: "09:00", endTime: "17:00", anchorDate: "" }];
 
   return {
     name: resource?.name || "",
@@ -148,11 +151,17 @@ function buildResourcePayload(formState) {
     capacity: Number(formState.capacity),
     location: formState.location.trim(),
     status: formState.status,
-    availabilityWindows: formState.availabilityWindows.map((w) => ({
-      dayOfWeek: w.dayOfWeek,
-      startTime: w.startTime,
-      endTime: w.endTime,
-    })),
+    availabilityWindows: formState.availabilityWindows.map((w) => {
+      const row = {
+        dayOfWeek: w.dayOfWeek,
+        startTime: w.startTime,
+        endTime: w.endTime,
+      };
+      if (w.anchorDate && String(w.anchorDate).trim()) {
+        row.anchorDate = w.anchorDate;
+      }
+      return row;
+    }),
   };
 }
 
@@ -169,6 +178,7 @@ function ResourceForm({
   onAddWeekdaysMonFri,
   onUpdateAvailabilityWindow,
   onRemoveAvailabilityWindow,
+  onWindowAnchorDateChange,
 }) {
   return (
     <form className="form-grid resource-form-shell" onSubmit={onSubmit}>
@@ -276,6 +286,13 @@ function ResourceForm({
               Mon–Fri (template hours)
             </Button>
           </div>
+          {formState.calendarPickDate ? (
+            <p className="supporting-text mt-1">
+              Weekday from this date:{" "}
+              <strong>{formatEnumLabel(dateStringToDayOfWeek(formState.calendarPickDate))}</strong> (filled when you
+              add; server re-derives weekday from <code className="text-xs">anchorDate</code> on save).
+            </p>
+          ) : null}
           <p className="supporting-text mt-1">Calendar is today onward only (same as resource availability).</p>
         </label>
 
@@ -287,6 +304,16 @@ function ResourceForm({
                 className="flex flex-wrap items-center gap-2 text-sm"
                 key={`${windowKey(w)}-${index}`}
               >
+                <span className="text-text/60" title="Optional: pick a date to sync weekday with calendar">
+                  Date
+                </span>
+                <input
+                  className="rounded border border-border px-2 py-1"
+                  min={minCalendarDate}
+                  onChange={(e) => onWindowAnchorDateChange(index, e.target.value)}
+                  type="date"
+                  value={w.anchorDate || ""}
+                />
                 <select
                   className="rounded border border-border px-2 py-1"
                   onChange={(e) => onUpdateAvailabilityWindow(index, "dayOfWeek", e.target.value)}
@@ -416,6 +443,7 @@ function ManageResourcesPage() {
       dayOfWeek: dow,
       startTime: resourceForm.templateStartTime,
       endTime: resourceForm.templateEndTime,
+      anchorDate: resourceForm.calendarPickDate,
     };
     if (resourceForm.availabilityWindows.some((w) => windowKey(w) === windowKey(row))) {
       setFormError("That weekday and time range is already listed.");
@@ -437,6 +465,7 @@ function ManageResourcesPage() {
           dayOfWeek: d,
           startTime: previousState.templateStartTime,
           endTime: previousState.templateEndTime,
+          anchorDate: "",
         };
         if (!next.some((w) => windowKey(w) === windowKey(row))) {
           next.push(row);
@@ -449,9 +478,40 @@ function ManageResourcesPage() {
   const handleUpdateAvailabilityWindow = (index, field, value) => {
     setResourceForm((previousState) => ({
       ...previousState,
-      availabilityWindows: previousState.availabilityWindows.map((w, i) =>
-        i === index ? { ...w, [field]: value } : w,
-      ),
+      availabilityWindows: previousState.availabilityWindows.map((w, i) => {
+        if (i !== index) {
+          return w;
+        }
+        if (field === "dayOfWeek") {
+          return { ...w, dayOfWeek: value, anchorDate: "" };
+        }
+        return { ...w, [field]: value };
+      }),
+    }));
+  };
+
+  const handleWindowAnchorDateChange = (index, isoDate) => {
+    const today = getTodayIsoDate();
+    if (isoDate && isoDate < today) {
+      setFormError("Each window date must be today or later.");
+      return;
+    }
+    setFormError("");
+    setResourceForm((previousState) => ({
+      ...previousState,
+      availabilityWindows: previousState.availabilityWindows.map((w, i) => {
+        if (i !== index) {
+          return w;
+        }
+        if (!isoDate) {
+          return { ...w, anchorDate: "" };
+        }
+        return {
+          ...w,
+          anchorDate: isoDate,
+          dayOfWeek: dateStringToDayOfWeek(isoDate),
+        };
+      }),
     }));
   };
 
@@ -807,6 +867,7 @@ function ManageResourcesPage() {
             onRemoveAvailabilityWindow={handleRemoveAvailabilityWindow}
             onSubmit={handleResourceSubmit}
             onUpdateAvailabilityWindow={handleUpdateAvailabilityWindow}
+            onWindowAnchorDateChange={handleWindowAnchorDateChange}
             submitLabel={modalMode === "edit" ? "Update Resource" : "Create Resource"}
             submitting={submitting}
           />

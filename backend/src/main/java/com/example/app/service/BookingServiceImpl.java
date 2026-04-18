@@ -179,25 +179,39 @@ public class BookingServiceImpl implements BookingService {
                     startTime,
                     endTime,
                     false,
-                    "Resource is out of service.");
+                    "OUT_OF_SERVICE",
+                    "Unavailable: resource status is OUT_OF_SERVICE in the catalogue.");
         }
 
         if (!isIntervalWithinAnyWindow(resource, startTime, endTime)) {
+            String detail = describeWhyOutsideWindows(resource, startTime, endTime);
             return buildAvailabilityResponse(
                     resourceId,
                     startTime,
                     endTime,
                     false,
-                    "The requested time is outside this resource's published availability.");
+                    "OUTSIDE_WEEKLY_WINDOW",
+                    "Unavailable: outside weekly catalogue windows. " + detail);
         }
 
         boolean conflict = bookingRepository.existsApprovedBookingConflict(
                 resourceId, BookingStatus.APPROVED, startTime, endTime);
-        boolean isAvailable = !conflict;
-        String message = isAvailable
-                ? "Resource is available for the requested time range."
-                : "Resource is not available because an approved booking overlaps.";
-        return buildAvailabilityResponse(resourceId, startTime, endTime, isAvailable, message);
+        if (conflict) {
+            return buildAvailabilityResponse(
+                    resourceId,
+                    startTime,
+                    endTime,
+                    false,
+                    "APPROVED_BOOKING_OVERLAP",
+                    "Unavailable: overlaps an existing APPROVED booking for this resource.");
+        }
+        return buildAvailabilityResponse(
+                resourceId,
+                startTime,
+                endTime,
+                true,
+                "AVAILABLE",
+                "Available: within weekly catalogue hours and no approved booking conflict.");
     }
 
     private BookingResponse mapToResponse(Booking booking) {
@@ -303,13 +317,43 @@ public class BookingServiceImpl implements BookingService {
         return false;
     }
 
+    private String describeWhyOutsideWindows(Resource resource, LocalDateTime start, LocalDateTime end) {
+        List<AvailabilityWindow> wins = resource.getAvailabilityWindows();
+        if (wins == null || wins.isEmpty()) {
+            return "No weekly windows are configured for this resource.";
+        }
+        DayOfWeek dow = start.getDayOfWeek();
+        LocalDate date = start.toLocalDate();
+        LocalTime rs = start.toLocalTime();
+        LocalTime re = end.toLocalTime();
+        String fullCatalogue = wins.stream()
+                .map(w -> w.getDayOfWeek() + " " + w.getStartTime() + "-" + w.getEndTime())
+                .collect(Collectors.joining("; "));
+        List<AvailabilityWindow> sameDay = wins.stream()
+                .filter(w -> w.getDayOfWeek() == dow)
+                .toList();
+        if (sameDay.isEmpty()) {
+            return String.format(
+                    "Requested %s is a %s; there is no catalogue window for that weekday. Full catalogue: [%s].",
+                    date, dow, fullCatalogue);
+        }
+        String thatDay = sameDay.stream()
+                .map(w -> w.getStartTime() + "-" + w.getEndTime())
+                .collect(Collectors.joining("; "));
+        return String.format(
+                "Requested interval %s %s-%s must fall fully inside one window on %s. Catalogue that day: [%s].",
+                date, rs, re, dow, thatDay);
+    }
+
     private BookingAvailabilityResponse buildAvailabilityResponse(
             Long resourceId,
             LocalDateTime startTime,
             LocalDateTime endTime,
             boolean available,
+            String reasonCode,
             String message) {
         BookingAvailabilityResponse response = new BookingAvailabilityResponse();
+        response.setReasonCode(reasonCode);
         response.setResourceId(resourceId);
         response.setStartTime(startTime);
         response.setEndTime(endTime);
