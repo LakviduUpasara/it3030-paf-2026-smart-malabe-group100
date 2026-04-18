@@ -27,9 +27,6 @@ const initialResourceForm = {
   capacity: "1",
   location: "",
   status: "ACTIVE",
-  templateStartTime: "09:00",
-  templateEndTime: "17:00",
-  calendarPickDate: "",
   availabilityWindows: [
     { dayOfWeek: "MONDAY", startTime: "09:00", endTime: "17:00", anchorDate: "" },
   ],
@@ -112,9 +109,6 @@ function buildFormState(resource) {
     capacity: String(resource?.capacity ?? 1),
     location: resource?.location || "",
     status: resource?.status || "ACTIVE",
-    templateStartTime: windows[0].startTime,
-    templateEndTime: windows[0].endTime,
-    calendarPickDate: "",
     availabilityWindows: windows,
   };
 }
@@ -174,8 +168,7 @@ function ResourceForm({
   submitLabel,
   error,
   minCalendarDate,
-  onAddWeekdayFromCalendar,
-  onAddWeekdaysMonFri,
+  onAddAvailabilityWindow,
   onUpdateAvailabilityWindow,
   onRemoveAvailabilityWindow,
   onWindowAnchorDateChange,
@@ -245,59 +238,8 @@ function ResourceForm({
       </div>
 
       <div className="resource-form-fields border-t border-border/60 pt-4 mt-2">
-        <p className="supporting-text col-span-full mb-2">
-          <strong>Weekly availability</strong> — times must fall inside these windows for bookings and
-          availability checks (same rules as <code className="text-xs">GET /api/v1/bookings/check</code>).
-        </p>
-
-        <label className="field">
-          <span>Default hours (for calendar / Mon–Fri quick add)</span>
-          <div className="flex flex-wrap gap-2">
-            <input
-              name="templateStartTime"
-              onChange={onChange}
-              type="time"
-              value={formState.templateStartTime}
-            />
-            <span className="self-center text-text/60">to</span>
-            <input
-              name="templateEndTime"
-              onChange={onChange}
-              type="time"
-              value={formState.templateEndTime}
-            />
-          </div>
-        </label>
-
-        <label className="field">
-          <span>Add weekday from calendar</span>
-          <div className="flex flex-wrap items-end gap-2">
-            <input
-              min={minCalendarDate}
-              name="calendarPickDate"
-              onChange={onChange}
-              type="date"
-              value={formState.calendarPickDate}
-            />
-            <Button disabled={submitting} onClick={onAddWeekdayFromCalendar} type="button" variant="secondary">
-              Add this weekday
-            </Button>
-            <Button disabled={submitting} onClick={onAddWeekdaysMonFri} type="button" variant="secondary">
-              Mon–Fri (template hours)
-            </Button>
-          </div>
-          {formState.calendarPickDate ? (
-            <p className="supporting-text mt-1">
-              Weekday from this date:{" "}
-              <strong>{formatEnumLabel(dateStringToDayOfWeek(formState.calendarPickDate))}</strong> (filled when you
-              add; server re-derives weekday from <code className="text-xs">anchorDate</code> on save).
-            </p>
-          ) : null}
-          <p className="supporting-text mt-1">Calendar is today onward only (same as resource availability).</p>
-        </label>
-
         <div className="field col-span-full">
-          <span>Scheduled windows</span>
+          <span>Availability windows</span>
           <ul className="mt-2 space-y-2 rounded-lg border border-border/80 bg-tint/40 p-3">
             {formState.availabilityWindows.map((w, index) => (
               <li
@@ -339,7 +281,7 @@ function ResourceForm({
                   value={w.endTime}
                 />
                 <Button
-                  disabled={submitting || formState.availabilityWindows.length < 2}
+                  disabled={submitting || formState.availabilityWindows.length <= 1}
                   onClick={() => onRemoveAvailabilityWindow(index)}
                   type="button"
                   variant="ghost"
@@ -349,6 +291,11 @@ function ResourceForm({
               </li>
             ))}
           </ul>
+          <div className="mt-2">
+            <Button disabled={submitting} onClick={onAddAvailabilityWindow} type="button" variant="secondary">
+              Add window
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -475,6 +422,17 @@ function ManageResourcesPage() {
     });
   };
 
+  const handleAddAvailabilityWindow = () => {
+    setFormError("");
+    setResourceForm((previousState) => ({
+      ...previousState,
+      availabilityWindows: [
+        ...previousState.availabilityWindows,
+        { dayOfWeek: "MONDAY", startTime: "09:00", endTime: "17:00", anchorDate: "" },
+      ],
+    }));
+  };
+
   const handleUpdateAvailabilityWindow = (index, field, value) => {
     setResourceForm((previousState) => ({
       ...previousState,
@@ -516,10 +474,15 @@ function ManageResourcesPage() {
   };
 
   const handleRemoveAvailabilityWindow = (index) => {
-    setResourceForm((previousState) => ({
-      ...previousState,
-      availabilityWindows: previousState.availabilityWindows.filter((_, i) => i !== index),
-    }));
+    setResourceForm((previousState) => {
+      if (previousState.availabilityWindows.length <= 1) {
+        return previousState;
+      }
+      return {
+        ...previousState,
+        availabilityWindows: previousState.availabilityWindows.filter((_, i) => i !== index),
+      };
+    });
   };
 
   const handleFilterSubmit = (event) => {
@@ -582,16 +545,7 @@ function ManageResourcesPage() {
     }
 
     if (!resourceForm.availabilityWindows.length) {
-      setFormError("Add at least one availability window.");
-      return;
-    }
-
-    if (
-      !resourceForm.templateStartTime ||
-      !resourceForm.templateEndTime ||
-      resourceForm.templateEndTime <= resourceForm.templateStartTime
-    ) {
-      setFormError("Default hours: end time must be after start time.");
+      setFormError("Add at least one availability window (use Add window).");
       return;
     }
 
@@ -860,8 +814,7 @@ function ManageResourcesPage() {
             error={formError}
             formState={resourceForm}
             minCalendarDate={getTodayIsoDate()}
-            onAddWeekdayFromCalendar={handleAddWeekdayFromCalendar}
-            onAddWeekdaysMonFri={handleAddWeekdaysMonFri}
+            onAddAvailabilityWindow={handleAddAvailabilityWindow}
             onCancel={closeFormModal}
             onChange={handleCreateChange}
             onRemoveAvailabilityWindow={handleRemoveAvailabilityWindow}
