@@ -1,23 +1,15 @@
 package com.example.app.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.Document;
 
-@Entity
-@Table(name = "bookings")
+@Document(collection = "bookings")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -26,36 +18,25 @@ import lombok.Setter;
 public class Booking {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    private String id;
 
-    @Column(nullable = false)
     private Long resourceId;
 
-    @Column(nullable = false)
     private Long userId;
 
-    @Column(nullable = false)
     private LocalDateTime startTime;
 
-    @Column(nullable = false)
     private LocalDateTime endTime;
 
-    @Column(nullable = false, length = 500)
     private String purpose;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
     private BookingStatus status;
 
-    @Column(length = 500)
     private String rejectionReason;
 
-    @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    @PrePersist
-    public void prePersist() {
+    public void applyDefaults() {
         if (status == null) {
             status = BookingStatus.PENDING;
         }
@@ -64,8 +45,8 @@ public class Booking {
         }
     }
 
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
+    public String getId() { return id; }
+    public void setId(String id) { this.id = id; }
     public Long getResourceId() { return resourceId; }
     public void setResourceId(Long resourceId) { this.resourceId = resourceId; }
     public Long getUserId() { return userId; }
