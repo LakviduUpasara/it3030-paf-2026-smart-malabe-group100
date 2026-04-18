@@ -15,11 +15,15 @@ import org.springframework.stereotype.Service;
 public class CampusMessageServiceImpl implements CampusMessageService {
 
     private static final Logger logger = LoggerFactory.getLogger(CampusMessageServiceImpl.class);
+    private static final String CAMPUS_MESSAGE_SEQUENCE_NAME = "campus_messages_sequence";
 
     private final CampusMessageRepository campusMessageRepository;
+    private final SequenceGeneratorService sequenceGeneratorService;
 
-    public CampusMessageServiceImpl(CampusMessageRepository campusMessageRepository) {
+    public CampusMessageServiceImpl(CampusMessageRepository campusMessageRepository,
+                                    SequenceGeneratorService sequenceGeneratorService) {
         this.campusMessageRepository = campusMessageRepository;
+        this.sequenceGeneratorService = sequenceGeneratorService;
     }
 
     @Override
@@ -37,8 +41,10 @@ public class CampusMessageServiceImpl implements CampusMessageService {
     public CampusMessageResponse createMessage(CampusMessageRequest request) {
         logger.info("Creating campus message: {}", request.getTitle());
         CampusMessage message = new CampusMessage();
+        message.setId(generateEntityId(CAMPUS_MESSAGE_SEQUENCE_NAME));
         message.setTitle(request.getTitle());
         message.setContent(request.getContent());
+        message.applyDefaults();
 
         CampusMessage savedMessage = campusMessageRepository.save(message);
         logger.info("Campus message created with ID: {}", savedMessage.getId());
@@ -47,11 +53,23 @@ public class CampusMessageServiceImpl implements CampusMessageService {
 
     private CampusMessageResponse mapToResponse(CampusMessage message) {
         CampusMessageResponse response = new CampusMessageResponse();
-        response.setId(message.getId());
+        response.setId(toResponseId(message.getId()));
         response.setTitle(message.getTitle());
         response.setContent(message.getContent());
         response.setCreatedAt(message.getCreatedAt());
         return response;
+    }
+
+    private String generateEntityId(String sequenceName) {
+        return String.valueOf(sequenceGeneratorService.generateSequence(sequenceName));
+    }
+
+    private Long toResponseId(String id) {
+        try {
+            return Long.valueOf(id);
+        } catch (NumberFormatException e) {
+            throw new IllegalStateException("Stored campus message id is not numeric: " + id, e);
+        }
     }
 }
 
