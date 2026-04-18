@@ -1,11 +1,10 @@
-import api, { requestWithFallback } from "./api";
-import { mockNotifications } from "../utils/mockData";
+import api, { createServiceError } from "./api";
 
 export async function getNotifications() {
-  return requestWithFallback(
-    () => api.get("/notifications"),
-    () => [...mockNotifications],
-    "Unable to load notifications.",
-  );
+  try {
+    const { data } = await api.get("/notifications");
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    throw createServiceError(error, "Unable to load notifications.");
+  }
 }
-

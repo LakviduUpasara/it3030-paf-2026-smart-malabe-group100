@@ -15,9 +15,9 @@ import lombok.Setter;
 @Builder
 public class BookingResponse {
 
-    private Long id;
-    private Long resourceId;
-    private Long userId;
+    private String id;
+    private String resourceId;
+    private String userId;
     private LocalDateTime startTime;
     private LocalDateTime endTime;
     private String purpose;
@@ -25,12 +25,12 @@ public class BookingResponse {
     private LocalDateTime createdAt;
     private String rejectionReason;
 
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
-    public Long getResourceId() { return resourceId; }
-    public void setResourceId(Long resourceId) { this.resourceId = resourceId; }
-    public Long getUserId() { return userId; }
-    public void setUserId(Long userId) { this.userId = userId; }
+    public String getId() { return id; }
+    public void setId(String id) { this.id = id; }
+    public String getResourceId() { return resourceId; }
+    public void setResourceId(String resourceId) { this.resourceId = resourceId; }
+    public String getUserId() { return userId; }
+    public void setUserId(String userId) { this.userId = userId; }
     public LocalDateTime getStartTime() { return startTime; }
     public void setStartTime(LocalDateTime startTime) { this.startTime = startTime; }
     public LocalDateTime getEndTime() { return endTime; }

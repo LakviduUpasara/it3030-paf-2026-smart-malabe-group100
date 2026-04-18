@@ -82,21 +82,6 @@ export function createServiceError(error, fallbackMessage) {
   return normalizedError;
 }
 
-/**
- * Calls the API; on missing response or 404, returns fallbackFn() (mock/offline data).
- */
-export async function requestWithFallback(requestFn, fallbackFn, errorMessage) {
-  try {
-    const response = await requestFn();
-    return response.data;
-  } catch (error) {
-    if (!error?.response || error.response.status === 404) {
-      return fallbackFn();
-    }
-    throw createServiceError(error, errorMessage);
-  }
-}
-
 export const bookingAPI = {
   createBooking: (data) => api.post('/bookings', data),
   getAllBookings: (params) => api.get('/bookings', { params }),

@@ -14,17 +14,21 @@ public interface BookingService {
 
     BookingResponse createBooking(BookingRequest request);
 
-    Page<BookingResponse> getAllBookings(Optional<Long> resourceId, Optional<Long> userId, Optional<LocalDate> date, Pageable pageable);
+    Page<BookingResponse> getAllBookings(
+            Optional<String> resourceId,
+            Optional<String> userId,
+            Optional<LocalDate> date,
+            Pageable pageable);
 
-    List<BookingResponse> getBookingsByUser(Long userId);
+    List<BookingResponse> getBookingsByUser(String userId);
 
     List<BookingResponse> getPendingBookings();
 
-    BookingResponse approveBooking(Long bookingId);
+    BookingResponse approveBooking(String bookingId);
 
-    BookingResponse rejectBooking(Long bookingId, String reason);
+    BookingResponse rejectBooking(String bookingId, String reason);
 
-    BookingResponse cancelBooking(Long bookingId);
+    BookingResponse cancelBooking(String bookingId);
 
-    BookingAvailabilityResponse checkAvailability(Long resourceId, LocalDateTime startTime, LocalDateTime endTime);
+    BookingAvailabilityResponse checkAvailability(String resourceId, LocalDateTime startTime, LocalDateTime endTime);
 }

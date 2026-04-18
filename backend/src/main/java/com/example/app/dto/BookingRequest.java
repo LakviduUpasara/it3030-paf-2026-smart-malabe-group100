@@ -17,11 +17,11 @@ import lombok.Setter;
 @Builder
 public class BookingRequest {
 
-    @NotNull(message = "resourceId is required")
-    private Long resourceId;
+    @NotBlank(message = "resourceId is required")
+    private String resourceId;
 
-    @NotNull(message = "userId is required")
-    private Long userId;
+    @NotBlank(message = "userId is required")
+    private String userId;
 
     @NotNull(message = "startTime is required")
     @FutureOrPresent(message = "startTime must be in the present or future")
@@ -34,10 +34,10 @@ public class BookingRequest {
     @NotBlank(message = "purpose is required")
     private String purpose;
 
-    public Long getResourceId() { return resourceId; }
-    public void setResourceId(Long resourceId) { this.resourceId = resourceId; }
-    public Long getUserId() { return userId; }
-    public void setUserId(Long userId) { this.userId = userId; }
+    public String getResourceId() { return resourceId; }
+    public void setResourceId(String resourceId) { this.resourceId = resourceId; }
+    public String getUserId() { return userId; }
+    public void setUserId(String userId) { this.userId = userId; }
     public LocalDateTime getStartTime() { return startTime; }
     public void setStartTime(LocalDateTime startTime) { this.startTime = startTime; }
     public LocalDateTime getEndTime() { return endTime; }

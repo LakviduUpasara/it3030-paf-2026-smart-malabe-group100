@@ -5,13 +5,6 @@ import { checkResourceAvailability } from "../services/bookingService";
 import { getResources } from "../services/resourceService";
 import { FiSearch, FiCalendar, FiClock } from "react-icons/fi";
 
-const FALLBACK_RESOURCES = [
-  { id: 1, name: "Lab A", type: "Computer Lab", availabilityWindows: [], status: "ACTIVE" },
-  { id: 2, name: "Lab B", type: "Computer Lab", availabilityWindows: [], status: "ACTIVE" },
-  { id: 3, name: "Meeting Room 1", type: "Room", availabilityWindows: [], status: "ACTIVE" },
-  { id: 4, name: "Projector 1", type: "Equipment", availabilityWindows: [], status: "ACTIVE" },
-];
-
 function getTodayIsoDate() {
   const n = new Date();
   return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
@@ -67,7 +60,7 @@ function normalizeTypeLabel(type) {
 
 function mapApiResources(list) {
   if (!Array.isArray(list) || list.length === 0) {
-    return FALLBACK_RESOURCES;
+    return [];
   }
   return list.map((r) => ({
     id: r.id,
@@ -117,8 +110,9 @@ function buildHourlySlots(selectedDateStr) {
 
 function ResourceAvailabilityPage() {
   const navigate = useNavigate();
-  const [resources, setResources] = useState(FALLBACK_RESOURCES);
+  const [resources, setResources] = useState([]);
   const [resourcesLoading, setResourcesLoading] = useState(true);
+  const [resourcesError, setResourcesError] = useState(null);
   const [selectedDate, setSelectedDate] = useState(() => getTodayIsoDate());
   const [resourceId, setResourceId] = useState("");
   const [timeSlots, setTimeSlots] = useState([]);
@@ -135,9 +129,11 @@ function ResourceAvailabilityPage() {
           return;
         }
         setResources(mapApiResources(data));
-      } catch {
+        setResourcesError(null);
+      } catch (e) {
         if (active) {
-          setResources(FALLBACK_RESOURCES);
+          setResources([]);
+          setResourcesError(e?.message || "Unable to load resources from the server.");
         }
       } finally {
         if (active) {
@@ -196,7 +192,7 @@ function ResourceAvailabilityPage() {
     setSummaryMessage("");
     try {
       const slots = buildHourlySlots(selectedDate);
-      const rid = Number(resourceId);
+      const rid = String(resourceId);
 
       const checked = await Promise.all(
         slots.map(async (slot) => {
@@ -257,7 +253,7 @@ function ResourceAvailabilityPage() {
     const selectedResource = resources.find((resource) => String(resource.id) === String(resourceId));
 
     const bookingData = {
-      resourceId: Number(resourceId),
+      resourceId: String(resourceId),
       resourceName: selectedResource?.name || `Resource ${resourceId}`,
       startTime: slot.startTime.toISOString(),
       endTime: slot.endTime.toISOString(),
@@ -273,6 +269,14 @@ function ResourceAvailabilityPage() {
       <h1 className="mb-8 text-3xl font-bold text-gray-900">Resource availability</h1>
       {resourcesLoading ? (
         <p className="mb-4 text-sm text-gray-600">Loading resources…</p>
+      ) : null}
+      {resourcesError ? (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">{resourcesError}</div>
+      ) : null}
+      {!resourcesLoading && !resourcesError && resources.length === 0 ? (
+        <p className="mb-4 text-sm text-amber-800">
+          No resources are available yet. Add resources in the admin catalogue to check availability.
+        </p>
       ) : null}
 
       <div className="mb-8 rounded-xl bg-white p-6 shadow-md">

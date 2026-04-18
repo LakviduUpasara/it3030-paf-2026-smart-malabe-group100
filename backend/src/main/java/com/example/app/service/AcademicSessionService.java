@@ -12,7 +12,7 @@ public interface AcademicSessionService {
     List<AcademicSessionResponse> getAllAcademicSessions(
             Long moduleOfferingId,
             Long studentGroupId,
-            Long resourceId,
+            String resourceId,
             LocalDate sessionDate);
 
     AcademicSessionResponse getAcademicSessionById(Long id);

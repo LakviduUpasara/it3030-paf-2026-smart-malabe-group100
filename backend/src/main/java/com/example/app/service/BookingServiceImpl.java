@@ -23,8 +23,11 @@ import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,6 +39,7 @@ public class BookingServiceImpl implements BookingService {
 
     private final BookingRepository bookingRepository;
     private final ResourceRepository resourceRepository;
+    private final MongoTemplate mongoTemplate;
 
     @Override
     @Transactional
@@ -50,13 +54,15 @@ public class BookingServiceImpl implements BookingService {
 
         rejectConflict(request.getResourceId(), request.getStartTime(), request.getEndTime());
 
-        Booking booking = new Booking();
-        booking.setResourceId(request.getResourceId());
-        booking.setUserId(request.getUserId());
-        booking.setStartTime(request.getStartTime());
-        booking.setEndTime(request.getEndTime());
-        booking.setPurpose(request.getPurpose());
-        booking.setStatus(BookingStatus.PENDING);
+        Booking booking = Booking.builder()
+                .resourceId(request.getResourceId())
+                .userId(request.getUserId())
+                .startTime(request.getStartTime())
+                .endTime(request.getEndTime())
+                .purpose(request.getPurpose())
+                .status(BookingStatus.PENDING)
+                .createdAt(LocalDateTime.now())
+                .build();
 
         Booking saved = bookingRepository.save(booking);
         logger.info("Booking created with ID: {}", saved.getId());
@@ -65,39 +71,20 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<BookingResponse> getAllBookings(Optional<Long> resourceId,
-                                                Optional<Long> userId,
+    public Page<BookingResponse> getAllBookings(Optional<String> resourceId,
+                                                Optional<String> userId,
                                                 Optional<LocalDate> date,
                                                 Pageable pageable) {
-        Specification<Booking> specification = Specification.where(null);
-
-        if (resourceId.isPresent()) {
-            specification = specification.and((root, query, criteriaBuilder) ->
-                    criteriaBuilder.equal(root.get("resourceId"), resourceId.get()));
-        }
-
-        if (userId.isPresent()) {
-            specification = specification.and((root, query, criteriaBuilder) ->
-                    criteriaBuilder.equal(root.get("userId"), userId.get()));
-        }
-
-        if (date.isPresent()) {
-            LocalDateTime startOfDay = date.get().atStartOfDay();
-            LocalDateTime endOfDay = date.get().atTime(LocalTime.MAX);
-            specification = specification.and((root, query, criteriaBuilder) ->
-                    criteriaBuilder.and(
-                            criteriaBuilder.lessThan(root.get("startTime"), endOfDay),
-                            criteriaBuilder.greaterThan(root.get("endTime"), startOfDay)
-                    ));
-        }
-
-        return bookingRepository.findAll(specification, pageable)
-                .map(this::mapToResponse);
+        Query base = buildBookingFilterQuery(resourceId, userId, date);
+        long total = mongoTemplate.count(base, Booking.class);
+        base.with(pageable);
+        List<Booking> list = mongoTemplate.find(base, Booking.class);
+        return new PageImpl<>(list.stream().map(this::mapToResponse).toList(), pageable, total);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<BookingResponse> getBookingsByUser(Long userId) {
+    public List<BookingResponse> getBookingsByUser(String userId) {
         return bookingRepository.findByUserIdOrderByStartTimeDesc(userId).stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
@@ -113,7 +100,7 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     @Transactional
-    public BookingResponse approveBooking(Long bookingId) {
+    public BookingResponse approveBooking(String bookingId) {
         logger.info("Approving booking ID: {}", bookingId);
         Booking booking = findBookingOrThrow(bookingId);
         if (booking.getStatus() != BookingStatus.PENDING) {
@@ -131,7 +118,7 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     @Transactional
-    public BookingResponse rejectBooking(Long bookingId, String reason) {
+    public BookingResponse rejectBooking(String bookingId, String reason) {
         logger.info("Rejecting booking ID: {} with reason: {}", bookingId, reason);
 
         if (reason == null || reason.trim().isEmpty()) {
@@ -153,7 +140,7 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     @Transactional
-    public BookingResponse cancelBooking(Long bookingId) {
+    public BookingResponse cancelBooking(String bookingId) {
         logger.info("Cancelling booking ID: {}", bookingId);
         Booking booking = findBookingOrThrow(bookingId);
         if (booking.getStatus() != BookingStatus.APPROVED) {
@@ -168,7 +155,7 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     @Transactional(readOnly = true)
-    public BookingAvailabilityResponse checkAvailability(Long resourceId, LocalDateTime startTime, LocalDateTime endTime) {
+    public BookingAvailabilityResponse checkAvailability(String resourceId, LocalDateTime startTime, LocalDateTime endTime) {
         validateAvailabilityRequest(startTime, endTime);
 
         Resource resource = findResourceOrThrow(resourceId);
@@ -194,8 +181,8 @@ public class BookingServiceImpl implements BookingService {
                     "Unavailable: outside weekly catalogue windows. " + detail);
         }
 
-        boolean conflict = bookingRepository.existsApprovedBookingConflict(
-                resourceId, BookingStatus.APPROVED, startTime, endTime);
+        boolean conflict = bookingRepository.existsByResourceIdAndStatusAndStartTimeBeforeAndEndTimeAfter(
+                resourceId, BookingStatus.APPROVED, endTime, startTime);
         if (conflict) {
             return buildAvailabilityResponse(
                     resourceId,
@@ -214,6 +201,19 @@ public class BookingServiceImpl implements BookingService {
                 "Available: within weekly catalogue hours and no approved booking conflict.");
     }
 
+    private Query buildBookingFilterQuery(Optional<String> resourceId, Optional<String> userId, Optional<LocalDate> date) {
+        Query query = new Query();
+        resourceId.ifPresent(id -> query.addCriteria(Criteria.where("resourceId").is(id)));
+        userId.ifPresent(id -> query.addCriteria(Criteria.where("userId").is(id)));
+        if (date.isPresent()) {
+            LocalDateTime startOfDay = date.get().atStartOfDay();
+            LocalDateTime endOfDay = date.get().atTime(LocalTime.MAX);
+            query.addCriteria(Criteria.where("startTime").lt(endOfDay));
+            query.addCriteria(Criteria.where("endTime").gt(startOfDay));
+        }
+        return query;
+    }
+
     private BookingResponse mapToResponse(Booking booking) {
         BookingResponse response = new BookingResponse();
         response.setId(booking.getId());
@@ -228,7 +228,7 @@ public class BookingServiceImpl implements BookingService {
         return response;
     }
 
-    private Booking findBookingOrThrow(Long bookingId) {
+    private Booking findBookingOrThrow(String bookingId) {
         return bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new NotFoundException("Booking not found with id " + bookingId));
     }
@@ -249,14 +249,16 @@ public class BookingServiceImpl implements BookingService {
         }
     }
 
-    private void rejectConflict(Long resourceId, LocalDateTime startTime, LocalDateTime endTime) {
-        boolean conflictExists = bookingRepository.existsApprovedBookingConflict(resourceId,
+    private void rejectConflict(String resourceId, LocalDateTime startTime, LocalDateTime endTime) {
+        boolean conflictExists = bookingRepository.existsByResourceIdAndStatusAndStartTimeBeforeAndEndTimeAfter(
+                resourceId,
                 BookingStatus.APPROVED,
-                startTime,
-                endTime);
+                endTime,
+                startTime);
         if (conflictExists) {
             logger.warn("Booking conflict detected for resourceId={}, startTime={}, endTime={}", resourceId, startTime, endTime);
-            throw new BookingConflictException("The requested time slot overlaps with an existing approved booking for this resource.");
+            throw new BookingConflictException(
+                    "The requested time slot overlaps with an existing approved booking for this resource.");
         }
     }
 
@@ -274,8 +276,8 @@ public class BookingServiceImpl implements BookingService {
         }
     }
 
-    private Resource findResourceOrThrow(Long resourceId) {
-        return resourceRepository.findByIdWithAvailabilityWindows(resourceId)
+    private Resource findResourceOrThrow(String resourceId) {
+        return resourceRepository.findById(resourceId)
                 .orElseThrow(() -> new NotFoundException("Resource not found with id " + resourceId));
     }
 
@@ -289,10 +291,6 @@ public class BookingServiceImpl implements BookingService {
         }
     }
 
-    /**
-     * True when the interval lies on one calendar day and is fully contained in at least one
-     * availability window for that day of week.
-     */
     private boolean isIntervalWithinAnyWindow(Resource resource, LocalDateTime start, LocalDateTime end) {
         if (resource.getAvailabilityWindows() == null || resource.getAvailabilityWindows().isEmpty()) {
             return false;
@@ -346,7 +344,7 @@ public class BookingServiceImpl implements BookingService {
     }
 
     private BookingAvailabilityResponse buildAvailabilityResponse(
-            Long resourceId,
+            String resourceId,
             LocalDateTime startTime,
             LocalDateTime endTime,
             boolean available,
