@@ -16,6 +16,10 @@ public class TwoFactorChallengeResponse {
     private String challengeId;
     private TwoFactorMethod method;
     private LocalDateTime expiresAt;
+    /** Earliest time the client may call resend (email OTP only). Null when resend is allowed immediately. */
+    private LocalDateTime nextResendAt;
+    /** Server cooldown between sends; mirrors app.auth.otp-resend-cooldown-seconds. */
+    private Integer resendCooldownSeconds;
     private String message;
     private String deliveryHint;
     private String manualEntryKey;

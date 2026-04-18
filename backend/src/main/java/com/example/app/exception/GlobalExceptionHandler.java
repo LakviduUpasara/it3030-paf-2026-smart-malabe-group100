@@ -6,21 +6,49 @@ import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.data.mongodb.UncategorizedMongoDbException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.mail.MailException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @RestControllerAdvice
+@Slf4j
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(DuplicateKeyException.class)
+    public ResponseEntity<Map<String, Object>> handleDuplicateKey(DuplicateKeyException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(buildErrorResponse("Duplicate key", HttpStatus.CONFLICT));
+    }
+
+    @ExceptionHandler(UncategorizedMongoDbException.class)
+    public ResponseEntity<Map<String, Object>> handleMongo(UncategorizedMongoDbException ex) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(buildErrorResponse("Database connection is required", HttpStatus.SERVICE_UNAVAILABLE));
+    }
 
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<Map<String, Object>> handleApiException(ApiException ex) {
+        if (ex.getCause() != null && ex.getStatus().is5xxServerError()) {
+            log.error("API error ({}): {}", ex.getStatus(), ex.getMessage(), ex);
+        }
         Map<String, Object> response = new HashMap<>();
         response.put("timestamp", LocalDateTime.now());
         response.put("status", ex.getStatus().value());
         response.put("message", ex.getMessage());
         return ResponseEntity.status(ex.getStatus()).body(response);
+    }
+
+    @ExceptionHandler(MailException.class)
+    public ResponseEntity<Map<String, Object>> handleMailException(MailException ex) {
+        log.error("Outbound mail failed: {}", ex.getMessage(), ex);
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(buildErrorResponse("Email delivery failed: " + ex.getMessage(), HttpStatus.SERVICE_UNAVAILABLE));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -40,13 +68,26 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<Map<String, Object>> handleBadRequest(IllegalArgumentException ex) {
-        Map<String, Object> response = new HashMap<>();
-        response.put("timestamp", LocalDateTime.now());
-        response.put("status", HttpStatus.BAD_REQUEST.value());
-        response.put("message", ex.getMessage());
+    public ResponseEntity<Map<String, Object>> handleIllegalArgumentException(IllegalArgumentException ex) {
+        return ResponseEntity.badRequest()
+                .body(buildErrorResponse(ex.getMessage(), HttpStatus.BAD_REQUEST));
+    }
 
-        return ResponseEntity.badRequest().body(response);
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleMvcNoResourceFound(NoResourceFoundException ex) {
+        String path = ex.getResourcePath();
+        String message =
+                path != null && !path.isBlank()
+                        ? "No API or static resource at /" + path
+                        : "Resource not found";
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(buildErrorResponse(message, HttpStatus.NOT_FOUND));
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<Map<String, Object>> handleAccessDeniedException(AccessDeniedException ex) {
+        String message = ex.getMessage() != null && !ex.getMessage().isBlank() ? ex.getMessage() : "Access denied";
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(buildErrorResponse(message, HttpStatus.FORBIDDEN));
     }
 
     @ExceptionHandler(NotFoundException.class)

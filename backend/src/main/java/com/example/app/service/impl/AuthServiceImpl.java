@@ -3,21 +3,26 @@ package com.example.app.service.impl;
 import com.example.app.dto.auth.AuthFlowResponse;
 import com.example.app.dto.auth.AuthFlowStatus;
 import com.example.app.dto.auth.AuthenticatedUserResponse;
+import com.example.app.dto.auth.ChangeFirstLoginPasswordRequest;
+import com.example.app.dto.auth.SelectFirstLoginTwoFactorRequest;
 import com.example.app.dto.auth.GoogleCredentialRequest;
 import com.example.app.dto.auth.GoogleLoginRequest;
 import com.example.app.dto.auth.GoogleSignupSessionResponse;
 import com.example.app.dto.auth.LoginRequest;
 import com.example.app.dto.auth.PendingApprovalResponse;
 import com.example.app.dto.auth.RegisterRequest;
+import com.example.app.dto.auth.ResendEmailOtpRequest;
 import com.example.app.dto.auth.TwoFactorChallengeResponse;
 import com.example.app.dto.auth.VerifyTwoFactorRequest;
 import com.example.app.entity.GoogleSignupSession;
+import com.example.app.entity.SessionPhase;
 import com.example.app.entity.SessionToken;
 import com.example.app.entity.SignupRequest;
 import com.example.app.entity.TwoFactorChallenge;
 import com.example.app.entity.UserAccount;
 import com.example.app.entity.enums.AccountStatus;
 import com.example.app.entity.enums.AuthProvider;
+import com.example.app.entity.enums.Role;
 import com.example.app.entity.enums.SignupRequestStatus;
 import com.example.app.entity.enums.TwoFactorMethod;
 import com.example.app.config.AppProperties;
@@ -37,6 +42,7 @@ import com.warrenstrange.googleauth.GoogleAuthenticatorKey;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
@@ -69,7 +75,13 @@ public class AuthServiceImpl implements AuthService {
     @Value("${app.auth.challenge-minutes:10}")
     private long challengeMinutes;
 
-    @Value("${app.auth.dev-expose-otp:true}")
+    @Value("${app.auth.otp-resend-cooldown-seconds:60}")
+    private long otpResendCooldownSeconds;
+
+    @Value("${app.auth.first-login-setup-hours:4}")
+    private long firstLoginSetupHours;
+
+    @Value("${app.auth.dev-expose-otp:false}")
     private boolean exposeDevelopmentOtp;
 
     @Value("${app.auth.google.signup-session-minutes:15}")
@@ -82,9 +94,10 @@ public class AuthServiceImpl implements AuthService {
         String normalizedEmail;
         String normalizedFullName;
         String providerSubject = null;
-        TwoFactorMethod preferredTwoFactorMethod = request.getPreferredTwoFactorMethod() == null
-                ? TwoFactorMethod.AUTHENTICATOR_APP
-                : request.getPreferredTwoFactorMethod();
+        TwoFactorMethod preferredTwoFactorMethod = request.getPreferredTwoFactorMethod();
+        if (preferredTwoFactorMethod == null) {
+            preferredTwoFactorMethod = TwoFactorMethod.EMAIL_OTP;
+        }
 
         if (authProvider == AuthProvider.GOOGLE) {
             GoogleSignupSession signupSession = resolveGoogleSignupSession(request.getSocialSignupToken());
@@ -110,6 +123,17 @@ public class AuthServiceImpl implements AuthService {
             throw new ApiException(HttpStatus.CONFLICT, "An approved account already exists for this email.");
         }
 
+        /*
+         * Sign-up never creates a UserAccount — only a SignupRequest row (pending access).
+         * requestedRole is the applicant's preference; the real Role is assigned only when an admin approves.
+         */
+        Role requestedRole = request.getRequestedRole() == null ? Role.USER : request.getRequestedRole();
+        if (requestedRole != Role.USER && requestedRole != Role.TECHNICIAN && requestedRole != Role.ADMIN) {
+            throw new ApiException(
+                    HttpStatus.BAD_REQUEST,
+                    "Public registration only supports User, Technician, or Admin access requests.");
+        }
+
         SignupRequest signupRequest = signupRequestRepository.findByEmailIgnoreCase(normalizedEmail)
                 .orElseGet(() -> SignupRequest.builder().id(UUID.randomUUID().toString()).build());
 
@@ -125,13 +149,19 @@ public class AuthServiceImpl implements AuthService {
                 : null);
         signupRequest.setCampusId(request.getCampusId().trim());
         signupRequest.setPhoneNumber(request.getPhoneNumber().trim());
-        signupRequest.setDepartment(request.getDepartment().trim());
+        signupRequest.setDepartment(blankToEmDash(request.getDepartment()));
+        String extra = request.getSupplementaryProfile() == null ? "" : request.getSupplementaryProfile().trim();
+        signupRequest.setSupplementaryProfile(extra.isEmpty() ? null : extra);
         signupRequest.setReasonForAccess(request.getReasonForAccess().trim());
+        signupRequest.setApplicationProfileJson(trimOrNull(request.getApplicationProfileJson()));
         signupRequest.setAuthProvider(authProvider);
         signupRequest.setPreferredTwoFactorMethod(preferredTwoFactorMethod);
         signupRequest.setStatus(SignupRequestStatus.PENDING);
+        signupRequest.setRequestedRole(requestedRole);
         signupRequest.setAssignedRole(null);
         signupRequest.setReviewerNote(null);
+        signupRequest.setRejectionReason(null);
+        signupRequest.setReviewedBy(null);
         signupRequest.setReviewedAt(null);
         signupRequest.setRequestedAt(LocalDateTime.now());
 
@@ -139,7 +169,8 @@ public class AuthServiceImpl implements AuthService {
         if (authProvider == AuthProvider.GOOGLE) {
             googleSignupSessionRepository.deleteById(request.getSocialSignupToken());
         }
-        return pendingResponse(savedRequest, "Your sign up request has been sent to the campus administrator for approval.");
+        return pendingResponse(
+                savedRequest, "Your access request has been submitted for administrator review.");
     }
 
     @Override
@@ -166,7 +197,15 @@ public class AuthServiceImpl implements AuthService {
             return authenticatedResponse(userAccount, "Developer mode: second factor is disabled.");
         }
 
-        return buildTwoFactorChallenge(userAccount);
+        if (userAccount.isMustChangePassword()) {
+            return passwordChangeRequiredResponse(userAccount);
+        }
+
+        if (!userAccount.requiresTwoFactorAtLogin()) {
+            return authenticatedResponse(userAccount, "Signed in successfully.");
+        }
+
+        return buildTwoFactorChallenge(userAccount, false);
     }
 
     @Override
@@ -235,6 +274,7 @@ public class AuthServiceImpl implements AuthService {
                 .email(signupSession.getEmail())
                 .pictureUrl(signupSession.getPictureUrl())
                 .provider(AuthProvider.GOOGLE)
+                .expiresAt(signupSession.getExpiresAt())
                 .build();
     }
 
@@ -274,7 +314,16 @@ public class AuthServiceImpl implements AuthService {
             return authenticatedResponse(userAccount, "Developer mode: second factor is disabled.");
         }
 
-        return buildTwoFactorChallenge(userAccount);
+        if (userAccount.isMustChangePassword()) {
+            userAccount.setMustChangePassword(false);
+            userAccountRepository.save(userAccount);
+        }
+
+        if (!userAccount.requiresTwoFactorAtLogin()) {
+            return authenticatedResponse(userAccount, "Signed in with Google successfully.");
+        }
+
+        return buildTwoFactorChallenge(userAccount, false);
     }
 
     @Override
@@ -309,8 +358,10 @@ public class AuthServiceImpl implements AuthService {
 
         if (challenge.getMethod() == TwoFactorMethod.EMAIL_OTP) {
             if (!normalizedCode.equals(challenge.getOtpCode())) {
+                log.warn("Invalid email OTP for challenge {} (user {})", challenge.getId(), challenge.getUserId());
                 throw new ApiException(HttpStatus.BAD_REQUEST, "The email verification code is incorrect.");
             }
+            log.info("Email OTP verified for user {}", userAccount.getId());
         } else {
             int verificationCode;
             try {
@@ -335,6 +386,66 @@ public class AuthServiceImpl implements AuthService {
         twoFactorChallengeRepository.save(challenge);
 
         return authenticatedResponse(userAccount, "2-step verification completed successfully.");
+    }
+
+    @Override
+    public AuthFlowResponse resendEmailOtp(ResendEmailOtpRequest request) {
+        TwoFactorChallenge challenge = twoFactorChallengeRepository
+                .findById(request.getChallengeId().trim())
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Verification challenge was not found."));
+
+        if (challenge.isUsed()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "This verification step was already completed.");
+        }
+
+        if (challenge.getMethod() != TwoFactorMethod.EMAIL_OTP) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Resend is only available for email verification codes.");
+        }
+
+        if (challenge.getExpiresAt() != null && challenge.getExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "This code has expired. Please sign in again.");
+        }
+
+        LocalDateTime last =
+                challenge.getLastOtpSentAt() != null ? challenge.getLastOtpSentAt() : challenge.getCreatedAt();
+        if (last != null) {
+            LocalDateTime nextAllowed = last.plusSeconds(otpResendCooldownSeconds);
+            if (LocalDateTime.now().isBefore(nextAllowed)) {
+                throw new ApiException(
+                        HttpStatus.TOO_MANY_REQUESTS,
+                        "Please wait before requesting another code."
+                );
+            }
+        }
+
+        UserAccount userAccount = userAccountRepository
+                .findById(challenge.getUserId())
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Account not found."));
+
+        if (appProperties.isDeveloperMode()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Developer mode is on: email OTP resend is not used.");
+        }
+
+        String otpCode = generateOtpCode();
+        challenge.setOtpCode(otpCode);
+        challenge.setExpiresAt(LocalDateTime.now().plusMinutes(challengeMinutes));
+        challenge.setLastOtpSentAt(LocalDateTime.now());
+
+        TwoFactorChallenge saved = twoFactorChallengeRepository.save(challenge);
+        try {
+            authEmailOtpNotifier.sendSignInOtp(userAccount.getEmail(), otpCode);
+        } catch (RuntimeException ex) {
+            twoFactorChallengeRepository.deleteById(saved.getId());
+            throw ex;
+        }
+
+        log.info("Email OTP resent for user {} challenge {}", userAccount.getId(), saved.getId());
+
+        return AuthFlowResponse.builder()
+                .authStatus(AuthFlowStatus.TWO_FACTOR_REQUIRED)
+                .message("A new verification code was sent to your email.")
+                .twoFactorChallenge(toTwoFactorResponse(saved, userAccount, AuthFlowStatus.TWO_FACTOR_REQUIRED))
+                .build();
     }
 
     @Override
@@ -378,19 +489,184 @@ public class AuthServiceImpl implements AuthService {
             return authenticatedResponse(userAccount, "Developer mode: second factor is disabled.");
         }
 
-        return buildTwoFactorChallenge(userAccount);
+        if (userAccount.isMustChangePassword()) {
+            return passwordChangeRequiredResponse(userAccount);
+        }
+
+        if (!userAccount.requiresTwoFactorAtLogin()) {
+            return authenticatedResponse(userAccount, "Your workspace is ready.");
+        }
+
+        return buildTwoFactorChallenge(userAccount, false);
     }
 
     @Override
-    public AuthFlowResponse getCurrentSession(AuthenticatedUser authenticatedUser) {
+    public AuthFlowResponse changeFirstLoginPassword(
+            ChangeFirstLoginPasswordRequest request,
+            AuthenticatedUser user,
+            String authorizationHeader
+    ) {
+        String tokenValue = extractBearerToken(authorizationHeader);
+        if (tokenValue == null || tokenValue.isBlank()) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "Sign in again to continue password setup.");
+        }
+        SessionToken sessionToken = sessionTokenRepository
+                .findById(tokenValue.trim())
+                .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "Your setup session expired. Please sign in again."));
+        if (sessionToken.getExpiresAt().isBefore(LocalDateTime.now())) {
+            sessionTokenRepository.deleteById(tokenValue.trim());
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "Your setup session expired. Please sign in again.");
+        }
+        if (sessionToken.getPhase() != SessionPhase.PASSWORD_CHANGE) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Password change is not required for this session.");
+        }
+        if (!Objects.equals(sessionToken.getUserId(), user.getUserId())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Session does not match the signed-in user.");
+        }
+
+        UserAccount userAccount = userAccountRepository
+                .findById(user.getUserId())
+                .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "Account not found."));
+
+        if (userAccount.getPasswordHash() == null
+                || !passwordEncoder.matches(request.getCurrentPassword(), userAccount.getPasswordHash())) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "Current password is incorrect.");
+        }
+
+        userAccount.setPasswordHash(passwordEncoder.encode(request.getNewPassword().trim()));
+        userAccount.setMustChangePassword(false);
+        userAccountRepository.save(userAccount);
+
+        sessionTokenRepository.deleteById(tokenValue.trim());
+
+        SessionToken nextToken = sessionTokenRepository.save(SessionToken.builder()
+                .token(UUID.randomUUID() + "-" + UUID.randomUUID())
+                .userId(userAccount.getId())
+                .phase(SessionPhase.TWO_FACTOR_METHOD_SELECTION)
+                .createdAt(LocalDateTime.now())
+                .expiresAt(LocalDateTime.now().plusHours(firstLoginSetupHours))
+                .build());
+
+        return AuthFlowResponse.builder()
+                .authStatus(AuthFlowStatus.TWO_FACTOR_METHOD_SELECTION_REQUIRED)
+                .message("Choose how you want to verify sign-in: email code or authenticator app.")
+                .token(nextToken.getToken())
+                .user(toAuthenticatedUserResponse(userAccount))
+                .sessionPhase(SessionPhase.TWO_FACTOR_METHOD_SELECTION.name())
+                .build();
+    }
+
+    @Override
+    public AuthFlowResponse selectFirstLoginTwoFactor(
+            SelectFirstLoginTwoFactorRequest request,
+            AuthenticatedUser user,
+            String authorizationHeader
+    ) {
+        String tokenValue = extractBearerToken(authorizationHeader);
+        if (tokenValue == null || tokenValue.isBlank()) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "Sign in again to continue setup.");
+        }
+        SessionToken sessionToken = sessionTokenRepository
+                .findById(tokenValue.trim())
+                .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "Your setup session expired. Please sign in again."));
+        if (sessionToken.getExpiresAt().isBefore(LocalDateTime.now())) {
+            sessionTokenRepository.deleteById(tokenValue.trim());
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "Your setup session expired. Please sign in again.");
+        }
+        if (sessionToken.getPhase() != SessionPhase.TWO_FACTOR_METHOD_SELECTION) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Choose your verification method in the sign-in setup flow.");
+        }
+        if (!Objects.equals(sessionToken.getUserId(), user.getUserId())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Session does not match the signed-in user.");
+        }
+
+        UserAccount userAccount = userAccountRepository
+                .findById(user.getUserId())
+                .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "Account not found."));
+
+        if (Boolean.TRUE.equals(request.getSkipTwoFactor())) {
+            if (request.getMethod() != null) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "Do not send a method when skipping 2-step verification.");
+            }
+            userAccount.setTwoFactorEnabled(false);
+            userAccount.setAuthenticatorSecret(null);
+            userAccount.setAuthenticatorConfirmed(false);
+            userAccountRepository.save(userAccount);
+
+            sessionTokenRepository.deleteById(tokenValue.trim());
+
+            UserAccount reloaded = userAccountRepository
+                    .findById(userAccount.getId())
+                    .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "Account not found."));
+
+            if (appProperties.isDeveloperMode()) {
+                return authenticatedResponse(reloaded, "Developer mode: 2-step verification skipped.");
+            }
+            return authenticatedResponse(
+                    reloaded,
+                    "You can enable 2-step verification later in Administration → System Settings."
+            );
+        }
+
+        TwoFactorMethod method = request.getMethod();
+        if (method == null) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Choose a verification method or skip 2-step verification.");
+        }
+
+        userAccount.setTwoFactorEnabled(true);
+        userAccount.setPreferredTwoFactorMethod(method);
+        if (method == TwoFactorMethod.EMAIL_OTP) {
+            userAccount.setAuthenticatorSecret(null);
+            userAccount.setAuthenticatorConfirmed(false);
+        } else {
+            GoogleAuthenticatorKey key = googleAuthenticator.createCredentials();
+            userAccount.setAuthenticatorSecret(key.getKey());
+            userAccount.setAuthenticatorConfirmed(false);
+        }
+        userAccountRepository.save(userAccount);
+
+        sessionTokenRepository.deleteById(tokenValue.trim());
+
+        UserAccount reloaded = userAccountRepository
+                .findById(userAccount.getId())
+                .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "Account not found."));
+
+        if (appProperties.isDeveloperMode()) {
+            return authenticatedResponse(reloaded, "Developer mode: 2FA method saved, second factor is disabled.");
+        }
+
+        boolean enrollmentStep = method == TwoFactorMethod.AUTHENTICATOR_APP;
+        return buildTwoFactorChallenge(reloaded, enrollmentStep);
+    }
+
+    @Override
+    public AuthFlowResponse getCurrentSession(AuthenticatedUser authenticatedUser, String authorizationHeader) {
         UserAccount userAccount = userAccountRepository.findById(authenticatedUser.getUserId())
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "The current session is no longer valid."));
 
-        return AuthFlowResponse.builder()
+        String tokenValue = extractBearerToken(authorizationHeader);
+        String sessionPhaseName = null;
+        if (tokenValue != null && !tokenValue.isBlank()) {
+            Optional<SessionToken> st = sessionTokenRepository.findById(tokenValue.trim());
+            if (st.isPresent() && st.get().getExpiresAt().isAfter(LocalDateTime.now())) {
+                SessionPhase p = st.get().getPhase();
+                if (p != null && p != SessionPhase.FULL) {
+                    sessionPhaseName = p.name();
+                }
+            }
+        }
+
+        boolean googlePrompt = shouldOfferOptionalGoogleTwoFactorPrompt(userAccount);
+
+        AuthFlowResponse.AuthFlowResponseBuilder builder = AuthFlowResponse.builder()
                 .authStatus(AuthFlowStatus.AUTHENTICATED)
                 .message("Authenticated session loaded successfully.")
-                .user(toAuthenticatedUserResponse(userAccount))
-                .build();
+                .user(toAuthenticatedUserResponse(userAccount, googlePrompt))
+                .showGoogleTwoFactorSetupPrompt(googlePrompt ? Boolean.TRUE : null);
+        if (sessionPhaseName != null) {
+            builder.sessionPhase(sessionPhaseName);
+        }
+        return builder.build();
     }
 
     private AuthFlowResponse resolveSignupRequestState(String email, String fallbackMessage) {
@@ -410,14 +686,56 @@ public class AuthServiceImpl implements AuthService {
         }
     }
 
+    /**
+     * Chooses email OTP vs authenticator based on the account.
+     *
+     * @param authenticatorEnrollmentStep when {@code true}, the user just chose the authenticator app during first-login
+     *                                      and a new secret was saved — show QR/setup. When {@code false} (normal sign-in),
+     *                                      if a secret exists but the app was never confirmed, send email OTP instead so
+     *                                      abandoned setups do not block access.
+     */
+    private TwoFactorMethod resolveEffectiveTwoFactorMethod(
+            UserAccount userAccount, boolean authenticatorEnrollmentStep
+    ) {
+        TwoFactorMethod preferred = userAccount.getPreferredTwoFactorMethod();
+        if (preferred == null || preferred == TwoFactorMethod.EMAIL_OTP) {
+            return TwoFactorMethod.EMAIL_OTP;
+        }
+        String secret = userAccount.getAuthenticatorSecret();
+        boolean hasSecret = secret != null && !secret.isBlank();
+        if (!hasSecret) {
+            return TwoFactorMethod.EMAIL_OTP;
+        }
+        if (!userAccount.isAuthenticatorConfirmed()) {
+            if (authenticatorEnrollmentStep) {
+                return TwoFactorMethod.AUTHENTICATOR_APP;
+            }
+            return TwoFactorMethod.EMAIL_OTP;
+        }
+        return TwoFactorMethod.AUTHENTICATOR_APP;
+    }
+
     private AuthFlowResponse buildTwoFactorChallenge(UserAccount userAccount) {
+        return buildTwoFactorChallenge(userAccount, false);
+    }
+
+    private AuthFlowResponse buildTwoFactorChallenge(UserAccount userAccount, boolean authenticatorEnrollmentStep) {
+        if (!userAccount.requiresTwoFactorAtLogin()) {
+            throw new ApiException(
+                    HttpStatus.BAD_REQUEST,
+                    "2-step verification is turned off for this account. Sign in again without a verification step."
+            );
+        }
+
         twoFactorChallengeRepository.deleteByUserId(userAccount.getId());
+
+        TwoFactorMethod method = resolveEffectiveTwoFactorMethod(userAccount, authenticatorEnrollmentStep);
 
         // Persist the challenge as a small Mongo document so 2FA can be resumed safely.
         TwoFactorChallenge challenge = TwoFactorChallenge.builder()
                 .id(UUID.randomUUID().toString())
                 .userId(userAccount.getId())
-                .method(userAccount.getPreferredTwoFactorMethod())
+                .method(method)
                 .createdAt(LocalDateTime.now())
                 .expiresAt(LocalDateTime.now().plusMinutes(challengeMinutes))
                 .used(false)
@@ -426,22 +744,51 @@ public class AuthServiceImpl implements AuthService {
         AuthFlowStatus authFlowStatus = AuthFlowStatus.TWO_FACTOR_REQUIRED;
         String message = "Enter the code from your second verification step to continue.";
 
-        if (userAccount.getPreferredTwoFactorMethod() == TwoFactorMethod.EMAIL_OTP) {
+        if (method == TwoFactorMethod.EMAIL_OTP) {
             String otpCode = generateOtpCode();
             challenge.setOtpCode(otpCode);
-            authEmailOtpNotifier.sendSignInOtp(userAccount.getEmail(), otpCode);
-        } else {
-            if (userAccount.getAuthenticatorSecret() == null || userAccount.getAuthenticatorSecret().isBlank()) {
-                GoogleAuthenticatorKey key = googleAuthenticator.createCredentials();
-                userAccount.setAuthenticatorSecret(key.getKey());
-                userAccount.setAuthenticatorConfirmed(false);
-                userAccountRepository.save(userAccount);
+            challenge.setLastOtpSentAt(LocalDateTime.now());
+            if (userAccount.getPreferredTwoFactorMethod() == TwoFactorMethod.AUTHENTICATOR_APP) {
+                message =
+                        "We sent a one-time code to your email. Use it to sign in. If you have not finished linking Google Authenticator, you can complete that later from your account settings.";
             }
+            TwoFactorChallenge saved = twoFactorChallengeRepository.save(challenge);
+            try {
+                authEmailOtpNotifier.sendSignInOtp(userAccount.getEmail(), otpCode);
+            } catch (RuntimeException ex) {
+                twoFactorChallengeRepository.deleteById(saved.getId());
+                throw ex;
+            }
+            return AuthFlowResponse.builder()
+                    .authStatus(authFlowStatus)
+                    .message(message)
+                    .twoFactorChallenge(toTwoFactorResponse(saved, userAccount, authFlowStatus))
+                    .build();
+        }
 
-            if (!userAccount.isAuthenticatorConfirmed()) {
-                authFlowStatus = AuthFlowStatus.AUTHENTICATOR_SETUP_REQUIRED;
-                message = "Set up your authenticator app with the provided key and enter the generated code.";
+        if (userAccount.getAuthenticatorSecret() == null || userAccount.getAuthenticatorSecret().isBlank()) {
+            log.warn("Effective method was AUTHENTICATOR_APP but secret missing for user {}", userAccount.getId());
+            String otpCode = generateOtpCode();
+            challenge.setMethod(TwoFactorMethod.EMAIL_OTP);
+            challenge.setOtpCode(otpCode);
+            challenge.setLastOtpSentAt(LocalDateTime.now());
+            TwoFactorChallenge saved = twoFactorChallengeRepository.save(challenge);
+            try {
+                authEmailOtpNotifier.sendSignInOtp(userAccount.getEmail(), otpCode);
+            } catch (RuntimeException ex) {
+                twoFactorChallengeRepository.deleteById(saved.getId());
+                throw ex;
             }
+            return AuthFlowResponse.builder()
+                    .authStatus(authFlowStatus)
+                    .message(message)
+                    .twoFactorChallenge(toTwoFactorResponse(saved, userAccount, authFlowStatus))
+                    .build();
+        }
+
+        if (!userAccount.isAuthenticatorConfirmed()) {
+            authFlowStatus = AuthFlowStatus.AUTHENTICATOR_SETUP_REQUIRED;
+            message = "Set up your authenticator app with the provided key and enter the generated code.";
         }
 
         TwoFactorChallenge savedChallenge = twoFactorChallengeRepository.save(challenge);
@@ -453,21 +800,54 @@ public class AuthServiceImpl implements AuthService {
                 .build();
     }
 
+    private AuthFlowResponse passwordChangeRequiredResponse(UserAccount userAccount) {
+        sessionTokenRepository.deleteByUserId(userAccount.getId());
+        SessionToken sessionToken = sessionTokenRepository.save(SessionToken.builder()
+                .token(UUID.randomUUID() + "-" + UUID.randomUUID())
+                .userId(userAccount.getId())
+                .phase(SessionPhase.PASSWORD_CHANGE)
+                .createdAt(LocalDateTime.now())
+                .expiresAt(LocalDateTime.now().plusHours(firstLoginSetupHours))
+                .build());
+
+        return AuthFlowResponse.builder()
+                .authStatus(AuthFlowStatus.PASSWORD_CHANGE_REQUIRED)
+                .message("You must set a new password using your current password before continuing.")
+                .token(sessionToken.getToken())
+                .user(toAuthenticatedUserResponse(userAccount))
+                .sessionPhase(SessionPhase.PASSWORD_CHANGE.name())
+                .build();
+    }
+
     private AuthFlowResponse authenticatedResponse(UserAccount userAccount, String message) {
         sessionTokenRepository.deleteByUserId(userAccount.getId());
         SessionToken sessionToken = sessionTokenRepository.save(SessionToken.builder()
                 .token(UUID.randomUUID() + "-" + UUID.randomUUID())
                 .userId(userAccount.getId())
+                .phase(SessionPhase.FULL)
                 .createdAt(LocalDateTime.now())
                 .expiresAt(LocalDateTime.now().plusHours(sessionHours))
                 .build());
+
+        UserAccount fresh = userAccountRepository.findById(userAccount.getId()).orElse(userAccount);
+        boolean googlePrompt = shouldOfferOptionalGoogleTwoFactorPrompt(fresh);
 
         return AuthFlowResponse.builder()
                 .authStatus(AuthFlowStatus.AUTHENTICATED)
                 .message(message)
                 .token(sessionToken.getToken())
-                .user(toAuthenticatedUserResponse(userAccount))
+                .user(toAuthenticatedUserResponse(fresh, googlePrompt))
+                .showGoogleTwoFactorSetupPrompt(googlePrompt ? Boolean.TRUE : null)
                 .build();
+    }
+
+    private boolean shouldOfferOptionalGoogleTwoFactorPrompt(UserAccount user) {
+        if (appProperties.isDeveloperMode()) {
+            return false;
+        }
+        return user.getProvider() == AuthProvider.GOOGLE
+                && Boolean.FALSE.equals(user.getTwoFactorEnabled())
+                && !user.isGoogleTwoFactorPromptDismissed();
     }
 
     private AuthFlowResponse pendingResponse(SignupRequest signupRequest, String message) {
@@ -479,6 +859,13 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private AuthenticatedUserResponse toAuthenticatedUserResponse(UserAccount userAccount) {
+        return toAuthenticatedUserResponse(userAccount, false);
+    }
+
+    private AuthenticatedUserResponse toAuthenticatedUserResponse(UserAccount userAccount, boolean showGoogleTwoFactorSetupPrompt) {
+        boolean pendingAuthApp =
+                userAccount.getPreferredTwoFactorMethod() == TwoFactorMethod.AUTHENTICATOR_APP
+                        && !userAccount.isAuthenticatorConfirmed();
         return AuthenticatedUserResponse.builder()
                 .id(userAccount.getId())
                 .name(userAccount.getFullName())
@@ -487,22 +874,43 @@ public class AuthServiceImpl implements AuthService {
                 .status(userAccount.getStatus())
                 .provider(userAccount.getProvider())
                 .preferredTwoFactorMethod(userAccount.getPreferredTwoFactorMethod())
+                .twoFactorEnabled(userAccount.getTwoFactorEnabled())
+                .pendingAuthenticatorSetup(pendingAuthApp)
+                .mustChangePassword(userAccount.isMustChangePassword())
+                .emailNotificationsEnabled(userAccount.isEmailNotificationsEnabled())
+                .appNotificationsEnabled(userAccount.isAppNotificationsEnabled())
+                .showGoogleTwoFactorSetupPrompt(showGoogleTwoFactorSetupPrompt ? Boolean.TRUE : null)
                 .build();
     }
 
     private PendingApprovalResponse toPendingApprovalResponse(SignupRequest signupRequest, String message) {
-        return PendingApprovalResponse.builder()
-                .requestId(signupRequest.getId())
-                .applicantName(signupRequest.getFullName())
-                .email(signupRequest.getEmail())
-                .provider(signupRequest.getAuthProvider() == null ? AuthProvider.LOCAL : signupRequest.getAuthProvider())
-                .status(signupRequest.getStatus())
-                .assignedRole(signupRequest.getAssignedRole())
-                .reviewerNote(signupRequest.getReviewerNote())
-                .requestedAt(signupRequest.getRequestedAt())
-                .reviewedAt(signupRequest.getReviewedAt())
-                .message(message)
-                .build();
+        return new PendingApprovalResponse(
+                signupRequest.getId(),
+                signupRequest.getFullName(),
+                signupRequest.getEmail(),
+                signupRequest.getAuthProvider() == null ? AuthProvider.LOCAL : signupRequest.getAuthProvider(),
+                signupRequest.getStatus(),
+                signupRequest.getRequestedRole(),
+                signupRequest.getAssignedRole(),
+                signupRequest.getReviewerNote(),
+                signupRequest.getRejectionReason(),
+                signupRequest.getRequestedAt(),
+                signupRequest.getReviewedAt(),
+                message
+        );
+    }
+
+    private LocalDateTime computeNextResendAt(TwoFactorChallenge challenge) {
+        LocalDateTime last = challenge.getLastOtpSentAt() != null ? challenge.getLastOtpSentAt() : challenge.getCreatedAt();
+        if (last == null) {
+            return null;
+        }
+        return last.plusSeconds(otpResendCooldownSeconds);
+    }
+
+    /** QR / manual key only while the authenticator is not yet confirmed (first-time enrollment or reset). */
+    private boolean showAuthenticatorEnrollmentUi(TwoFactorChallenge challenge, UserAccount userAccount) {
+        return challenge.getMethod() == TwoFactorMethod.AUTHENTICATOR_APP && !userAccount.isAuthenticatorConfirmed();
     }
 
     private TwoFactorChallengeResponse toTwoFactorResponse(
@@ -510,10 +918,13 @@ public class AuthServiceImpl implements AuthService {
             UserAccount userAccount,
             AuthFlowStatus authFlowStatus
     ) {
+        boolean emailOtp = challenge.getMethod() == TwoFactorMethod.EMAIL_OTP;
         return TwoFactorChallengeResponse.builder()
                 .challengeId(challenge.getId())
                 .method(challenge.getMethod())
                 .expiresAt(challenge.getExpiresAt())
+                .nextResendAt(emailOtp ? computeNextResendAt(challenge) : null)
+                .resendCooldownSeconds(emailOtp ? (int) otpResendCooldownSeconds : null)
                 .message(authFlowStatus == AuthFlowStatus.AUTHENTICATOR_SETUP_REQUIRED
                         ? "Complete your authenticator app setup to finish sign-in."
                         : "Complete your second verification step to finish sign-in.")
@@ -521,11 +932,13 @@ public class AuthServiceImpl implements AuthService {
                         ? (appProperties.getNotifications().getEmail().isEnabled()
                         ? "The one-time code was sent to your campus email address."
                         : "Email delivery is turned off; use the development-only code below if your administrator enabled it.")
-                        : "Open Google Authenticator (or a compatible app), add the provided manual key, then enter the generated 6-digit code.")
-                .manualEntryKey(challenge.getMethod() == TwoFactorMethod.AUTHENTICATOR_APP
+                        : (!userAccount.isAuthenticatorConfirmed()
+                        ? "Scan the QR code or add the manual key, then enter the code from your authenticator app."
+                        : "Open your authenticator app and enter the current 6-digit code."))
+                .manualEntryKey(showAuthenticatorEnrollmentUi(challenge, userAccount)
                         ? userAccount.getAuthenticatorSecret()
                         : null)
-                .qrCodeUri(challenge.getMethod() == TwoFactorMethod.AUTHENTICATOR_APP
+                .qrCodeUri(showAuthenticatorEnrollmentUi(challenge, userAccount)
                         ? buildOtpAuthUri(userAccount)
                         : null)
                 .debugCode(exposeDevelopmentOtp && challenge.getMethod() == TwoFactorMethod.EMAIL_OTP
@@ -536,9 +949,12 @@ public class AuthServiceImpl implements AuthService {
 
     private String getSignupRequestMessage(SignupRequest signupRequest) {
         return switch (signupRequest.getStatus()) {
-            case PENDING -> "Your sign up request is still waiting for administrator approval.";
+            case PENDING -> "Your access request is still waiting for administrator review.";
             case APPROVED -> "Your sign up request has been approved. Please sign in using your approved account.";
-            case REJECTED -> "Your sign up request was rejected. Review the administrator note and submit a new request if needed.";
+            case REJECTED -> "Your access request was rejected."
+                    + (signupRequest.getRejectionReason() != null && !signupRequest.getRejectionReason().isBlank()
+                            ? " Reason: " + signupRequest.getRejectionReason().trim()
+                            : " You may submit a new request if appropriate.");
         };
     }
 
@@ -562,6 +978,22 @@ public class AuthServiceImpl implements AuthService {
 
     private String normalizeEmail(String email) {
         return email == null ? "" : email.trim().toLowerCase();
+    }
+
+    private static String blankToEmDash(String value) {
+        if (value == null) {
+            return "—";
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? "—" : trimmed;
+    }
+
+    private static String trimOrNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String t = value.trim();
+        return t.isEmpty() ? null : t;
     }
 
     private GoogleSignupSession resolveGoogleSignupSession(String signupToken) {
@@ -616,6 +1048,15 @@ public class AuthServiceImpl implements AuthService {
             return authenticatedResponse(userAccount, "Developer mode: second factor is disabled.");
         }
 
-        return buildTwoFactorChallenge(userAccount);
+        if (userAccount.isMustChangePassword()) {
+            userAccount.setMustChangePassword(false);
+            userAccountRepository.save(userAccount);
+        }
+
+        if (!userAccount.requiresTwoFactorAtLogin()) {
+            return authenticatedResponse(userAccount, "Signed in successfully.");
+        }
+
+        return buildTwoFactorChallenge(userAccount, false);
     }
 }

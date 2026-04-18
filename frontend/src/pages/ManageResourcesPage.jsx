@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
+import { Boxes, ShieldAlert, Wrench } from "lucide-react";
 import Button from "../components/Button";
+import AdminKpiGrid from "../components/admin/AdminKpiGrid";
+import AdminPageHeader from "../components/admin/AdminPageHeader";
+import AdminStatTile from "../components/admin/AdminStatTile";
 import Card from "../components/Card";
 import LoadingSpinner from "../components/LoadingSpinner";
 import Modal from "../components/Modal";
@@ -28,17 +32,9 @@ const initialResourceForm = {
   endTime: "10:00",
 };
 
-const resourceTypes = [
-  "LECTURE_HALL",
-  "LAB",
-  "MEETING_ROOM",
-  "EQUIPMENT",
-];
+const resourceTypes = ["LECTURE_HALL", "LAB", "MEETING_ROOM", "EQUIPMENT"];
 
-const resourceStatuses = [
-  "ACTIVE",
-  "OUT_OF_SERVICE",
-];
+const resourceStatuses = ["ACTIVE", "OUT_OF_SERVICE"];
 
 const daysOfWeek = [
   "MONDAY",
@@ -266,7 +262,7 @@ function ManageResourcesPage() {
   useEffect(() => {
     let active = true;
 
-    async function loadResources() {
+    async function load() {
       setLoading(true);
       setListError("");
 
@@ -286,7 +282,7 @@ function ManageResourcesPage() {
       }
     }
 
-    loadResources();
+    load();
 
     return () => {
       active = false;
@@ -369,9 +365,9 @@ function ManageResourcesPage() {
     }
 
     if (
-      !resourceForm.startTime
-      || !resourceForm.endTime
-      || resourceForm.endTime <= resourceForm.startTime
+      !resourceForm.startTime ||
+      !resourceForm.endTime ||
+      resourceForm.endTime <= resourceForm.startTime
     ) {
       setFormError("End time must be after start time.");
       return;
@@ -421,144 +417,202 @@ function ManageResourcesPage() {
     }
   };
 
-  return (
-    <div className="page-stack resource-management-page">
-      <Card
-        actions={
-          <Button className="resource-primary-action" onClick={openCreateModal} variant="primary">
-            New Resource
-          </Button>
-        }
-        className="resource-management-card"
-        title="Manage Resources"
-        subtitle="Browse, filter, create, update, and remove catalogue entries"
-      >
-        <div className="resource-feedback-stack">
-          {listError ? <p className="alert alert-error">{listError}</p> : null}
-          {actionError ? <p className="alert alert-error">{actionError}</p> : null}
-          {actionSuccess ? <p className="alert alert-success">{actionSuccess}</p> : null}
-        </div>
+  const availableResources = resources.filter((resource) => resource.status === "ACTIVE").length;
+  const maintenanceResources = resources.filter((resource) => resource.status === "OUT_OF_SERVICE")
+    .length;
+  const resourceTypesCount = new Set(resources.map((resource) => resource.type)).size;
+  const capacityTotal = resources.reduce(
+    (total, resource) => total + Number(resource.capacity || 0),
+    0,
+  );
 
-        <section className="resource-filter-section">
-          <div className="resource-section-head">
-            <div>
-              <strong>Filter Catalogue</strong>
+  return (
+    <>
+      <AdminPageHeader
+        actions={
+          <>
+            <Button onClick={refreshResources} variant="secondary" type="button">
+              Refresh inventory
+            </Button>
+            <Button className="resource-primary-action" onClick={openCreateModal} variant="primary">
+              New resource
+            </Button>
+          </>
+        }
+        description="Review rooms, labs, and movable assets with filters, CRUD actions, and a live portfolio snapshot."
+        title="Resource portfolio"
+      />
+
+      <AdminKpiGrid>
+        <AdminStatTile
+          detail={`${availableResources} available now`}
+          icon={Boxes}
+          label="Total resources"
+          value={resources.length}
+        />
+        <AdminStatTile
+          detail="Ready for scheduling"
+          icon={Wrench}
+          label="Active"
+          value={availableResources}
+        />
+        <AdminStatTile
+          detail="Out of service"
+          icon={ShieldAlert}
+          label="Maintenance"
+          value={maintenanceResources}
+        />
+      </AdminKpiGrid>
+
+      <div className="grid gap-6 xl:grid-cols-[1.35fr_0.95fr]">
+        <div className="page-stack resource-management-page min-w-0">
+        <Card
+          className="resource-management-card admin-panel-card"
+          title="Manage Resources"
+          subtitle="Browse, filter, create, update, and remove catalogue entries"
+        >
+          <div className="resource-feedback-stack">
+            {listError ? <p className="alert alert-error">{listError}</p> : null}
+            {actionError ? <p className="alert alert-error">{actionError}</p> : null}
+            {actionSuccess ? <p className="alert alert-success">{actionSuccess}</p> : null}
+          </div>
+
+          <section className="resource-filter-section">
+            <div className="resource-section-head">
+              <div>
+                <strong>Filter catalogue</strong>
+                <p className="supporting-text">
+                  Narrow the resource list by type, location, and minimum capacity.
+                </p>
+              </div>
+            </div>
+
+            <form className="form-grid resource-filter-grid" onSubmit={handleFilterSubmit}>
+              <label className="field">
+                <span>Type</span>
+                <select name="type" onChange={handleFilterChange} value={filters.type}>
+                  <option value="">All resource types</option>
+                  {resourceTypes.map((type) => (
+                    <option key={type} value={type}>
+                      {formatEnumLabel(type)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="field">
+                <span>Location</span>
+                <input
+                  name="location"
+                  onChange={handleFilterChange}
+                  placeholder="Search by location"
+                  type="text"
+                  value={filters.location}
+                />
+              </label>
+
+              <label className="field">
+                <span>Minimum capacity</span>
+                <input
+                  min="1"
+                  name="minCapacity"
+                  onChange={handleFilterChange}
+                  placeholder="e.g. 30"
+                  type="number"
+                  value={filters.minCapacity}
+                />
+              </label>
+
+              <div className="inline-actions resource-filter-actions">
+                <Button type="submit" variant="primary">
+                  Apply filters
+                </Button>
+                <Button disabled={loading} onClick={handleFilterReset} type="button" variant="secondary">
+                  Clear filters
+                </Button>
+              </div>
+            </form>
+          </section>
+
+          <section className="resource-results-section">
+            <div className="resource-results-head">
               <p className="supporting-text">
-                Narrow the resource list by type, location, and minimum capacity.
+                Showing {resources.length} resource{resources.length === 1 ? "" : "s"}.
               </p>
             </div>
-          </div>
 
-          <form className="form-grid resource-filter-grid" onSubmit={handleFilterSubmit}>
-            <label className="field">
-              <span>Type</span>
-              <select name="type" onChange={handleFilterChange} value={filters.type}>
-                <option value="">All resource types</option>
-                {resourceTypes.map((type) => (
-                  <option key={type} value={type}>
-                    {formatEnumLabel(type)}
-                  </option>
+            {loading ? <LoadingSpinner label="Loading resources..." /> : null}
+
+            {!loading && !resources.length ? (
+              <p className="empty-state">No resources matched the current filters.</p>
+            ) : null}
+
+            {!loading && resources.length ? (
+              <div className="resource-card-grid">
+                {resources.map((resource) => (
+                  <Card
+                    actions={
+                      <div className="inline-actions resource-card-actions">
+                        <Button onClick={() => openEditModal(resource)} variant="secondary">
+                          Edit
+                        </Button>
+                        <Button
+                          disabled={deletingId === resource.id}
+                          onClick={() => handleDelete(resource)}
+                          variant="ghost"
+                        >
+                          {deletingId === resource.id ? "Deleting..." : "Delete"}
+                        </Button>
+                      </div>
+                    }
+                    className="resource-item-card"
+                    key={resource.id}
+                    subtitle={`${formatEnumLabel(resource.type)} | ${resource.location}`}
+                    title={resource.name}
+                  >
+                    <div className="resource-card-content">
+                      <div className="resource-card-meta">
+                        <p className="supporting-text">Capacity: {resource.capacity}</p>
+                        {resource.availabilityWindows?.length ? (
+                          <p className="supporting-text resource-availability">
+                            Availability:{" "}
+                            {resource.availabilityWindows.map(formatAvailabilityWindow).join(" | ")}
+                          </p>
+                        ) : null}
+                      </div>
+                      <div className="resource-card-footer">
+                        <span className={`status-badge ${getStatusToken(resource.status)}`}>
+                          {formatEnumLabel(resource.status)}
+                        </span>
+                      </div>
+                    </div>
+                  </Card>
                 ))}
-              </select>
-            </label>
+              </div>
+            ) : null}
+          </section>
+        </Card>
+        </div>
 
-            <label className="field">
-              <span>Location</span>
-              <input
-                name="location"
-                onChange={handleFilterChange}
-                placeholder="Search by location"
-                type="text"
-                value={filters.location}
-              />
-            </label>
-
-            <label className="field">
-              <span>Minimum Capacity</span>
-              <input
-                min="1"
-                name="minCapacity"
-                onChange={handleFilterChange}
-                placeholder="e.g. 30"
-                type="number"
-                value={filters.minCapacity}
-              />
-            </label>
-
-            <div className="inline-actions resource-filter-actions">
-              <Button type="submit" variant="primary">
-                Apply Filters
-              </Button>
-              <Button
-                disabled={loading}
-                onClick={handleFilterReset}
-                type="button"
-                variant="secondary"
-              >
-                Clear Filters
-              </Button>
+        <aside className="h-fit rounded-3xl border border-border bg-tint p-5">
+          <p className="text-base font-semibold text-heading">Portfolio mix</p>
+          <p className="text-sm text-text/72">Inventory snapshot</p>
+          <div className="mt-4 space-y-3 border-t border-border/60 pt-4 text-sm">
+            <div className="flex justify-between gap-2">
+              <span className="text-text/72">Resource types</span>
+              <span className="font-semibold text-heading">{resourceTypesCount}</span>
             </div>
-          </form>
-        </section>
-
-        <section className="resource-results-section">
-          <div className="resource-results-head">
-            <p className="supporting-text">
-              Showing {resources.length} resource{resources.length === 1 ? "" : "s"}.
-            </p>
+            <div className="flex justify-between gap-2">
+              <span className="text-text/72">Bookable capacity</span>
+              <span className="font-semibold text-heading">{capacityTotal}</span>
+            </div>
+            <div className="flex justify-between gap-2">
+              <span className="text-text/72">Maintenance blocked</span>
+              <span className="font-semibold text-heading">{maintenanceResources}</span>
+            </div>
           </div>
-
-          {loading ? <LoadingSpinner label="Loading resources..." /> : null}
-
-          {!loading && !resources.length ? (
-            <p className="empty-state">No resources matched the current filters.</p>
-          ) : null}
-
-          {!loading && resources.length ? (
-            <div className="resource-card-grid">
-              {resources.map((resource) => (
-                <Card
-                  actions={
-                    <div className="inline-actions resource-card-actions">
-                      <Button onClick={() => openEditModal(resource)} variant="secondary">
-                        Edit
-                      </Button>
-                      <Button
-                        disabled={deletingId === resource.id}
-                        onClick={() => handleDelete(resource)}
-                        variant="ghost"
-                      >
-                        {deletingId === resource.id ? "Deleting..." : "Delete"}
-                      </Button>
-                    </div>
-                  }
-                  className="resource-item-card"
-                  key={resource.id}
-                  subtitle={`${formatEnumLabel(resource.type)} | ${resource.location}`}
-                  title={resource.name}
-                >
-                  <div className="resource-card-content">
-                    <div className="resource-card-meta">
-                      <p className="supporting-text">Capacity: {resource.capacity}</p>
-                      {resource.availabilityWindows?.length ? (
-                        <p className="supporting-text resource-availability">
-                          Availability:{" "}
-                          {resource.availabilityWindows.map(formatAvailabilityWindow).join(" | ")}
-                        </p>
-                      ) : null}
-                    </div>
-                    <div className="resource-card-footer">
-                      <span className={`status-badge ${getStatusToken(resource.status)}`}>
-                        {formatEnumLabel(resource.status)}
-                      </span>
-                    </div>
-                  </div>
-                </Card>
-              ))}
-            </div>
-          ) : null}
-        </section>
-      </Card>
+        </aside>
+      </div>
 
       <Modal
         contentClassName="resource-modal-content"
@@ -584,9 +638,8 @@ function ManageResourcesPage() {
           />
         </div>
       </Modal>
-    </div>
+    </>
   );
 }
 
 export default ManageResourcesPage;
-

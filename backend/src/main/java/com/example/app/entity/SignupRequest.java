@@ -42,7 +42,13 @@ public class SignupRequest {
 
     private String department;
 
+    /** Extra applicant notes aligned with requested campus role (faculties, workshop, programme, etc.). */
+    private String supplementaryProfile;
+
     private String reasonForAccess;
+
+    /** JSON snapshot of the applicant’s registration form (aligned with admin console fields). */
+    private String applicationProfileJson;
 
     private AuthProvider authProvider;
 
@@ -50,9 +56,19 @@ public class SignupRequest {
 
     private SignupRequestStatus status;
 
+    /** Role the applicant asks for when registering (reviewer may assign a different role on approval). */
+    private Role requestedRole;
+
     private Role assignedRole;
 
+    /** Internal reviewer note (approve or reject). */
     private String reviewerNote;
+
+    /** Applicant-facing rejection explanation; set only when status is REJECTED. */
+    private String rejectionReason;
+
+    /** Email of the admin/manager who last approved or rejected (audit). */
+    private String reviewedBy;
 
     @CreatedDate
     private LocalDateTime requestedAt;

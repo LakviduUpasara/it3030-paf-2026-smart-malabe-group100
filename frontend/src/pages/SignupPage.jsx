@@ -2,17 +2,19 @@ import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { FaApple } from "react-icons/fa6";
 import { FcGoogle } from "react-icons/fc";
-import {
-  HiOutlineCheckBadge,
-  HiOutlineEnvelope,
-  HiOutlineShieldCheck,
-} from "react-icons/hi2";
+import { HiOutlineCheckBadge, HiOutlineEnvelope } from "react-icons/hi2";
 import Button from "../components/Button";
 import Card from "../components/Card";
 import GoogleIdentityButton from "../components/GoogleIdentityButton";
 import LoadingSpinner from "../components/LoadingSpinner";
+import SignupRegistrationFields from "../components/signup/SignupRegistrationFields";
 import SocialAccountChooserModal from "../components/SocialAccountChooserModal";
 import { useAuth } from "../hooks/useAuth";
+import {
+  buildInitialDraft,
+  deriveRegisterPayloadPrimitives,
+  validateRegistrationDraft,
+} from "../signup/registrationUtils";
 import { getPasswordStrength } from "../utils/passwordStrength";
 import { getDefaultRouteForRole } from "../utils/roleUtils";
 
@@ -21,22 +23,6 @@ const SOCIAL_COPY = {
   GOOGLE: { label: "Google", icon: FcGoogle },
   APPLE: { label: "Apple", icon: FaApple },
 };
-const TWO_FACTOR_OPTIONS = [
-  {
-    value: "EMAIL_OTP",
-    title: "Email verification code",
-    description: "Get a one-time code in your approved inbox.",
-    badge: "Inbox",
-    icon: HiOutlineEnvelope,
-  },
-  {
-    value: "AUTHENTICATOR_APP",
-    title: "Authenticator app",
-    description: "Use a TOTP app for the rotating 6-digit code.",
-    badge: "App",
-    icon: HiOutlineShieldCheck,
-  },
-];
 const PROVIDER_ACCOUNT_CHOICES = {
   GOOGLE: [
     {
@@ -79,26 +65,55 @@ const PROVIDER_ACCOUNT_CHOICES = {
   ],
 };
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** Roles applicants may request (platform roles are assigned only after review). */
+const REQUESTABLE_ROLES = ["USER", "TECHNICIAN", "ADMIN"];
+
+function formatRequestedRoleLabel(role) {
+  const r = String(role || "").trim();
+  if (!r) {
+    return "";
+  }
+  return r.charAt(0) + r.slice(1).toLowerCase();
+}
+
+function sanitizeRequestedRole(role) {
+  const s = String(role ?? "USER").trim().toUpperCase();
+  return REQUESTABLE_ROLES.includes(s) ? s : "USER";
+}
+
+/** Persists Google sign-up token + step across refresh so submit still sends a valid session id. */
+const GOOGLE_SIGNUP_STORAGE_KEY = "paf_google_signup_draft";
+
 const initialForm = {
   fullName: "",
   email: "",
   password: "",
   confirmPassword: "",
-  campusId: "",
-  phoneNumber: "",
-  department: "",
   reasonForAccess: "",
-  preferredTwoFactorMethod: "EMAIL_OTP",
+  requestedRole: "USER",
 };
 
 function SignupPage() {
   const [formState, setFormState] = useState(initialForm);
   const [step, setStep] = useState(1);
+  const [registrationDraft, setRegistrationDraft] = useState(null);
+  const [certifyAccuracy, setCertifyAccuracy] = useState(false);
   const [provider, setProvider] = useState(AUTH_PROVIDERS.LOCAL);
   const [chooserProvider, setChooserProvider] = useState(null);
   const [socialSignupToken, setSocialSignupToken] = useState("");
   const [localError, setLocalError] = useState("");
   const formRef = useRef(null);
+  const googleSessionExpiresAtRef = useRef(null);
+
+  const clearGoogleSignupDraft = () => {
+    googleSessionExpiresAtRef.current = null;
+    try {
+      sessionStorage.removeItem(GOOGLE_SIGNUP_STORAGE_KEY);
+    } catch {
+      // ignore
+    }
+  };
+
   const {
     isAuthenticated,
     pendingApproval,
@@ -108,8 +123,7 @@ function SignupPage() {
     clearError,
     isLoading,
     error,
-  } =
-    useAuth();
+  } = useAuth();
   const navigate = useNavigate();
   const isSocial = provider !== AUTH_PROVIDERS.LOCAL;
   const activeError = localError || error;
@@ -118,7 +132,8 @@ function SignupPage() {
   );
   const providerMeta = SOCIAL_COPY[provider];
   const ProviderIcon = providerMeta?.icon;
-  const stepLabel = step === 1 ? "Account setup" : "Campus profile";
+  const stepLabel =
+    step === 1 ? "Account" : step === 2 ? "Campus registration" : "Request & confirm";
   const passwordStrength = getPasswordStrength(formState.password);
   const passwordHasValue = formState.password.trim().length > 0;
   const confirmPasswordHasValue = formState.confirmPassword.trim().length > 0;
@@ -128,15 +143,74 @@ function SignupPage() {
     step > 1 ||
     provider !== AUTH_PROVIDERS.LOCAL ||
     socialSignupToken ||
-    Object.entries(formState).some(([key, value]) =>
-      key === "preferredTwoFactorMethod"
-        ? value !== initialForm.preferredTwoFactorMethod
-        : String(value).trim() !== "",
-    );
+    Object.entries(formState).some(([, value]) => String(value).trim() !== "") ||
+    certifyAccuracy;
 
   useEffect(() => {
     window.scrollTo(0, 0);
+  }, [step]);
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(GOOGLE_SIGNUP_STORAGE_KEY);
+      if (!raw) {
+        return;
+      }
+      const meta = JSON.parse(raw);
+      if (!meta?.signupToken || !meta?.email) {
+        sessionStorage.removeItem(GOOGLE_SIGNUP_STORAGE_KEY);
+        return;
+      }
+      if (meta.expiresAt) {
+        const t = Date.parse(meta.expiresAt);
+        if (Number.isFinite(t) && t < Date.now()) {
+          sessionStorage.removeItem(GOOGLE_SIGNUP_STORAGE_KEY);
+          return;
+        }
+      }
+      googleSessionExpiresAtRef.current = meta.expiresAt ?? null;
+      setSocialSignupToken(meta.signupToken);
+      setProvider(AUTH_PROVIDERS.GOOGLE);
+      const restoredRole = sanitizeRequestedRole(meta.requestedRole);
+      setFormState((prev) => ({
+        ...prev,
+        fullName: meta.fullName || "",
+        email: meta.email || "",
+        requestedRole: restoredRole,
+        password: "",
+        confirmPassword: "",
+      }));
+      setRegistrationDraft(buildInitialDraft(restoredRole, meta.fullName || "", meta.email || ""));
+      setStep(typeof meta.step === "number" && meta.step >= 1 && meta.step <= 3 ? meta.step : 2);
+    } catch {
+      try {
+        sessionStorage.removeItem(GOOGLE_SIGNUP_STORAGE_KEY);
+      } catch {
+        // ignore
+      }
+    }
   }, []);
+
+  useEffect(() => {
+    if (provider !== AUTH_PROVIDERS.GOOGLE || !socialSignupToken) {
+      return;
+    }
+    try {
+      sessionStorage.setItem(
+        GOOGLE_SIGNUP_STORAGE_KEY,
+        JSON.stringify({
+          signupToken: socialSignupToken,
+          email: formState.email,
+          fullName: formState.fullName,
+          step,
+          requestedRole: formState.requestedRole,
+          expiresAt: googleSessionExpiresAtRef.current,
+        }),
+      );
+    } catch {
+      // ignore
+    }
+  }, [provider, socialSignupToken, step, formState.email, formState.fullName, formState.requestedRole]);
 
   if (isAuthenticated) {
     return <Navigate replace to={getDefaultRouteForRole(user?.role)} />;
@@ -150,20 +224,14 @@ function SignupPage() {
     if (!formRef.current) {
       return formState;
     }
-
     const data = new FormData(formRef.current);
     const next = {
       fullName: String(data.get("fullName") || formState.fullName || ""),
       email: String(data.get("email") || formState.email || ""),
       password: String(data.get("password") || formState.password || ""),
       confirmPassword: String(data.get("confirmPassword") || formState.confirmPassword || ""),
-      campusId: String(data.get("campusId") || formState.campusId || ""),
-      phoneNumber: String(data.get("phoneNumber") || formState.phoneNumber || ""),
-      department: String(data.get("department") || formState.department || ""),
       reasonForAccess: String(data.get("reasonForAccess") || formState.reasonForAccess || ""),
-      preferredTwoFactorMethod: String(
-        data.get("preferredTwoFactorMethod") || formState.preferredTwoFactorMethod || "EMAIL_OTP",
-      ),
+      requestedRole: sanitizeRequestedRole(String(data.get("requestedRole") || formState.requestedRole || "USER")),
     };
     setFormState(next);
     return next;
@@ -180,6 +248,16 @@ function SignupPage() {
     clearTransientErrors();
   };
 
+  const handleRequestedRoleChange = (event) => {
+    const r = event.target.value;
+    setFormState((current) => {
+      const next = { ...current, requestedRole: r };
+      setRegistrationDraft(buildInitialDraft(r, next.fullName, next.email));
+      return next;
+    });
+    clearTransientErrors();
+  };
+
   const normalizeIdentity = (fullName, email) => ({
     fullName: fullName.trim(),
     email: email.trim().toLowerCase(),
@@ -187,47 +265,63 @@ function SignupPage() {
 
   const validateAccount = (state, nextProvider = provider) => {
     const identity = normalizeIdentity(state.fullName, state.email);
-
-    if (!identity.fullName || !identity.email) {
-      setLocalError("Complete your account details to continue.");
+    if (!identity.email) {
+      setLocalError("Enter your primary email address to continue.");
       return false;
     }
-
     if (!emailPattern.test(identity.email)) {
       setLocalError("Enter a valid email address to continue.");
       return false;
     }
-
+    if (!identity.fullName) {
+      setLocalError("Enter your full name to continue.");
+      return false;
+    }
     if (nextProvider === AUTH_PROVIDERS.LOCAL && !state.password.trim()) {
       setLocalError("Enter a password to continue with local sign up.");
       return false;
     }
-
-    if (
-      nextProvider === AUTH_PROVIDERS.LOCAL &&
-      state.password !== state.confirmPassword
-    ) {
+    if (nextProvider === AUTH_PROVIDERS.LOCAL && state.password !== state.confirmPassword) {
       setLocalError("Password confirmation does not match.");
       return false;
     }
-
     return true;
   };
 
-  const validateProfile = (state) => {
-    if (!state.campusId.trim() || !state.phoneNumber.trim() || !state.department.trim() || !state.reasonForAccess.trim()) {
-      setLocalError("Complete the campus profile details before submitting the request.");
-      return false;
-    }
-    return true;
-  };
-
-  const goToProfileStep = () => {
+  const goToRegistrationStep = () => {
     const current = syncForm();
     if (!validateAccount(current, AUTH_PROVIDERS.LOCAL)) {
       return;
     }
+    setRegistrationDraft(
+      buildInitialDraft(current.requestedRole || "USER", current.fullName, current.email),
+    );
     setStep(2);
+  };
+
+  const goToRequestStep = () => {
+    if (!registrationDraft) {
+      setLocalError("Complete the registration form.");
+      return;
+    }
+    const msg = validateRegistrationDraft(formState.requestedRole, registrationDraft);
+    if (msg) {
+      setLocalError(msg);
+      return;
+    }
+    setLocalError("");
+    setStep(3);
+  };
+
+  const handleStepBack = () => {
+    if (step === 3) {
+      setStep(2);
+      return;
+    }
+    if (step === 2) {
+      setStep(1);
+      return;
+    }
   };
 
   const openSocialChooser = (nextProvider) => {
@@ -237,9 +331,12 @@ function SignupPage() {
   };
 
   const resetSignupFlow = () => {
+    clearGoogleSignupDraft();
     setFormState(initialForm);
     setProvider(AUTH_PROVIDERS.LOCAL);
     setStep(1);
+    setRegistrationDraft(null);
+    setCertifyAccuracy(false);
     setSocialSignupToken("");
     clearTransientErrors();
     setChooserProvider(null);
@@ -252,9 +349,9 @@ function SignupPage() {
   const handleGoogleSignup = async (credential) => {
     setLocalError("");
     clearError();
-
     try {
       const googleSession = await prepareGoogleSignup(credential);
+      googleSessionExpiresAtRef.current = googleSession.expiresAt ?? null;
       setProvider(AUTH_PROVIDERS.GOOGLE);
       setSocialSignupToken(googleSession.signupToken);
       setFormState((current) => ({
@@ -263,11 +360,14 @@ function SignupPage() {
         email: googleSession.email,
         password: "",
         confirmPassword: "",
-        preferredTwoFactorMethod: "AUTHENTICATOR_APP",
       }));
+      setRegistrationDraft(
+        buildInitialDraft("USER", googleSession.fullName, googleSession.email),
+      );
       setStep(2);
     } catch (signupError) {
       if (signupError?.status === 409) {
+        clearGoogleSignupDraft();
         setProvider(AUTH_PROVIDERS.LOCAL);
         setStep(1);
         setSocialSignupToken("");
@@ -279,6 +379,7 @@ function SignupPage() {
 
   const handleSocialAccountSelect = (selectedAccount) => {
     const selectedProvider = chooserProvider || provider || AUTH_PROVIDERS.GOOGLE;
+    clearGoogleSignupDraft();
     setProvider(selectedProvider);
     setSocialSignupToken("");
     setFormState((current) => ({
@@ -287,8 +388,8 @@ function SignupPage() {
       email: selectedAccount.email,
       password: "",
       confirmPassword: "",
-      preferredTwoFactorMethod: "AUTHENTICATOR_APP",
     }));
+    setRegistrationDraft(buildInitialDraft("USER", selectedAccount.fullName, selectedAccount.email));
     setChooserProvider(null);
     setStep(2);
     clearTransientErrors();
@@ -296,34 +397,58 @@ function SignupPage() {
 
   const submitSignup = async (event) => {
     event.preventDefault();
+    if (step !== 3) {
+      return;
+    }
     const current = syncForm();
     const identity = normalizeIdentity(current.fullName, current.email);
-
     if (provider === AUTH_PROVIDERS.GOOGLE && !socialSignupToken) {
       setLocalError("Reconnect your Google account before submitting the sign up request.");
       setStep(1);
       return;
     }
-
     if (!validateAccount(current, provider)) {
       setStep(1);
       return;
     }
-
-    if (!validateProfile(current)) {
+    if (!registrationDraft) {
+      setLocalError("Complete the registration step.");
+      setStep(2);
       return;
     }
-
+    const draftErr = validateRegistrationDraft(current.requestedRole, registrationDraft);
+    if (draftErr) {
+      setLocalError(draftErr);
+      setStep(2);
+      return;
+    }
+    if (!current.reasonForAccess.trim()) {
+      setLocalError("Enter the reason for your access request.");
+      return;
+    }
+    if (!certifyAccuracy) {
+      setLocalError("Confirm that your details are accurate before submitting.");
+      return;
+    }
+    const primitives = deriveRegisterPayloadPrimitives(current.requestedRole, registrationDraft, identity.email);
     try {
       const response = await register({
-        ...current,
         fullName: identity.fullName,
         email: identity.email,
+        password: current.password,
+        requestedRole: current.requestedRole || "USER",
+        reasonForAccess: current.reasonForAccess.trim(),
+        preferredTwoFactorMethod: "EMAIL_OTP",
         authProvider: provider,
         socialSignupToken,
+        campusId: primitives.campusId,
+        phoneNumber: primitives.phoneNumber,
+        department: primitives.department,
+        supplementaryProfile: primitives.supplementaryProfile,
+        applicationProfileJson: primitives.applicationProfileJson,
       });
-
       if (response?.authStatus === "PENDING_APPROVAL") {
+        clearGoogleSignupDraft();
         navigate("/approval-pending", { replace: true });
       }
     } catch (submitError) {
@@ -336,7 +461,6 @@ function SignupPage() {
       backToLocalSignup();
       return;
     }
-
     openSocialChooser(provider);
   };
 
@@ -347,23 +471,36 @@ function SignupPage() {
           {ProviderIcon ? <ProviderIcon /> : null}
         </div>
         <div className="connected-account-copy">
-          <span className="connected-account-kicker">{providerMeta.label} account connected</span>
-          <strong className="connected-account-name">{formState.fullName}</strong>
+          <span className="connected-account-kicker">
+            Connected with <span className="connected-account-kicker-brand">{providerMeta.label}</span>
+          </span>
+          <div className="connected-account-name-row">
+            <strong className="connected-account-name">{formState.fullName}</strong>
+          </div>
           <div className="connected-account-email">
-            <HiOutlineEnvelope />
+            <HiOutlineEnvelope aria-hidden />
             <span>{formState.email}</span>
           </div>
         </div>
         <span className="connected-account-status">
-          <HiOutlineCheckBadge />
-          <span>Verified</span>
+          <HiOutlineCheckBadge aria-hidden />
+          <span>Identity verified</span>
         </span>
       </div>
-
       <div className={`auth-actions-row connected-account-actions ${compact ? "connected-account-actions-compact" : ""}`.trim()}>
         {!compact ? (
-          <Button className="connected-account-primary" onClick={() => setStep(2)} type="button" variant="primary">
-            Continue to Campus Profile
+          <Button
+            className="connected-account-primary"
+            onClick={() => {
+              setRegistrationDraft(
+                buildInitialDraft(formState.requestedRole || "USER", formState.fullName, formState.email),
+              );
+              setStep(2);
+            }}
+            type="button"
+            variant="primary"
+          >
+            Continue to campus registration
           </Button>
         ) : null}
         <Button className="connected-account-switch" onClick={openConnectedAccountSwitcher} type="button" variant="secondary">
@@ -388,11 +525,7 @@ function SignupPage() {
             <div className="signup-shell-head-top">
               <span className="signup-eyebrow">Campus Access</span>
               {isFormDirty ? (
-                <button
-                  className="signup-reset-button"
-                  onClick={resetSignupFlow}
-                  type="button"
-                >
+                <button className="signup-reset-button" onClick={resetSignupFlow} type="button">
                   Start over
                 </button>
               ) : null}
@@ -401,23 +534,24 @@ function SignupPage() {
               <h1 className="auth-title signup-title">Create your Smart Campus account</h1>
               <p className="auth-subtitle signup-subtitle">
                 {isSocial
-                  ? `${SOCIAL_COPY[provider].label} account verified. Complete the remaining details and send your request.`
-                  : "Use email or a connected account, then submit your campus access request for approval."}
+                  ? `${SOCIAL_COPY[provider].label} account verified. Complete your campus profile for the role you request, then submit for review.`
+                  : "Use your primary email, complete the campus registration step for your role, then submit your access request."}
               </p>
             </div>
           </div>
 
-          <div className="signup-stagebar" aria-label={`Step ${step} of 2`}>
+          <div className="signup-stagebar" aria-label={`Step ${step} of 3`}>
             <div className="signup-stagebar-meta">
-              <strong>Step {step} of 2</strong>
+              <strong>Step {step} of 3</strong>
               <span>{stepLabel}</span>
             </div>
             <div className="signup-stagebar-track" aria-hidden="true">
               <span className={`signup-stagebar-fill signup-stagebar-fill-step-${step}`.trim()} />
             </div>
-            <div className="signup-stagebar-labels">
+            <div className="signup-stagebar-labels signup-stagebar-labels-3">
               <span className={step === 1 ? "is-active" : ""}>Account</span>
-              <span className={step === 2 ? "is-active" : ""}>Profile</span>
+              <span className={step === 2 ? "is-active" : ""}>Registration</span>
+              <span className={step === 3 ? "is-active" : ""}>Request</span>
             </div>
           </div>
 
@@ -425,23 +559,48 @@ function SignupPage() {
             {step === 1 && !isSocial ? (
               <div className="auth-form-grid signup-form-grid">
                 <label className="field field-annotated field-full">
-                  <span>Full name</span>
+                  <span>Primary email address *</span>
                   <div className="input-shell">
-                    <input className="login-input" name="fullName" onChange={handleChange} onInput={handleChange} placeholder="Your full name" type="text" value={formState.fullName} />
+                    <input
+                      className="login-input"
+                      name="email"
+                      autoComplete="email"
+                      onChange={handleChange}
+                      onInput={handleChange}
+                      placeholder="you@university.edu"
+                      type="email"
+                      value={formState.email}
+                    />
                   </div>
+                  <p className="supporting-text mt-1 text-xs text-text/60">This is your login and contact email.</p>
                 </label>
-
                 <label className="field field-annotated field-full">
-                  <span>Email address</span>
+                  <span>Full name *</span>
                   <div className="input-shell">
-                    <input className="login-input" name="email" onChange={handleChange} onInput={handleChange} placeholder="name@smartcampus.edu" type="email" value={formState.email} />
+                    <input
+                      className="login-input"
+                      name="fullName"
+                      autoComplete="name"
+                      onChange={handleChange}
+                      onInput={handleChange}
+                      placeholder="Your full name"
+                      type="text"
+                      value={formState.fullName}
+                    />
                   </div>
                 </label>
-
                 <label className="field field-annotated">
-                  <span>Password</span>
+                  <span>Password *</span>
                   <div className="input-shell">
-                    <input className="login-input" name="password" onChange={handleChange} onInput={handleChange} placeholder="Create a password" type="password" value={formState.password} />
+                    <input
+                      className="login-input"
+                      name="password"
+                      onChange={handleChange}
+                      onInput={handleChange}
+                      placeholder="Create a password"
+                      type="password"
+                      value={formState.password}
+                    />
                   </div>
                   {passwordHasValue ? (
                     <div className="password-strength-panel" aria-live="polite">
@@ -459,10 +618,7 @@ function SignupPage() {
                       </div>
                       <div className="password-strength-checks">
                         {passwordStrength.checks.map((check) => (
-                          <span
-                            key={check.id}
-                            className={`password-check ${check.passed ? "is-passed" : ""}`.trim()}
-                          >
+                          <span key={check.id} className={`password-check ${check.passed ? "is-passed" : ""}`.trim()}>
                             {check.label}
                           </span>
                         ))}
@@ -470,11 +626,18 @@ function SignupPage() {
                     </div>
                   ) : null}
                 </label>
-
                 <label className="field field-annotated">
-                  <span>Confirm password</span>
+                  <span>Confirm password *</span>
                   <div className="input-shell">
-                    <input className="login-input" name="confirmPassword" onChange={handleChange} onInput={handleChange} placeholder="Confirm your password" type="password" value={formState.confirmPassword} />
+                    <input
+                      className="login-input"
+                      name="confirmPassword"
+                      onChange={handleChange}
+                      onInput={handleChange}
+                      placeholder="Confirm your password"
+                      type="password"
+                      value={formState.confirmPassword}
+                    />
                   </div>
                   {confirmPasswordHasValue ? (
                     <p className={`password-match-note ${passwordsMatch ? "is-match" : "is-mismatch"}`.trim()}>
@@ -485,81 +648,90 @@ function SignupPage() {
               </div>
             ) : null}
 
-            {step === 1 && isSocial ? (
-              renderConnectedAccountCard()
-            ) : null}
+            {step === 1 && isSocial ? renderConnectedAccountCard() : null}
 
             {step === 2 ? (
               <div className="auth-form-grid signup-form-grid">
                 {isSocial ? (
-                  <div className="field-full">
-                    {renderConnectedAccountCard({ compact: true })}
-                  </div>
+                  <div className="field-full">{renderConnectedAccountCard({ compact: true })}</div>
                 ) : null}
-
-                <label className="field field-annotated">
-                  <span>Campus ID</span>
-                  <div className="input-shell">
-                    <input className="login-input" name="campusId" onChange={handleChange} onInput={handleChange} placeholder="IT23123456 / EMP-109" type="text" value={formState.campusId} />
-                  </div>
-                </label>
-
-                <label className="field field-annotated">
-                  <span>Phone number</span>
-                  <div className="input-shell">
-                    <input className="login-input" name="phoneNumber" onChange={handleChange} onInput={handleChange} placeholder="+94 77 123 4567" type="text" value={formState.phoneNumber} />
-                  </div>
-                </label>
-
-                <label className="field field-annotated">
-                  <span>Department / Faculty</span>
-                  <div className="input-shell">
-                    <input className="login-input" name="department" onChange={handleChange} onInput={handleChange} placeholder="Computing / Facilities / Administration" type="text" value={formState.department} />
-                  </div>
-                </label>
-
                 <label className="field field-annotated field-full">
-                  <span>Reason for access</span>
-                  <textarea className="auth-textarea" name="reasonForAccess" onChange={handleChange} onInput={handleChange} placeholder="Explain why you need Smart Campus Operations Hub access." rows="4" value={formState.reasonForAccess} />
+                  <span>Requested campus role *</span>
+                  <div className="input-shell">
+                    <select
+                      className="login-input"
+                      name="requestedRole"
+                      onChange={handleRequestedRoleChange}
+                      value={formState.requestedRole}
+                    >
+                      {REQUESTABLE_ROLES.map((r) => (
+                        <option key={r} value={r}>
+                          {formatRequestedRoleLabel(r)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </label>
-
-                <div className="field field-annotated field-full">
-                  <div className="field-section-heading">
-                    <span>2-step verification</span>
-                    <p>Choose how Smart Campus verifies secure sign-in.</p>
-                  </div>
-                  <div className="auth-method-grid">
-                    {TWO_FACTOR_OPTIONS.map((option) => {
-                      const OptionIcon = option.icon;
-                      const isSelected = formState.preferredTwoFactorMethod === option.value;
-
-                      return (
-                        <label
-                          key={option.value}
-                          className={`auth-method-option ${isSelected ? "is-selected" : ""}`.trim()}
-                        >
-                          <input
-                            checked={isSelected}
-                            name="preferredTwoFactorMethod"
-                            onChange={handleChange}
-                            type="radio"
-                            value={option.value}
-                          />
-                          <div className="auth-method-option-top">
-                            <span className="auth-method-icon" aria-hidden="true">
-                              <OptionIcon />
-                            </span>
-                            <span className="auth-method-badge">{option.badge}</span>
-                          </div>
-                          <div className="auth-method-option-copy">
-                            <span>{option.title}</span>
-                            <small>{option.description}</small>
-                          </div>
-                        </label>
-                      );
-                    })}
-                  </div>
+                <div className="field-full rounded-2xl border border-border bg-card/60 p-5 text-left shadow-inner sm:p-6">
+                  {registrationDraft ? (
+                    <SignupRegistrationFields
+                      draft={registrationDraft}
+                      onDraftChange={setRegistrationDraft}
+                      primaryEmail={formState.email}
+                      requestedRole={formState.requestedRole}
+                    />
+                  ) : (
+                    <p className="text-sm text-text/70">Loading form…</p>
+                  )}
                 </div>
+              </div>
+            ) : null}
+
+            {step === 3 ? (
+              <div className="auth-form-grid signup-form-grid">
+                <div className="field-full rounded-2xl border border-border bg-tint/40 p-4 text-sm text-text/80">
+                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-text/55">Summary</p>
+                  <p className="mt-2">
+                    <strong>Role:</strong> {formatRequestedRoleLabel(formState.requestedRole)}
+                  </p>
+                  <p className="mt-1">
+                    <strong>Email:</strong> {formState.email}
+                  </p>
+                  <p className="mt-1">
+                    <strong>Name:</strong> {formState.fullName}
+                  </p>
+                </div>
+                <label className="field field-annotated field-full">
+                  <span>Reason for access *</span>
+                  <textarea
+                    className="auth-textarea"
+                    name="reasonForAccess"
+                    onChange={handleChange}
+                    onInput={handleChange}
+                    placeholder="Why do you need Smart Campus access?"
+                    rows={4}
+                    value={formState.reasonForAccess}
+                  />
+                </label>
+                <label className="field field-annotated field-full flex flex-row items-start gap-3 !space-y-0">
+                  <input
+                    checked={certifyAccuracy}
+                    className="mt-1 h-4 w-4 shrink-0 rounded border-border"
+                    onChange={(e) => {
+                      setCertifyAccuracy(e.target.checked);
+                      clearTransientErrors();
+                    }}
+                    type="checkbox"
+                  />
+                  <span className="text-sm leading-snug text-text/85">
+                    I confirm the information above matches what the campus should use for my account, and I agree to
+                    submit this request for administrator review.
+                  </span>
+                </label>
+                <p className="field-full text-xs text-text/65">
+                  After approval, first sign-in will guide you through password change (if applicable) and second-step
+                  verification (email code or authenticator app).
+                </p>
               </div>
             ) : null}
 
@@ -577,16 +749,29 @@ function SignupPage() {
             ) : null}
 
             {step === 1 && !isSocial ? (
-              <Button className="login-submit signup-submit" onClick={goToProfileStep} type="button" variant="primary">
+              <Button className="login-submit signup-submit" onClick={goToRegistrationStep} type="button" variant="primary">
                 Continue
               </Button>
             ) : null}
 
             {step === 2 ? (
               <div className="auth-actions-row signup-form-actions">
-                <Button onClick={() => setStep(1)} type="button" variant="secondary">Back</Button>
+                <Button onClick={handleStepBack} type="button" variant="secondary">
+                  Back
+                </Button>
+                <Button className="login-submit signup-submit" onClick={goToRequestStep} type="button" variant="primary">
+                  Next
+                </Button>
+              </div>
+            ) : null}
+
+            {step === 3 ? (
+              <div className="auth-actions-row signup-form-actions">
+                <Button onClick={handleStepBack} type="button" variant="secondary">
+                  Back
+                </Button>
                 <Button className="login-submit signup-submit" disabled={isLoading} type="submit" variant="primary">
-                  Submit Approval Request
+                  Submit approval request
                 </Button>
               </div>
             ) : null}
@@ -617,9 +802,7 @@ function SignupPage() {
                   </span>
                 </button>
               </div>
-              <p className="login-demo-note">
-                Use a verified Google or Apple account for faster account setup.
-              </p>
+              <p className="login-demo-note">Your Google / Apple email becomes the primary email for this request.</p>
             </div>
           ) : null}
 

@@ -18,10 +18,11 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+/** JPA-based module offerings (legacy). LMS catalog offerings use {@code /api/v1/module-offerings}. */
 @RestController
-@RequestMapping("/api/v1/module-offerings")
+@RequestMapping("/api/v1/legacy/module-offerings")
 @RequiredArgsConstructor
-public class ModuleOfferingController {
+public class LegacyModuleOfferingController {
 
     private final ModuleOfferingService moduleOfferingService;
 
@@ -45,8 +46,7 @@ public class ModuleOfferingController {
 
     @PutMapping("/{id}")
     public ModuleOfferingResponse updateModuleOffering(
-            @PathVariable Long id,
-            @Valid @RequestBody ModuleOfferingRequest request) {
+            @PathVariable Long id, @Valid @RequestBody ModuleOfferingRequest request) {
         return moduleOfferingService.updateModuleOffering(id, request);
     }
 

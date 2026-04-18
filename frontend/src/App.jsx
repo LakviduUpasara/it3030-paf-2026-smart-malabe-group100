@@ -1,13 +1,30 @@
 import { BrowserRouter, useLocation } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import Navbar from "./components/Navbar";
+import GoogleTwoFactorPromptModal from "./components/GoogleTwoFactorPromptModal";
+import TwoFactorSetupReminder from "./components/TwoFactorSetupReminder";
 import { useAuth } from "./hooks/useAuth";
 import AppRoutes from "./routes/AppRoutes";
+
+function GoogleTwoFactorPromptHost() {
+  const { isAuthenticated, googleTwoFactorPrompt } = useAuth();
+  const location = useLocation();
+  if (!isAuthenticated || !googleTwoFactorPrompt) {
+    return null;
+  }
+  if (location.pathname === "/login" || location.pathname === "/signup") {
+    return null;
+  }
+  return <GoogleTwoFactorPromptModal />;
+}
 
 function AppLayout() {
   const { isAuthenticated } = useAuth();
   const location = useLocation();
-  const isPublicMarketingRoute = !isAuthenticated && ["/", "/login", "/signup"].includes(location.pathname);
+  const isAdminWorkspace = isAuthenticated && location.pathname.startsWith("/admin");
+  const isPublicMarketingRoute =
+    !isAuthenticated &&
+    ["/", "/login", "/signup", "/approval-pending"].includes(location.pathname);
   const isTicketsWideLayout =
     isAuthenticated &&
     (location.pathname === "/tickets" ||
@@ -16,10 +33,23 @@ function AppLayout() {
       location.pathname === "/admin/tickets");
   const isAdminTicketsPage = isAuthenticated && location.pathname === "/admin/tickets";
 
+  const shellClass = ["app-shell", isPublicMarketingRoute ? "app-shell-auth" : ""]
+    .filter(Boolean)
+    .join(" ");
+
+  if (isAdminWorkspace) {
+    return (
+      <div className={shellClass}>
+        <AppRoutes />
+      </div>
+    );
+  }
+
   return (
-    <div className={isPublicMarketingRoute ? "app-shell app-shell-auth" : "app-shell"}>
+    <div className={shellClass}>
       <div className="app-background" />
       <Navbar />
+      <TwoFactorSetupReminder />
       <main
         className={
           isPublicMarketingRoute
@@ -42,6 +72,7 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <AppLayout />
+        <GoogleTwoFactorPromptHost />
       </AuthProvider>
     </BrowserRouter>
   );

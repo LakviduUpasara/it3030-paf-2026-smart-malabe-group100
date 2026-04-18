@@ -1,11 +1,13 @@
 import { createContext, useEffect, useState } from "react";
 import * as authService from "../services/authService";
+import * as accountService from "../services/accountService";
+import { clearStorage, STORAGE_KEYS } from "../utils/storage";
 
+/** Fallback when /health cannot be reached (offline UI). Server APP_DEVELOPER_MODE is authoritative when health loads. */
 const envDeveloperMode =
   String(import.meta.env.VITE_DEVELOPER_MODE ?? "")
     .trim()
     .toLowerCase() === "true";
-import { clearStorage, STORAGE_KEYS } from "../utils/storage";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 
 export const AuthContext = createContext(null);
@@ -21,9 +23,11 @@ export function AuthProvider({ children }) {
     STORAGE_KEYS.TWO_FACTOR_CHALLENGE,
     null,
   );
+  const [sessionPhase, setSessionPhase] = useLocalStorage(STORAGE_KEYS.SESSION_PHASE, null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
-  const [developerMode, setDeveloperMode] = useState(envDeveloperMode);
+  const [developerMode, setDeveloperMode] = useState(false);
+  const [googleTwoFactorPrompt, setGoogleTwoFactorPrompt] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -31,8 +35,8 @@ export function AuthProvider({ children }) {
       try {
         const health = await authService.fetchHealthStatus();
         if (!cancelled) {
-          // Env flag stays on: backend may not have APP_DEVELOPER_MODE set, but UI still shows dev tools.
-          setDeveloperMode(Boolean(health.developerMode) || envDeveloperMode);
+          // Must match backend: VITE_DEVELOPER_MODE alone must not show quick sign-in when API has dev mode off.
+          setDeveloperMode(Boolean(health?.developerMode));
         }
       } catch {
         if (!cancelled) {
@@ -53,15 +57,18 @@ export function AuthProvider({ children }) {
     setUser(null);
     setSessionToken(null);
     setTwoFactorChallenge(null);
+    setSessionPhase(null);
     clearStorage(STORAGE_KEYS.USER);
     clearStorage(STORAGE_KEYS.SESSION);
     clearStorage(STORAGE_KEYS.TWO_FACTOR_CHALLENGE);
+    clearStorage(STORAGE_KEYS.SESSION_PHASE);
   };
 
   const clearClientState = () => {
     clearSessionState();
     setPendingApproval(null);
     clearStorage(STORAGE_KEYS.PENDING_APPROVAL);
+    setGoogleTwoFactorPrompt(false);
   };
 
   const applyAuthFlowResponse = (response) => {
@@ -77,15 +84,45 @@ export function AuthProvider({ children }) {
         setSessionToken(response.token);
         setPendingApproval(null);
         setTwoFactorChallenge(null);
+        setSessionPhase(null);
+        clearStorage(STORAGE_KEYS.SESSION_PHASE);
+        setGoogleTwoFactorPrompt(
+          response.showGoogleTwoFactorSetupPrompt === true || response.user?.showGoogleTwoFactorSetupPrompt === true,
+        );
         break;
       case "PENDING_APPROVAL":
         clearClientState();
         setPendingApproval(response.pendingApproval);
         break;
+      case "PASSWORD_CHANGE_REQUIRED":
+        setUser(response.user);
+        setSessionToken(response.token);
+        setSessionPhase(response.sessionPhase || "PASSWORD_CHANGE");
+        setPendingApproval(null);
+        setTwoFactorChallenge(null);
+        clearStorage(STORAGE_KEYS.PENDING_APPROVAL);
+        break;
+      case "TWO_FACTOR_METHOD_SELECTION_REQUIRED":
+        setUser(response.user);
+        setSessionToken(response.token);
+        setSessionPhase(response.sessionPhase || "TWO_FACTOR_METHOD_SELECTION");
+        setPendingApproval(null);
+        setTwoFactorChallenge(null);
+        clearStorage(STORAGE_KEYS.PENDING_APPROVAL);
+        break;
       case "TWO_FACTOR_REQUIRED":
       case "AUTHENTICATOR_SETUP_REQUIRED":
-        clearClientState();
-        setTwoFactorChallenge(response.twoFactorChallenge);
+        setUser(null);
+        setSessionToken(null);
+        clearStorage(STORAGE_KEYS.USER);
+        clearStorage(STORAGE_KEYS.SESSION);
+        setSessionPhase(null);
+        clearStorage(STORAGE_KEYS.SESSION_PHASE);
+        setPendingApproval(null);
+        clearStorage(STORAGE_KEYS.PENDING_APPROVAL);
+        if (response.twoFactorChallenge) {
+          setTwoFactorChallenge(response.twoFactorChallenge);
+        }
         break;
       default:
         break;
@@ -153,6 +190,44 @@ export function AuthProvider({ children }) {
       "Unable to verify the second-factor code.",
     );
 
+  const resendEmailOtp = async (payload) =>
+    performAuthAction(
+      () => authService.resendEmailOtp(payload),
+      "Unable to resend the verification code.",
+    );
+
+  const changeFirstLoginPassword = async (payload) =>
+    performAuthAction(
+      () => authService.changeFirstLoginPassword(payload),
+      "Unable to update your password.",
+    );
+
+  const selectFirstLoginTwoFactorMethod = async (method) =>
+    performAuthAction(
+      () => authService.selectFirstLoginTwoFactor({ method }),
+      "Unable to save your verification method.",
+    );
+
+  const skipFirstLoginTwoFactor = async () =>
+    performAuthAction(
+      () => authService.selectFirstLoginTwoFactor({ skipTwoFactor: true }),
+      "Unable to skip 2-step verification.",
+    );
+
+  const dismissGoogleTwoFactorPrompt = async () => {
+    setIsLoading(true);
+    setError("");
+    try {
+      await accountService.dismissGoogleTwoFactorPrompt();
+      setGoogleTwoFactorPrompt(false);
+    } catch (requestError) {
+      setError(requestError.message || "Unable to dismiss the prompt.");
+      throw requestError;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const refreshPendingApproval = async (lookup) => {
     setIsLoading(true);
     setError("");
@@ -204,8 +279,11 @@ export function AuthProvider({ children }) {
     sessionToken,
     pendingApproval,
     twoFactorChallenge,
+    sessionPhase,
     developerMode,
-    isAuthenticated: Boolean(user?.email && sessionToken),
+    googleTwoFactorPrompt,
+    dismissGoogleTwoFactorPrompt,
+    isAuthenticated: Boolean(user?.email && sessionToken && !sessionPhase),
     isLoading,
     error,
     clearError,
@@ -218,6 +296,10 @@ export function AuthProvider({ children }) {
     loginWithGoogle,
     loginWithApple,
     verifyTwoFactor,
+    resendEmailOtp,
+    changeFirstLoginPassword,
+    selectFirstLoginTwoFactorMethod,
+    skipFirstLoginTwoFactor,
     refreshPendingApproval,
     activateApprovedSignup,
     logout,

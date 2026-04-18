@@ -72,6 +72,8 @@ function ApprovalPendingPage() {
         if (
           response?.authStatus === "TWO_FACTOR_REQUIRED"
           || response?.authStatus === "AUTHENTICATOR_SETUP_REQUIRED"
+          || response?.authStatus === "PASSWORD_CHANGE_REQUIRED"
+          || response?.authStatus === "TWO_FACTOR_METHOD_SELECTION_REQUIRED"
         ) {
           navigate("/login", { replace: true });
         }
@@ -147,6 +149,8 @@ function ApprovalPendingPage() {
       if (
         response?.authStatus === "TWO_FACTOR_REQUIRED"
         || response?.authStatus === "AUTHENTICATOR_SETUP_REQUIRED"
+        || response?.authStatus === "PASSWORD_CHANGE_REQUIRED"
+        || response?.authStatus === "TWO_FACTOR_METHOD_SELECTION_REQUIRED"
       ) {
         navigate("/login", { replace: true });
       }
@@ -214,8 +218,24 @@ function ApprovalPendingPage() {
                 <p>{new Date(pendingApproval.requestedAt).toLocaleString()}</p>
               </div>
               <div>
-                <strong>Assigned Role</strong>
-                <p>{pendingApproval.assignedRole || "Pending admin decision"}</p>
+                <strong>Requested role</strong>
+                <p>
+                  {pendingApproval.requestedRole
+                    ? String(pendingApproval.requestedRole).replaceAll("_", " ")
+                    : "—"}
+                </p>
+              </div>
+              <div>
+                <strong>Assigned role</strong>
+                <p>
+                  {pendingApproval.status === "APPROVED" && pendingApproval.assignedRole
+                    ? String(pendingApproval.assignedRole).replaceAll("_", " ")
+                    : pendingApproval.status === "PENDING"
+                      ? "Awaiting administrator"
+                      : pendingApproval.assignedRole
+                        ? String(pendingApproval.assignedRole).replaceAll("_", " ")
+                        : "—"}
+                </p>
               </div>
               <div>
                 <strong>Latest Update</strong>
@@ -233,7 +253,16 @@ function ApprovalPendingPage() {
               </div>
             ) : null}
 
-            {pendingApproval.reviewerNote ? (
+            {pendingApproval.status === "REJECTED" && (pendingApproval.rejectionReason || pendingApproval.reviewerNote) ? (
+              <div className="auth-help-panel">
+                <strong>{pendingApproval.rejectionReason ? "Rejection reason" : "Administrator note"}</strong>
+                <p className="supporting-text">
+                  {pendingApproval.rejectionReason || pendingApproval.reviewerNote}
+                </p>
+              </div>
+            ) : null}
+
+            {pendingApproval.status !== "REJECTED" && pendingApproval.reviewerNote ? (
               <div className="auth-help-panel">
                 <strong>Administrator note</strong>
                 <p className="supporting-text">{pendingApproval.reviewerNote}</p>

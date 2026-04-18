@@ -12,6 +12,8 @@ import {
   getDefaultRouteForRole,
   getNavigationGroups,
   getNavigationItems,
+  normalizeRole,
+  ROLES,
 } from "../utils/roleUtils";
 import Button from "./Button";
 import NotificationDropdown from "./NotificationDropdown";
@@ -29,11 +31,15 @@ function Navbar() {
   const isLoginPage = location.pathname === "/login";
   const isSignupPage = location.pathname === "/signup";
   const isApprovalPendingPage = location.pathname === "/approval-pending";
-  const isAdminTicketsPage = location.pathname === "/admin/tickets";
-  const isPublicPage = !isAuthenticated
-    && ["/", "/login", "/signup", "/approval-pending"].includes(location.pathname);
+  const isPublicPage =
+    !isAuthenticated && ["/", "/login", "/signup", "/approval-pending"].includes(location.pathname);
+
+  const role = normalizeRole(user?.role);
+  const isAdminWorkspace =
+    isAuthenticated && role === ROLES.ADMIN && location.pathname.startsWith("/admin");
+
   const [activePublicSection, setActivePublicSection] = useState(
-    isLoginPage || isSignupPage || isApprovalPendingPage ? null : "home"
+    isLoginPage || isSignupPage || isApprovalPendingPage ? null : "home",
   );
   const [openGroup, setOpenGroup] = useState(null);
   const navigationMenuRef = useRef(null);
@@ -75,7 +81,7 @@ function Navbar() {
       {
         rootMargin: "-20% 0px -55% 0px",
         threshold: [0.2, 0.35, 0.5, 0.7],
-      }
+      },
     );
 
     sections.forEach((section) => observer.observe(section));
@@ -123,17 +129,19 @@ function Navbar() {
     }
   };
 
-  const navigationItems = isAuthenticated ? getNavigationItems(user?.role) : [];
-  const navigationGroups = isAuthenticated ? getNavigationGroups(user?.role) : [];
+  const navigationItems =
+    isAuthenticated && !isAdminWorkspace ? getNavigationItems(user?.role) : [];
+  const navigationGroups =
+    isAuthenticated && !isAdminWorkspace ? getNavigationGroups(user?.role) : [];
 
   const isGroupActive = (group) =>
-    group.items.some((item) => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`));
+    group.items.some(
+      (item) => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`),
+    );
 
   return (
     <header
-      className={`navbar ${isPublicPage ? "navbar-auth-shell" : ""} ${
-        isAuthenticated && isAdminTicketsPage ? "navbar--admin-tickets" : ""
-      }`.trim()}
+      className={`navbar ${isPublicPage ? "navbar-auth-shell" : ""} ${isAdminWorkspace ? "navbar-enterprise" : ""}`.trim()}
     >
       <div className="navbar-brand">
         <button
@@ -153,13 +161,20 @@ function Navbar() {
         </button>
       </div>
 
-      {isAuthenticated ? (
+      {isAdminWorkspace ? (
+        <div className="navbar-workspace-chip">
+          <span className="navbar-workspace-kicker">Enterprise Workspace</span>
+          <strong>Admin Operations Center</strong>
+        </div>
+      ) : null}
+
+      {isAuthenticated && !isAdminWorkspace ? (
         <nav className="navbar-links navbar-links-app" ref={navigationMenuRef}>
           {navigationItems.map((item) => (
             <NavLink
+              end={item.end === true}
               key={item.path}
               className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}
-              end={item.path === "/technician"}
               to={item.path}
             >
               {item.label}
@@ -170,18 +185,13 @@ function Navbar() {
             const active = isGroupActive(group);
 
             return (
-              <div
-                key={group.label}
-                className={`nav-menu ${isOpen ? "open" : ""}`.trim()}
-              >
+              <div key={group.label} className={`nav-menu ${isOpen ? "open" : ""}`.trim()}>
                 <button
                   type="button"
                   className={`nav-menu-button ${active ? "active" : ""}`.trim()}
                   aria-expanded={isOpen}
                   onClick={() =>
-                    setOpenGroup((currentGroup) =>
-                      currentGroup === group.label ? null : group.label
-                    )
+                    setOpenGroup((currentGroup) => (currentGroup === group.label ? null : group.label))
                   }
                 >
                   <span>{group.label}</span>
@@ -209,7 +219,9 @@ function Navbar() {
             );
           })}
         </nav>
-      ) : (
+      ) : null}
+
+      {!isAuthenticated ? (
         <nav className="navbar-links navbar-links-public">
           {publicNavigationItems.map((item) => (
             <button
@@ -226,7 +238,7 @@ function Navbar() {
             </button>
           ))}
         </nav>
-      )}
+      ) : null}
 
       <div className="navbar-actions">
         {isAuthenticated ? (

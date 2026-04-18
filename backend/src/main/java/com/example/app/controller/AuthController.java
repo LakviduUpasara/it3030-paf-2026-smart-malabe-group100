@@ -1,12 +1,15 @@
 package com.example.app.controller;
 
 import com.example.app.dto.auth.AuthFlowResponse;
+import com.example.app.dto.auth.ChangeFirstLoginPasswordRequest;
 import com.example.app.dto.auth.GoogleCredentialRequest;
 import com.example.app.dto.auth.GoogleLoginRequest;
 import com.example.app.dto.auth.GoogleSignupSessionResponse;
 import com.example.app.dto.auth.LoginRequest;
 import com.example.app.dto.auth.PendingApprovalResponse;
 import com.example.app.dto.auth.RegisterRequest;
+import com.example.app.dto.auth.ResendEmailOtpRequest;
+import com.example.app.dto.auth.SelectFirstLoginTwoFactorRequest;
 import com.example.app.dto.auth.VerifyTwoFactorRequest;
 import com.example.app.exception.ApiException;
 import com.example.app.security.AuthenticatedUser;
@@ -33,6 +36,10 @@ public class AuthController {
 
     private final AuthService authService;
 
+    /**
+     * Public sign-up: persists a pending {@link com.example.app.entity.SignupRequest} only (no {@code UserAccount}).
+     * Returns 202 ACCEPTED with {@code PENDING_APPROVAL}; the applicant role is assigned only after admin approval.
+     */
     @PostMapping("/register")
     public ResponseEntity<AuthFlowResponse> register(@Valid @RequestBody RegisterRequest request) {
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(authService.register(request));
@@ -70,6 +77,35 @@ public class AuthController {
         return ResponseEntity.ok(authService.verifyTwoFactor(request));
     }
 
+    @PostMapping("/resend-email-otp")
+    public ResponseEntity<AuthFlowResponse> resendEmailOtp(@Valid @RequestBody ResendEmailOtpRequest request) {
+        return ResponseEntity.ok(authService.resendEmailOtp(request));
+    }
+
+    @PostMapping("/first-login/change-password")
+    public ResponseEntity<AuthFlowResponse> changeFirstLoginPassword(
+            @Valid @RequestBody ChangeFirstLoginPasswordRequest request,
+            @AuthenticationPrincipal AuthenticatedUser authenticatedUser,
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader
+    ) {
+        if (authenticatedUser == null) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "No active session was found.");
+        }
+        return ResponseEntity.ok(authService.changeFirstLoginPassword(request, authenticatedUser, authorizationHeader));
+    }
+
+    @PostMapping("/first-login/select-2fa-method")
+    public ResponseEntity<AuthFlowResponse> selectFirstLoginTwoFactor(
+            @Valid @RequestBody SelectFirstLoginTwoFactorRequest request,
+            @AuthenticationPrincipal AuthenticatedUser authenticatedUser,
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader
+    ) {
+        if (authenticatedUser == null) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "No active session was found.");
+        }
+        return ResponseEntity.ok(authService.selectFirstLoginTwoFactor(request, authenticatedUser, authorizationHeader));
+    }
+
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(@RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader) {
         authService.logout(authorizationHeader);
@@ -77,12 +113,15 @@ public class AuthController {
     }
 
     @GetMapping("/me")
-    public ResponseEntity<AuthFlowResponse> getCurrentSession(@AuthenticationPrincipal AuthenticatedUser authenticatedUser) {
+    public ResponseEntity<AuthFlowResponse> getCurrentSession(
+            @AuthenticationPrincipal AuthenticatedUser authenticatedUser,
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader
+    ) {
         if (authenticatedUser == null) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "No active session was found.");
         }
 
-        return ResponseEntity.ok(authService.getCurrentSession(authenticatedUser));
+        return ResponseEntity.ok(authService.getCurrentSession(authenticatedUser, authorizationHeader));
     }
 
     @GetMapping("/signup-requests/{requestId}/status")

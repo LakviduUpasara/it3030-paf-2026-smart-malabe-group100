@@ -1,17 +1,35 @@
 /** @type {import('tailwindcss').Config} */
-export default {
-  content: ['./index.html', './src/**/*.{js,jsx}'],
+module.exports = {
+  // Must match a wrapper that includes auth routes (/signup, /login). Admin-only #admin-root hid all Tailwind on public pages.
+  important: "#root",
+  content: ["./index.html", "./src/**/*.{js,jsx,ts,tsx}"],
   theme: {
     extend: {
       colors: {
-        gray: {
-          900: '#111827',
-          800: '#1f2937',
-          700: '#374151',
-          600: '#4b5563',
-          400: '#9ca3af',
-          300: '#d1d5db',
+        bg: "var(--bg)",
+        card: "var(--card)",
+        tint: "var(--tint)",
+        text: "var(--text)",
+        heading: "var(--heading)",
+        primary: {
+          DEFAULT: "var(--primary)",
+          hover: "var(--primaryHover)",
         },
+        border: "var(--border)",
+      },
+      boxShadow: {
+        shadow: "var(--shadow)",
+        shadowHover: "var(--shadowHover)",
+      },
+      ringColor: {
+        focus: "var(--focus)",
+      },
+      ringOffsetColor: {
+        bg: "var(--bg)",
+      },
+      fontFamily: {
+        sans: ["Inter", "system-ui", "sans-serif"],
+        heading: ["Poppins", "Inter", "system-ui", "sans-serif"],
       },
     },
   },

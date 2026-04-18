@@ -2,42 +2,72 @@
 @tailwind components;
 @tailwind utilities;
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+@layer base {
+  :root {
+    --bg: #f6f7fb;
+    --card: #ffffff;
+    --tint: rgba(15, 23, 42, 0.04);
+    --text: #334155;
+    --heading: #0f172a;
+    --primary: #034aa6;
+    --primaryHover: #0339a6;
+    --border: rgba(15, 23, 42, 0.12);
+    --shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 10px 40px rgba(15, 23, 42, 0.04);
+    --shadowHover: 0 4px 12px rgba(15, 23, 42, 0.12), 0 20px 48px rgba(15, 23, 42, 0.08);
+    --focus: rgba(3, 74, 166, 0.22);
+  }
 
-/* Allow document scrolling on marketing + auth routes (landing, login, signup). */
-html {
-  min-height: 100%;
-}
+  #admin-root {
+    font-family: theme("fontFamily.sans");
+    color: var(--text);
+  }
 
-body,
-#root {
-  width: 100%;
-  min-height: 100%;
-}
+  #admin-root h1,
+  #admin-root h2,
+  #admin-root h3,
+  #admin-root h4,
+  #admin-root h5,
+  #admin-root h6 {
+    font-family: theme("fontFamily.heading");
+  }
 
-body {
-  min-height: 100vh;
-  overflow-x: hidden;
-  font-family: 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  background-color: #111827;
+  #admin-root ::selection {
+    background-color: color-mix(in srgb, var(--primary) 22%, var(--card) 78%);
+    color: var(--heading);
+  }
 }
 
 @layer components {
-  .glass {
-    @apply bg-opacity-10 backdrop-blur-md;
+  #admin-root .button {
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl border border-transparent px-4 py-2.5 text-sm font-medium tracking-[0.01em] transition-colors;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-bg;
   }
 
-  .btn-primary {
-    @apply px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition;
+  #admin-root .button-primary {
+    @apply bg-primary text-white hover:bg-primary-hover;
   }
 
-  .btn-secondary {
-    @apply px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600 transition;
+  #admin-root .button-secondary {
+    @apply border-border bg-card text-text hover:bg-tint;
+  }
+
+  #admin-root .button-ghost {
+    @apply bg-transparent text-text hover:bg-tint;
+  }
+
+  #admin-root .button:disabled {
+    @apply cursor-not-allowed opacity-50;
+  }
+
+  #admin-root .card {
+    @apply rounded-3xl border border-border bg-card shadow-shadow;
+  }
+
+  #admin-root .card-header h3 {
+    @apply font-heading text-base font-semibold text-heading;
+  }
+
+  #admin-root .card-subtitle {
+    @apply text-sm text-text opacity-70;
   }
 }

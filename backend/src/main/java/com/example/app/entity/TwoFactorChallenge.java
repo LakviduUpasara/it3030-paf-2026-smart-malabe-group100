@@ -33,6 +33,9 @@ public class TwoFactorChallenge {
 
     private LocalDateTime expiresAt;
 
+    /** Last time an email OTP was sent (initial send or resend). Used for resend cooldown. */
+    private LocalDateTime lastOtpSentAt;
+
     private boolean used;
 
     @CreatedDate

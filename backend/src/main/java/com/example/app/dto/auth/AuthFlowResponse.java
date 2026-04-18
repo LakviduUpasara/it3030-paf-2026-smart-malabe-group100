@@ -15,6 +15,11 @@ public class AuthFlowResponse {
     private String message;
     private AuthenticatedUserResponse user;
     private String token;
+    /** When present, session is restricted (first-login setup). Values match {@link com.example.app.entity.SessionPhase}. */
+    private String sessionPhase;
     private PendingApprovalResponse pendingApproval;
     private TwoFactorChallengeResponse twoFactorChallenge;
+
+    /** After Google sign-in when 2FA is off and the optional setup offer is still active. */
+    private Boolean showGoogleTwoFactorSetupPrompt;
 }

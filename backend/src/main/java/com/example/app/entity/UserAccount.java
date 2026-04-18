@@ -32,8 +32,24 @@ public class UserAccount {
     @Indexed(unique = true)
     private String email;
 
+    /** Login handle for staff/students when distinct from email (e.g. student id). */
+    @Indexed(unique = true, sparse = true)
+    private String username;
+
     @Indexed(unique = true, sparse = true)
     private String providerSubject;
+
+    @Builder.Default
+    private boolean mustChangePassword = false;
+
+    @Indexed(sparse = true)
+    private String lecturerRef;
+
+    @Indexed(sparse = true)
+    private String labAssistantRef;
+
+    @Indexed(sparse = true)
+    private String studentRef;
 
     private String passwordHash;
 
@@ -43,15 +59,54 @@ public class UserAccount {
 
     private AuthProvider provider;
 
+    /**
+     * When {@code null}, legacy accounts keep the previous behavior (2FA required at sign-in when not in dev mode).
+     * When {@code false}, sign-in does not require a second factor. When {@code true}, second factor follows
+     * {@link #preferredTwoFactorMethod} and authenticator confirmation state.
+     */
+    private Boolean twoFactorEnabled;
+
     private TwoFactorMethod preferredTwoFactorMethod;
 
     private String authenticatorSecret;
 
     private boolean authenticatorConfirmed;
 
+    /** Google-only: first-login optional 2FA offer was dismissed (skip or completed from prompt). */
+    @Builder.Default
+    private boolean googleTwoFactorPromptDismissed = false;
+
+    @Builder.Default
+    private boolean emailNotificationsEnabled = true;
+
+    @Builder.Default
+    private boolean appNotificationsEnabled = true;
+
     @CreatedDate
     private LocalDateTime createdAt;
 
     @LastModifiedDate
     private LocalDateTime updatedAt;
+
+    /**
+     * Legacy {@code twoFactorEnabled == null} keeps requiring a second factor at sign-in (previous product behavior).
+     */
+    public boolean requiresTwoFactorAtLogin() {
+        if (twoFactorEnabled == null) {
+            return true;
+        }
+        return Boolean.TRUE.equals(twoFactorEnabled);
+    }
+
+    /** True when 2FA is on and the chosen method is ready to use at sign-in (TOTP confirmed or email OTP). */
+    public boolean isTwoFactorFullyConfigured() {
+        if (!requiresTwoFactorAtLogin()) {
+            return true;
+        }
+        TwoFactorMethod m = preferredTwoFactorMethod;
+        if (m == null || m == TwoFactorMethod.EMAIL_OTP) {
+            return true;
+        }
+        return authenticatorSecret != null && !authenticatorSecret.isBlank() && authenticatorConfirmed;
+    }
 }

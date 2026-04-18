@@ -1,8 +1,4 @@
 import api, { createServiceError } from "./api";
-import {
-  buildMockAuthFlowAuthenticated,
-  buildMockPendingRegistrationFlow,
-} from "../utils/mockData";
 
 function normalizeEmail(email) {
   return email.trim().toLowerCase();
@@ -37,74 +33,61 @@ export function normalizeAuthStatus(raw) {
 export async function loginWithCredentials({ email, password }) {
   const normalizedEmail = normalizeEmail(email || "");
 
-  try {
-    const response = await api.post("/auth/login", { email: normalizedEmail, password });
-    return response.data;
-  } catch (error) {
-    if (!error?.response || error.response.status === 404) {
-      if (!normalizedEmail || !password?.trim()) {
-        throw new Error("Email and password are required.");
-      }
-
-      validateEmail(normalizedEmail, "Enter a valid email address.");
-
-      return buildMockAuthFlowAuthenticated({
-        email: normalizedEmail,
-        provider: "credentials",
-      });
-    }
-    throw createServiceError(error, "Email login failed.");
+  if (!normalizedEmail || !password?.trim()) {
+    throw new Error("Email and password are required.");
   }
-}
 
-export async function registerAccount(payload) {
-  const normalizedEmail = normalizeEmail(payload?.email || "");
-  const normalizedName = (payload?.fullName || payload?.name || "").trim();
-  const password = payload?.password;
+  validateEmail(normalizedEmail, "Enter a valid email address.");
 
   try {
-    const response = await api.post("/auth/register", {
-      name: normalizedName,
+    const response = await api.post("/auth/login", {
       email: normalizedEmail,
       password,
     });
     return response.data;
   } catch (error) {
-    if (!error?.response || error.response.status === 404) {
-      if (!normalizedName || !normalizedEmail || !password?.trim()) {
-        throw new Error("Name, email, and password are required.");
-      }
+    throw createServiceError(error, "Email login failed.");
+  }
+}
 
-      validateEmail(normalizedEmail, "Enter a valid email address.");
+export async function registerAccount(payload) {
+  const normalizedName = payload.fullName?.trim();
+  const normalizedEmail = normalizeEmail(payload.email || "");
+  const authProvider = payload.authProvider || "LOCAL";
+  const requiresPassword = authProvider === "LOCAL";
 
-      return buildMockPendingRegistrationFlow({
-        fullName: normalizedName,
-        email: normalizedEmail,
-        provider: payload?.authProvider || "LOCAL",
-      });
-    }
+  if (!normalizedName || !normalizedEmail || (requiresPassword && !payload.password?.trim())) {
+    throw new Error("Complete the required sign up details to continue.");
+  }
+
+  validateEmail(normalizedEmail, "Enter a valid email address.");
+
+  try {
+    const twoFa = payload.preferredTwoFactorMethod || "EMAIL_OTP";
+    const response = await api.post("/auth/register", {
+      ...payload,
+      fullName: normalizedName,
+      email: normalizedEmail,
+      preferredTwoFactorMethod: twoFa === "AUTHENTICATOR_APP" ? "AUTHENTICATOR_APP" : "EMAIL_OTP",
+    });
+    return response.data;
+  } catch (error) {
     throw createServiceError(error, "Registration failed.");
   }
 }
 
 async function loginWithProvider(provider, email) {
-  const normalizedEmail = normalizeEmail(email || "user@smartcampus.edu");
+  const normalizedEmail = normalizeEmail(email || "");
+
+  validateEmail(
+    normalizedEmail,
+    `Enter a valid email address before using ${provider}.`,
+  );
 
   try {
     const response = await api.post(`/auth/${provider}`, { email: normalizedEmail });
     return response.data;
   } catch (error) {
-    if (!error?.response || error.response.status === 404) {
-      validateEmail(
-        normalizedEmail,
-        `Enter a valid email address before using ${provider}.`,
-      );
-
-      return buildMockAuthFlowAuthenticated({
-        email: normalizedEmail,
-        provider,
-      });
-    }
     throw createServiceError(error, `${provider} sign-in failed.`);
   }
 }
@@ -152,6 +135,55 @@ export async function verifyTwoFactor({ challengeId, code }) {
     return response.data;
   } catch (error) {
     throw createServiceError(error, "2-step verification failed.");
+  }
+}
+
+export async function resendEmailOtp({ challengeId }) {
+  if (!challengeId?.trim()) {
+    throw new Error("Verification session is missing.");
+  }
+  try {
+    const response = await api.post("/auth/resend-email-otp", {
+      challengeId: challengeId.trim(),
+    });
+    return response.data;
+  } catch (error) {
+    throw createServiceError(error, "Unable to resend the verification code.");
+  }
+}
+
+export async function changeFirstLoginPassword({ currentPassword, newPassword }) {
+  if (!currentPassword?.trim() || !newPassword?.trim()) {
+    throw new Error("Enter your current password and a new password.");
+  }
+  try {
+    const response = await api.post("/auth/first-login/change-password", {
+      currentPassword: currentPassword.trim(),
+      newPassword: newPassword.trim(),
+    });
+    return response.data;
+  } catch (error) {
+    throw createServiceError(error, "Unable to update your password.");
+  }
+}
+
+export async function selectFirstLoginTwoFactor({ method, skipTwoFactor }) {
+  if (skipTwoFactor) {
+    try {
+      const response = await api.post("/auth/first-login/select-2fa-method", { skipTwoFactor: true });
+      return response.data;
+    } catch (error) {
+      throw createServiceError(error, "Unable to skip 2-step verification.");
+    }
+  }
+  if (!method) {
+    throw new Error("Choose email or authenticator verification, or skip 2-step verification.");
+  }
+  try {
+    const response = await api.post("/auth/first-login/select-2fa-method", { method });
+    return response.data;
+  } catch (error) {
+    throw createServiceError(error, "Unable to save your verification method.");
   }
 }
 
@@ -229,14 +261,8 @@ export async function logout() {
 
 export async function fetchHealthStatus() {
   try {
-    // Health lives at `/api/health`; auth base is `/api/v1`, so go up one segment.
-    const response = await api.get("../health");
-    const body = response.data;
-    const data = body?.data != null ? body.data : body;
-    return {
-      ...data,
-      developerMode: data?.developerMode ?? body?.developerMode,
-    };
+    const response = await api.get("/health");
+    return response.data;
   } catch (error) {
     throw createServiceError(error, "Unable to reach the campus API.");
   }
