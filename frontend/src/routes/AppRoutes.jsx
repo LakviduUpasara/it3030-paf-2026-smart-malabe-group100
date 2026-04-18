@@ -35,7 +35,6 @@ import TechnicianNotificationsPage from "../pages/technician/TechnicianNotificat
 import TechnicianTicketDetailPage from "../pages/technician/TechnicianTicketDetailPage";
 import TechnicianTicketWorkspacePage from "../pages/technician/TechnicianTicketWorkspacePage";
 import TechnicianAcceptQueuePage from "../pages/technician/TechnicianAcceptQueuePage";
-import TechnicianRejectQueuePage from "../pages/technician/TechnicianRejectQueuePage";
 import TechnicianTicketAcceptPage from "../pages/technician/TechnicianTicketAcceptPage";
 import TechnicianTicketRejectPage from "../pages/technician/TechnicianTicketRejectPage";
 import TechnicianResolvedTicketsPage from "../pages/technician/TechnicianResolvedTicketsPage";
@@ -139,7 +138,6 @@ function AppRoutes() {
         <Route index element={<TechnicianHomePage />} />
         <Route path="tickets" element={<TechnicianTicketsPage />} />
         <Route path="accept" element={<TechnicianAcceptQueuePage />} />
-        <Route path="reject" element={<TechnicianRejectQueuePage />} />
         <Route path="resolved" element={<TechnicianResolvedTicketsPage />} />
         <Route path="tickets/:ticketId/accept" element={<TechnicianTicketAcceptPage />} />
         <Route path="tickets/:ticketId/reject" element={<TechnicianTicketRejectPage />} />

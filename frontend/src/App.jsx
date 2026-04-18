@@ -28,8 +28,7 @@ function AppLayout() {
   const isTicketsWideLayout =
     isAuthenticated &&
     (location.pathname === "/tickets" ||
-      location.pathname === "/technician" ||
-      location.pathname === "/technician/resolved" ||
+      location.pathname.startsWith("/technician") ||
       location.pathname === "/admin/tickets");
   const isAdminTicketsPage = isAuthenticated && location.pathname === "/admin/tickets";
 
