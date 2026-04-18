@@ -22,6 +22,14 @@ function AppLayout() {
   const { isAuthenticated } = useAuth();
   const location = useLocation();
   const isAdminWorkspace = isAuthenticated && location.pathname.startsWith("/admin");
+  const isUserWorkspace =
+    isAuthenticated &&
+    (location.pathname === "/dashboard" ||
+      location.pathname === "/bookings" ||
+      location.pathname.startsWith("/bookings/") ||
+      location.pathname === "/tickets" ||
+      location.pathname === "/notifications" ||
+      location.pathname === "/settings/security");
   const isPublicMarketingRoute =
     !isAuthenticated &&
     ["/", "/login", "/signup", "/approval-pending"].includes(location.pathname);
@@ -37,7 +45,7 @@ function AppLayout() {
     .filter(Boolean)
     .join(" ");
 
-  if (isAdminWorkspace) {
+  if (isAdminWorkspace || isUserWorkspace) {
     return (
       <div className={shellClass}>
         <AppRoutes />
