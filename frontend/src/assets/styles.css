@@ -3087,6 +3087,11 @@ a {
   box-sizing: border-box;
 }
 
+.admin-tickets-main.admin-tickets-main--standalone {
+  margin-left: 0;
+  padding: 0;
+}
+
 @media (max-width: 720px) {
   .admin-tickets-layout {
     flex-direction: column;

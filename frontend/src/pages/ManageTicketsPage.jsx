@@ -181,18 +181,6 @@ function ManageTicketsPage() {
     };
   }, []);
 
-  const sectionCounts = useMemo(() => {
-    const counts = { open: 0, assigned: 0, resolved: 0, withdrawn: 0 };
-    for (const ticket of tickets) {
-      const s = normalizeTicketStatus(ticket?.status);
-      if (s === "OPEN" || s === "REJECTED") counts.open += 1;
-      else if (s === "IN_PROGRESS" || s === "ASSIGNED" || s === "ACCEPTED") counts.assigned += 1;
-      else if (s === "RESOLVED") counts.resolved += 1;
-      else if (s === "WITHDRAWN") counts.withdrawn += 1;
-    }
-    return counts;
-  }, [tickets]);
-
   const filteredTickets = useMemo(() => {
     if (activeSection === "categories" || activeSection === "technicians") {
       return [];
@@ -489,57 +477,8 @@ function ManageTicketsPage() {
 
   return (
     <>
-      <div className="admin-tickets-layout">
-        <aside className="admin-tickets-sidebar" aria-label="Tickets and category setup">
-          <h2 className="admin-tickets-sidebar-heading">Tickets</h2>
-          <nav className="admin-tickets-nav" aria-label="Filter by status">
-            {ADMIN_TICKET_SECTIONS.map((sec) => {
-              const count = sectionCounts[sec.id] ?? 0;
-              const isActive = activeSection === sec.id;
-              return (
-                <button
-                  key={sec.id}
-                  type="button"
-                  className={`admin-tickets-nav-item${isActive ? " is-active" : ""}`}
-                  onClick={() => setActiveSection(sec.id)}
-                  aria-pressed={isActive}
-                >
-                  <span className="admin-tickets-nav-label">{sec.label}</span>
-                  <span className="admin-tickets-nav-count" aria-hidden="true">
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
-          </nav>
-          <h2 className="admin-tickets-sidebar-heading admin-tickets-sidebar-heading--after-nav">
-            Setup
-          </h2>
-          <nav className="admin-tickets-nav" aria-label="Ticket configuration">
-            <button
-              type="button"
-              className={`admin-tickets-nav-item admin-tickets-nav-item--no-count${
-                activeSection === "categories" ? " is-active" : ""
-              }`}
-              onClick={() => setActiveSection("categories")}
-              aria-pressed={activeSection === "categories"}
-            >
-              <span className="admin-tickets-nav-label">Category setup</span>
-            </button>
-            <button
-              type="button"
-              className={`admin-tickets-nav-item admin-tickets-nav-item--no-count${
-                activeSection === "technicians" ? " is-active" : ""
-              }`}
-              onClick={() => setActiveSection("technicians")}
-              aria-pressed={activeSection === "technicians"}
-            >
-              <span className="admin-tickets-nav-label">Technicians</span>
-            </button>
-          </nav>
-        </aside>
-
-        <div className="admin-tickets-main">
+      <div className="admin-tickets-layout admin-tickets-layout--no-rail">
+        <div className="admin-tickets-main admin-tickets-main--standalone">
           {showTicketList ? (
             <Card title="Manage Tickets" subtitle="View all incident tickets">
               {error && <p className="alert alert-error">{error}</p>}
@@ -571,6 +510,7 @@ function ManageTicketsPage() {
           )}
         </div>
       </div>
+
 
       {detailOpen ? (
         <div
