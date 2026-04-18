@@ -27,7 +27,7 @@ public class AcademicSessionResponse {
     private Long studentGroupId;
     private String studentGroupCode;
     private Integer studentGroupSize;
-    private String resourceId;
+    private Long resourceId;
     private String resourceName;
     private ResourceType resourceType;
     private String resourceLocation;

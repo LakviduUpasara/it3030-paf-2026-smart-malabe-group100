@@ -117,14 +117,26 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
             </button>
           </div>
 
+          <div
+            className={`flex items-center gap-3 border-b border-border py-4 ${collapsed ? "justify-center px-2" : "px-4"}`}
+          >
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 font-heading text-sm font-semibold text-primary">
+              SC
+            </span>
+            {!collapsed ? (
+              <div className="min-w-0">
+                <p className="truncate font-heading text-sm font-semibold text-heading">Smart Campus</p>
+                <p className="text-xs text-text/60">LMS Admin</p>
+              </div>
+            ) : null}
+          </div>
+
           <nav className="flex min-h-0 flex-1 flex-col px-2 py-3" aria-label="Admin sections">
             <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overflow-x-hidden pb-2">
               {sections.map((section) => {
                 const SectionIcon = section.icon;
                 const isOpen = openSections[section.id] !== false;
-                const sectionActive = section.items.some((item) =>
-                  isNavItemActive(location.pathname, item, location.search),
-                );
+                const sectionActive = section.items.some((item) => isNavItemActive(location.pathname, item));
 
                 if (collapsed) {
                   return (
@@ -172,7 +184,7 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
                     {isOpen ? (
                       <div className="mt-1 flex flex-col gap-0.5 pl-2">
                         {section.items.map((item) => {
-                          const active = isNavItemActive(location.pathname, item, location.search);
+                          const active = isNavItemActive(location.pathname, item);
                           return (
                             <NavLink
                               key={item.id}
@@ -215,7 +227,7 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
                 </p>
                 <div className="flex flex-col gap-0.5 px-2">
                   {activeFlyoutSection.items.map((item) => {
-                    const active = isNavItemActive(location.pathname, item, location.search);
+                    const active = isNavItemActive(location.pathname, item);
                     return (
                       <NavLink
                         key={item.id}

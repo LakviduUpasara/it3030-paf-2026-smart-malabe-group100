@@ -10,11 +10,13 @@ import org.springframework.data.mongodb.repository.MongoRepository;
 
 public interface UserAccountRepository extends MongoRepository<UserAccount, String> {
 
+<<<<<<< HEAD
     List<UserAccount> findByRoleOrderByFullNameAsc(Role role);
-
+=======
     List<UserAccount> findByStatus(AccountStatus status);
 
     List<UserAccount> findByRoleInOrderByCreatedAtDesc(List<Role> roles);
+>>>>>>> feature/technician-dashboard-ui
 
     Optional<UserAccount> findByEmailIgnoreCase(String email);
 

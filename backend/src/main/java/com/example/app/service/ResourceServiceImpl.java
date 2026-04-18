@@ -10,17 +10,12 @@ import com.example.app.entity.ResourceStatus;
 import com.example.app.entity.ResourceType;
 import com.example.app.exception.ResourceNotFoundException;
 import com.example.app.repository.ResourceRepository;
-import java.time.DayOfWeek;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.mongodb.core.MongoTemplate;
-import org.springframework.data.mongodb.core.query.Criteria;
-import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -28,7 +23,6 @@ import org.springframework.stereotype.Service;
 public class ResourceServiceImpl implements ResourceService {
 
     private final ResourceRepository resourceRepository;
-    private final MongoTemplate mongoTemplate;
 
     @Override
     public ResourceResponse createResource(ResourceRequest request) {
@@ -52,7 +46,7 @@ public class ResourceServiceImpl implements ResourceService {
         if (type == null && status == null && minCapacity == null && normalizedLocation == null) {
             resources = resourceRepository.findAll();
         } else {
-            resources = findByFilters(type, status, minCapacity, normalizedLocation);
+            resources = resourceRepository.findAllByFilters(type, status, minCapacity, normalizedLocation);
         }
 
         return resources.stream()
@@ -61,13 +55,13 @@ public class ResourceServiceImpl implements ResourceService {
     }
 
     @Override
-    public ResourceResponse getResourceById(String id) {
+    public ResourceResponse getResourceById(Long id) {
         Resource resource = findResourceById(id);
         return mapToResponse(resource);
     }
 
     @Override
-    public ResourceResponse updateResource(String id, ResourceRequest request) {
+    public ResourceResponse updateResource(Long id, ResourceRequest request) {
         validateAvailabilityWindows(request.getAvailabilityWindows());
 
         Resource resource = findResourceById(id);
@@ -83,40 +77,12 @@ public class ResourceServiceImpl implements ResourceService {
     }
 
     @Override
-    public void deleteResource(String id) {
+    public void deleteResource(Long id) {
         Resource resource = findResourceById(id);
         resourceRepository.delete(resource);
     }
 
-    private List<Resource> findByFilters(
-            ResourceType type,
-            ResourceStatus status,
-            Integer minCapacity,
-            String location) {
-        List<Criteria> parts = new ArrayList<>();
-        if (type != null) {
-            parts.add(Criteria.where("type").is(type));
-        }
-        if (status != null) {
-            parts.add(Criteria.where("status").is(status));
-        }
-        if (minCapacity != null) {
-            parts.add(Criteria.where("capacity").gte(minCapacity));
-        }
-        if (location != null) {
-            parts.add(Criteria.where("location")
-                    .regex(".*" + Pattern.quote(location) + ".*", "i"));
-        }
-        Query query = new Query();
-        if (parts.size() == 1) {
-            query.addCriteria(parts.get(0));
-        } else if (parts.size() > 1) {
-            query.addCriteria(new Criteria().andOperator(parts.toArray(new Criteria[0])));
-        }
-        return mongoTemplate.find(query, Resource.class);
-    }
-
-    private Resource findResourceById(String id) {
+    private Resource findResourceById(Long id) {
         return resourceRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(id));
     }
@@ -174,8 +140,6 @@ public class ResourceServiceImpl implements ResourceService {
             throw new IllegalArgumentException("At least one availability window is required");
         }
 
-        normalizeAndValidateWindowDays(windows);
-
         Set<String> uniqueWindows = new HashSet<>();
 
         for (AvailabilityWindowRequest window : windows) {
@@ -215,23 +179,6 @@ public class ResourceServiceImpl implements ResourceService {
     private boolean windowsOverlap(AvailabilityWindowRequest first, AvailabilityWindowRequest second) {
         return first.getStartTime().isBefore(second.getEndTime())
                 && first.getEndTime().isAfter(second.getStartTime());
-    }
-
-    private void normalizeAndValidateWindowDays(List<AvailabilityWindowRequest> windows) {
-        for (AvailabilityWindowRequest w : windows) {
-            if (w.getAnchorDate() != null) {
-                DayOfWeek derived = w.getAnchorDate().getDayOfWeek();
-                if (w.getDayOfWeek() != null && w.getDayOfWeek() != derived) {
-                    throw new IllegalArgumentException(String.format(
-                            "dayOfWeek (%s) does not match anchorDate %s (that calendar date is a %s).",
-                            w.getDayOfWeek(), w.getAnchorDate(), derived));
-                }
-                w.setDayOfWeek(derived);
-            } else if (w.getDayOfWeek() == null) {
-                throw new IllegalArgumentException(
-                        "Each availability window must include dayOfWeek and/or anchorDate (calendar day).");
-            }
-        }
     }
 
     private String normalizeRequiredText(String value) {

@@ -37,11 +37,11 @@ public class AcademicSessionServiceImpl implements AcademicSessionService {
     public AcademicSessionResponse createAcademicSession(AcademicSessionRequest request) {
         ModuleOffering moduleOffering = findModuleOfferingById(request.getModuleOfferingId());
         StudentGroup studentGroup = findStudentGroupById(request.getStudentGroupId());
-        Resource resource = findCampusResourceById(request.getResourceId());
+        Resource resource = findResourceById(request.getResourceId());
 
         validateAcademicSessionRules(request, moduleOffering, studentGroup, resource, null);
 
-        AcademicSession academicSession = mapToEntity(request, moduleOffering, studentGroup, resource.getId());
+        AcademicSession academicSession = mapToEntity(request, moduleOffering, studentGroup, resource);
         AcademicSession savedAcademicSession = academicSessionRepository.save(academicSession);
         return mapToResponse(savedAcademicSession);
     }
@@ -50,7 +50,7 @@ public class AcademicSessionServiceImpl implements AcademicSessionService {
     public List<AcademicSessionResponse> getAllAcademicSessions(
             Long moduleOfferingId,
             Long studentGroupId,
-            String resourceId,
+            Long resourceId,
             LocalDate sessionDate) {
 
         if (moduleOfferingId != null) {
@@ -61,15 +61,14 @@ public class AcademicSessionServiceImpl implements AcademicSessionService {
             findStudentGroupById(studentGroupId);
         }
 
-        String resourceFilter = resourceId != null && !resourceId.isBlank() ? resourceId : null;
-        if (resourceFilter != null) {
-            findCampusResourceById(resourceFilter);
+        if (resourceId != null) {
+            findResourceById(resourceId);
         }
 
         return academicSessionRepository.findAllByFilters(
                         moduleOfferingId,
                         studentGroupId,
-                        resourceFilter,
+                        resourceId,
                         sessionDate)
                 .stream()
                 .map(this::mapToResponse)
@@ -87,13 +86,13 @@ public class AcademicSessionServiceImpl implements AcademicSessionService {
         AcademicSession academicSession = findAcademicSessionById(id);
         ModuleOffering moduleOffering = findModuleOfferingById(request.getModuleOfferingId());
         StudentGroup studentGroup = findStudentGroupById(request.getStudentGroupId());
-        Resource resource = findCampusResourceById(request.getResourceId());
+        Resource resource = findResourceById(request.getResourceId());
 
         validateAcademicSessionRules(request, moduleOffering, studentGroup, resource, id);
 
         academicSession.setModuleOffering(moduleOffering);
         academicSession.setStudentGroup(studentGroup);
-        academicSession.setCampusResourceId(resource.getId());
+        academicSession.setResource(resource);
         academicSession.setSessionType(request.getSessionType());
         academicSession.setSessionDate(request.getSessionDate());
         academicSession.setStartTime(request.getStartTime());
@@ -128,7 +127,7 @@ public class AcademicSessionServiceImpl implements AcademicSessionService {
                 .orElseThrow(() -> new StudentGroupNotFoundException(id));
     }
 
-    private Resource findCampusResourceById(String id) {
+    private Resource findResourceById(Long id) {
         return resourceRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(id));
     }
@@ -181,7 +180,7 @@ public class AcademicSessionServiceImpl implements AcademicSessionService {
     }
 
     private void validateNoResourceOverlap(
-            String resourceId,
+            Long resourceId,
             LocalDate sessionDate,
             LocalTime startTime,
             LocalTime endTime,
@@ -203,11 +202,11 @@ public class AcademicSessionServiceImpl implements AcademicSessionService {
             AcademicSessionRequest request,
             ModuleOffering moduleOffering,
             StudentGroup studentGroup,
-            String campusResourceId) {
+            Resource resource) {
         return AcademicSession.builder()
                 .moduleOffering(moduleOffering)
                 .studentGroup(studentGroup)
-                .campusResourceId(campusResourceId)
+                .resource(resource)
                 .sessionType(request.getSessionType())
                 .sessionDate(request.getSessionDate())
                 .startTime(request.getStartTime())
@@ -225,8 +224,7 @@ public class AcademicSessionServiceImpl implements AcademicSessionService {
         Semester semester = moduleOffering.getSemester();
         DegreeProgram degreeProgram = semester.getDegreeProgram();
         StudentGroup studentGroup = academicSession.getStudentGroup();
-        Resource resource = resourceRepository.findById(academicSession.getCampusResourceId())
-                .orElseThrow(() -> new ResourceNotFoundException(academicSession.getCampusResourceId()));
+        Resource resource = academicSession.getResource();
 
         return AcademicSessionResponse.builder()
                 .id(academicSession.getId())

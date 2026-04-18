@@ -3,7 +3,6 @@ import { useAuth } from "../hooks/useAuth";
 import AccessDeniedPage from "../pages/AccessDeniedPage";
 import AdminDashboardPage from "../pages/AdminDashboardPage";
 import AdminScaffoldPage from "../pages/admin/AdminScaffoldPage";
-import SystemSettingsPage from "../pages/SystemSettingsPage";
 import CatalogModulesAdminPage from "../pages/admin/CatalogModulesAdminPage";
 import DegreeProgramsAdminPage from "../pages/admin/DegreeProgramsAdminPage";
 import FacultiesAdminPage from "../pages/admin/FacultiesAdminPage";
@@ -16,7 +15,6 @@ import ModuleOfferingsAdminPage from "../pages/admin/ModuleOfferingsAdminPage";
 import ApproveBookingsPage from "../pages/ApproveBookingsPage";
 import ApprovalPendingPage from "../pages/ApprovalPendingPage";
 import CreateBookingPage from "../pages/CreateBookingPage";
-import ResourceAvailabilityPage from "../pages/ResourceAvailabilityPage";
 import DashboardPage from "../pages/DashboardPage";
 import LoginPage from "../pages/LoginPage";
 import ManageSignupRequestsPage from "../pages/ManageSignupRequestsPage";
@@ -29,23 +27,10 @@ import AdminNotificationsPage from "../pages/admin/AdminNotificationsPage";
 import NotFoundPage from "../pages/NotFoundPage";
 import PublicLandingPage from "../pages/PublicLandingPage";
 import SignupPage from "../pages/SignupPage";
-import TechnicianWorkspaceLayout from "../components/technician/TechnicianWorkspaceLayout";
-import TechnicianHomePage from "../pages/technician/TechnicianHomePage";
-import TechnicianNotificationsPage from "../pages/technician/TechnicianNotificationsPage";
-import TechnicianTicketDetailPage from "../pages/technician/TechnicianTicketDetailPage";
-import TechnicianTicketWorkspacePage from "../pages/technician/TechnicianTicketWorkspacePage";
-import TechnicianAcceptQueuePage from "../pages/technician/TechnicianAcceptQueuePage";
-import TechnicianRejectQueuePage from "../pages/technician/TechnicianRejectQueuePage";
-import TechnicianTicketAcceptPage from "../pages/technician/TechnicianTicketAcceptPage";
-import TechnicianTicketRejectPage from "../pages/technician/TechnicianTicketRejectPage";
-import TechnicianResolvedTicketsPage from "../pages/technician/TechnicianResolvedTicketsPage";
-import TechnicianTicketsPage from "../pages/technician/TechnicianTicketsPage";
+import TechnicianDashboardPage from "../pages/TechnicianDashboardPage";
 import AdminConsoleLayout from "../components/admin/AdminConsoleLayout";
-import UserConsoleLayout from "../components/user/UserConsoleLayout";
 import AdminRoute from "./AdminRoute";
 import RequireSuperAdmin from "./RequireSuperAdmin";
-import RequireAdminBooking from "./RequireAdminBooking";
-import RequireCampusOperator from "./RequireCampusOperator";
 import RequireUserRegistrar from "./RequireUserRegistrar";
 import ProtectedRoute from "./ProtectedRoute";
 import { getDefaultRouteForRole, ROLES } from "../utils/roleUtils";
@@ -73,71 +58,54 @@ function AppRoutes() {
       <Route path="/approval-pending" element={<ApprovalPendingPage />} />
       <Route path="/access-denied" element={<AccessDeniedPage />} />
 
-      {/* End-user console (sidebar + topbar shell). Role-specific gating stays on each leaf. */}
       <Route
+        path="/dashboard"
         element={
           <ProtectedRoute>
-            <UserConsoleLayout />
+            <DashboardPage />
           </ProtectedRoute>
         }
-      >
-        <Route path="/dashboard" element={<DashboardPage />} />
-        <Route
-          path="/bookings"
-          element={
-            <ProtectedRoute allowedRoles={[ROLES.USER]}>
-              <MyBookingsPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/bookings/new"
-          element={
-            <ProtectedRoute allowedRoles={[ROLES.USER]}>
-              <CreateBookingPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/bookings/availability"
-          element={
-            <ProtectedRoute
-              allowedRoles={[ROLES.USER, ROLES.ADMIN, ROLES.MANAGER, ROLES.LECTURER]}
-            >
-              <ResourceAvailabilityPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/tickets"
-          element={
-            <ProtectedRoute allowedRoles={[ROLES.USER]}>
-              <MyTicketsPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route path="/notifications" element={<NotificationsPage />} />
-        <Route path="/settings/security" element={<SystemSettingsPage />} />
-      </Route>
+      />
+      <Route
+        path="/bookings"
+        element={
+          <ProtectedRoute allowedRoles={[ROLES.USER]}>
+            <MyBookingsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/bookings/new"
+        element={
+          <ProtectedRoute allowedRoles={[ROLES.USER]}>
+            <CreateBookingPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/tickets"
+        element={
+          <ProtectedRoute allowedRoles={[ROLES.USER]}>
+            <MyTicketsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/notifications"
+        element={
+          <ProtectedRoute>
+            <NotificationsPage />
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/technician"
         element={
           <ProtectedRoute allowedRoles={[ROLES.TECHNICIAN]}>
-            <TechnicianWorkspaceLayout />
+            <TechnicianDashboardPage />
           </ProtectedRoute>
         }
-      >
-        <Route index element={<TechnicianHomePage />} />
-        <Route path="tickets" element={<TechnicianTicketsPage />} />
-        <Route path="accept" element={<TechnicianAcceptQueuePage />} />
-        <Route path="reject" element={<TechnicianRejectQueuePage />} />
-        <Route path="resolved" element={<TechnicianResolvedTicketsPage />} />
-        <Route path="tickets/:ticketId/accept" element={<TechnicianTicketAcceptPage />} />
-        <Route path="tickets/:ticketId/reject" element={<TechnicianTicketRejectPage />} />
-        <Route path="tickets/:ticketId/work" element={<TechnicianTicketWorkspacePage />} />
-        <Route path="tickets/:ticketId" element={<TechnicianTicketDetailPage />} />
-        <Route path="notifications" element={<TechnicianNotificationsPage />} />
-      </Route>
+      />
 
       <Route
         path="/admin"
@@ -230,20 +198,14 @@ function AppRoutes() {
           <Route path="users/roles-permissions" element={<AdminScaffoldPage />} />
 
           {/* Administration */}
-          <Route path="administration/system-settings" element={<SystemSettingsPage />} />
+          <Route path="administration/system-settings" element={<AdminScaffoldPage />} />
           <Route path="administration/audit-logs" element={<AdminScaffoldPage />} />
           <Route path="administration/security-settings" element={<AdminScaffoldPage />} />
           <Route path="administration/backup-management" element={<AdminScaffoldPage />} />
-        </Route>
 
-        <Route element={<RequireCampusOperator />}>
-          {/* Hiruni-style facilities path + legacy alias (Module A / bookings branch) */}
-          <Route path="resources/facilities" element={<ManageResourcesPage />} />
-          <Route path="campus/resources" element={<Navigate to="/admin/resources/facilities" replace />} />
-          <Route path="campus/availability" element={<ResourceAvailabilityPage />} />
-          <Route element={<RequireAdminBooking />}>
-            <Route path="bookings" element={<ApproveBookingsPage />} />
-          </Route>
+          {/* Campus operations (legacy Smart Campus) */}
+          <Route path="campus/resources" element={<ManageResourcesPage />} />
+          <Route path="bookings" element={<ApproveBookingsPage />} />
           <Route path="tickets" element={<ManageTicketsPage />} />
         </Route>
       </Route>

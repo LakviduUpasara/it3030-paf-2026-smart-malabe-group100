@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Plus } from "lucide-react";
-import { useLocation, useSearchParams } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import Button from "../../components/Button";
 import AdminPageHeader from "../../components/admin/AdminPageHeader";
 import { PORTAL_DATA_KEYS } from "../../constants/portalDataKeys";
@@ -10,7 +10,6 @@ import { useAuth } from "../../hooks/useAuth";
 import {
   buildNotificationAudience,
   channelIncludesWeb,
-  parseAudienceRolesFromLabel,
   rebuildFeedFromAnnouncements,
   resolveNotificationsForUser,
 } from "../../models/notification-center";
@@ -24,27 +23,41 @@ import * as registrationService from "../../services/registrationService";
 
 const PRIMARY = "#034AA6";
 
-/** Matches backend {@code Role} enum values used in audience resolution. */
+/** Supported role targets for this console. Kept to the three platform roles by design. */
 const NOTIFICATION_ROLE_OPTIONS = [
   { value: "USER", label: "User", hint: "General campus portal accounts" },
-  { value: "STUDENT", label: "Student", hint: "Enrolled students" },
-  { value: "LECTURER", label: "Lecturer", hint: "Teaching staff" },
-  { value: "LAB_ASSISTANT", label: "Lab assistant", hint: "Laboratory support" },
-  { value: "MANAGER", label: "Manager", hint: "Campus / user managers" },
+  { value: "ADMIN", label: "Admin", hint: "Platform administrators" },
   { value: "TECHNICIAN", label: "Technician", hint: "Maintenance & operations" },
-  { value: "ADMIN", label: "Administrator", hint: "Platform administrators" },
-  { value: "LOST_ITEM_ADMIN", label: "Lost item admin", hint: "Campus lost-and-found ops" },
 ];
 
 const ROLE_LABEL_BY_VALUE = Object.fromEntries(NOTIFICATION_ROLE_OPTIONS.map((o) => [o.value, o.label]));
 
-const AUDIENCE_TYPE_OPTIONS = [
-  { value: "All", label: "Everyone — all account types" },
-  { value: "Role", label: "By user role (students, lecturers, technicians, …)" },
-  { value: "Faculty", label: "By faculty (students & staff linked to faculty)" },
-  { value: "Semester", label: "By semester / term (students)" },
-  { value: "Degree Program", label: "By degree, intake, stream, subgroup (students)" },
-];
+/**
+ * The audience dropdown stores role tokens (USER/ADMIN/TECHNICIAN) directly on
+ * {@code form.audienceType}. When we persist or dispatch a broadcast we translate
+ * that into the existing storage schema ({@code audienceType: "Role"}) so saved
+ * rows, audience resolution, and filtering helpers stay compatible.
+ */
+function toStorageAudience(form) {
+  const t = String(form?.audienceType || "").toUpperCase();
+  if (t === "USER" || t === "ADMIN" || t === "TECHNICIAN") {
+    return { audienceType: "Role", audienceLabel: t };
+  }
+  return {
+    audienceType: form.audienceType,
+    audienceLabel: form.audienceLabel,
+  };
+}
+
+/**
+ * Audience choices shown in the "Audience" dropdown. The three entries map directly to
+ * a single-role broadcast — the page internally saves each as {@code audienceType=Role}
+ * with a single {@code audienceLabel} so existing history rows stay compatible.
+ */
+const AUDIENCE_TYPE_OPTIONS = NOTIFICATION_ROLE_OPTIONS.map((r) => ({
+  value: r.value,
+  label: r.label,
+}));
 /** Web = in-app notification center; legacy rows may store "In-app". */
 const CHANNEL_OPTIONS = [
   { value: "Web", label: "Web" },
@@ -76,59 +89,19 @@ function emptyTargeting() {
   };
 }
 
-function formatAudienceSummary(row) {
-  const t = row?.audienceType || "All";
-  if (t === "Role") {
-    const roles = parseAudienceRolesFromLabel(row?.audienceLabel);
-    if (!roles.length) {
-      return "Role — not set";
-    }
-    return roles.map((r) => ROLE_LABEL_BY_VALUE[r] || r).join(" · ");
-  }
-  if (t === "All") {
-    return "All users";
-  }
-  return AUDIENCE_TYPE_OPTIONS.find((o) => o.value === t)?.label || t;
-}
-
 function AdminNotificationsPage() {
   const location = useLocation();
   const isAnnouncementsRoute = location.pathname.includes("/communication/announcements");
   const pageTitle = isAnnouncementsRoute ? "Announcements" : "Targeted notifications";
   const pageDescription = isAnnouncementsRoute
     ? "Review sent broadcasts. Use Add to open a simple subject and message form—Send delivers to every user’s dashboard and email (where configured)."
-    : "Send in-app and email notifications to the right people. Target by user role (students, lecturers, lab assistants, technicians, managers, admins, general users, and more), or narrow by faculty, semester, or degree cohort.";
+    : "Choose an audience, channel, and priority. Add opens the same inline flow as other admin lists (for example, student registration).";
 
   const { setActiveWindow } = useAdminShell();
   const { user } = useAuth();
   const isSuperAdmin = user?.role === "ADMIN";
 
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [tab, setTab] = useState(() =>
-    searchParams.get("tab") === "inbox" ? "inbox" : "sent",
-  );
-
-  useEffect(() => {
-    const urlTab = searchParams.get("tab") === "inbox" ? "inbox" : "sent";
-    if (urlTab !== tab) {
-      setTab(urlTab);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
-
-  const selectTab = useCallback(
-    (next) => {
-      setTab(next);
-      const nextParams = new URLSearchParams(searchParams);
-      if (next === "inbox") {
-        nextParams.set("tab", "inbox");
-      } else {
-        nextParams.delete("tab");
-      }
-      setSearchParams(nextParams, { replace: true });
-    },
-    [searchParams, setSearchParams],
-  );
+  const [tab, setTab] = useState("sent");
   const [announcements, setAnnouncements] = useState([]);
   const [inbox, setInbox] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -159,33 +132,6 @@ function AdminNotificationsPage() {
   const [subgroups, setSubgroups] = useState([]);
   const [roleFaculty, setRoleFaculty] = useState("");
   const [roleDegree, setRoleDegree] = useState("");
-
-  const selectedRoleCount = useMemo(() => {
-    if (form.audienceType !== "Role") {
-      return 0;
-    }
-    return parseAudienceRolesFromLabel(form.audienceLabel).length;
-  }, [form.audienceType, form.audienceLabel]);
-
-  const toggleNotificationRole = (roleValue) => {
-    setForm((f) => {
-      if (f.audienceType !== "Role") {
-        return f;
-      }
-      const current = parseAudienceRolesFromLabel(f.audienceLabel);
-      const next = new Set(current);
-      if (next.has(roleValue)) {
-        next.delete(roleValue);
-      } else {
-        next.add(roleValue);
-      }
-      return { ...f, audienceLabel: [...next].sort().join(", ") };
-    });
-  };
-
-  const applyRolePreset = (keys) => {
-    setForm((f) => ({ ...f, audienceLabel: [...keys].sort().join(", ") }));
-  };
 
   const simpleAnnouncementMode = useMemo(
     () =>
@@ -399,21 +345,16 @@ function AdminNotificationsPage() {
     setSubmitting(true);
     setError("");
     try {
-      const broadcastSimple =
-        isAnnouncementsRoute &&
-        (viewMode === "add" || (viewMode === "edit" && editing?.audienceType === "All"));
-      const sendForm = broadcastSimple
-        ? {
-            ...form,
-            audienceType: "All",
-            audienceLabel: "All users",
-            channel: "Both",
-            targeting: emptyTargeting(),
-          }
-        : form;
+      const stored = toStorageAudience(form);
+      const sendForm = {
+        ...form,
+        audienceType: stored.audienceType,
+        audienceLabel: stored.audienceLabel,
+        channel: isAnnouncementsRoute && viewMode === "add" ? "Both" : form.channel,
+      };
 
       if (sendForm.audienceType === "Role" && !parseAudienceRolesFromLabel(sendForm.audienceLabel).length) {
-        setError("Select at least one user role, or change the audience type.");
+        setError("Pick a role (User, Admin, or Technician).");
         setSubmitting(false);
         return;
       }
@@ -628,8 +569,7 @@ function AdminNotificationsPage() {
             {isAnnouncementsRoute ? "targeted announcement" : "notification"}
           </h2>
           <p className="mt-1 text-xs text-text/65">
-            Pick who receives this: all accounts, specific <strong>user roles</strong> (below), or academic filters.
-            Then choose Web (in-app feed), Email (super admin + SMTP), or both. Send now resolves recipients via the API.
+            Choose audience, channel, and optional schedule. Send now delivers to the resolved users.
           </p>
           <div className="mt-4 space-y-3">
           <label className="flex flex-col gap-1">
@@ -659,8 +599,8 @@ function AdminNotificationsPage() {
                 setForm((f) => ({
                   ...f,
                   audienceType: v,
-                  audienceLabel: v === "All" ? "All users" : v === "Role" ? "" : "",
-                  targeting: v === "All" ? emptyTargeting() : f.targeting,
+                  audienceLabel: v,
+                  targeting: emptyTargeting(),
                 }));
                 if (v !== "Degree Program") {
                   setRoleFaculty("");
@@ -668,9 +608,9 @@ function AdminNotificationsPage() {
                 }
               }}
             >
-              {AUDIENCE_TYPE_OPTIONS.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
+              {AUDIENCE_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {t === "All" ? "All users" : t}
                 </option>
               ))}
             </select>
@@ -683,94 +623,12 @@ function AdminNotificationsPage() {
             </p>
           ) : null}
           {form.audienceType === "Role" ? (
-            <div className="space-y-3 rounded-2xl border border-[#034AA6]/25 bg-[#034AA6]/[0.06] p-4 dark:border-[#034AA6]/35 dark:bg-[#034AA6]/10">
-              <div className="flex flex-wrap items-end justify-between gap-2">
-                <div>
-                  <p className="text-sm font-semibold text-heading">Target by user role</p>
-                  <p className="mt-0.5 text-xs text-text/65">
-                    Select one or more account types. Notifications are matched to each user&apos;s Smart Campus role.
-                  </p>
-                </div>
-                <span className="rounded-full bg-white/80 px-3 py-1 text-xs font-medium text-[#034AA6] dark:bg-black/20">
-                  {selectedRoleCount} selected
-                </span>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-text hover:bg-tint"
-                  onClick={() => applyRolePreset(NOTIFICATION_ROLE_OPTIONS.map((o) => o.value))}
-                >
-                  All types
-                </button>
-                <button
-                  type="button"
-                  className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-text hover:bg-tint"
-                  onClick={() => applyRolePreset(["STUDENT", "LECTURER", "LAB_ASSISTANT"])}
-                >
-                  Students + lecturers + lab assistants
-                </button>
-                <button
-                  type="button"
-                  className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-text hover:bg-tint"
-                  onClick={() => applyRolePreset(["STUDENT"])}
-                >
-                  Students only
-                </button>
-                <button
-                  type="button"
-                  className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-text hover:bg-tint"
-                  onClick={() => applyRolePreset(["TECHNICIAN", "MANAGER", "USER"])}
-                >
-                  Technicians, managers &amp; users
-                </button>
-                <button
-                  type="button"
-                  className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-text hover:bg-tint"
-                  onClick={() => applyRolePreset(["ADMIN", "LOST_ITEM_ADMIN"])}
-                >
-                  Admins only
-                </button>
-                <button
-                  type="button"
-                  className="rounded-full border border-dashed border-text/30 px-3 py-1.5 text-xs text-text/70"
-                  onClick={() => setForm((f) => ({ ...f, audienceLabel: "" }))}
-                >
-                  Clear
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {NOTIFICATION_ROLE_OPTIONS.map((opt) => {
-                  const checked = parseAudienceRolesFromLabel(form.audienceLabel).includes(opt.value);
-                  return (
-                    <label
-                      key={opt.value}
-                      className={`flex cursor-pointer gap-3 rounded-2xl border px-3 py-3 transition-colors ${
-                        checked
-                          ? "border-[#034AA6] bg-white shadow-sm dark:bg-surface"
-                          : "border-border bg-card hover:border-text/25"
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        className="mt-0.5 h-4 w-4 shrink-0 accent-[#034AA6]"
-                        checked={checked}
-                        onChange={() => toggleNotificationRole(opt.value)}
-                      />
-                      <span className="min-w-0">
-                        <span className="block text-sm font-semibold text-heading">{opt.label}</span>
-                        <span className="mt-0.5 block text-[11px] leading-snug text-text/60">{opt.hint}</span>
-                        <span className="mt-1 inline-block rounded bg-tint px-1.5 py-0.5 font-mono text-[10px] text-text/55">
-                          {opt.value}
-                        </span>
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
+            <input
+              className="rounded-2xl border border-black/15 px-3 py-2"
+              placeholder="Roles (comma-separated): STUDENT, LECTURER"
+              value={form.audienceLabel}
+              onChange={(e) => setForm((f) => ({ ...f, audienceLabel: e.target.value }))}
+            />
           ) : null}
           {form.audienceType === "Faculty" ? (
             <select
@@ -1016,19 +874,19 @@ function AdminNotificationsPage() {
         <button
           type="button"
           onClick={() => {
-            selectTab("sent");
+            setTab("sent");
             setActiveWindow("List");
           }}
           className={`flex-1 rounded-3xl px-4 py-2 text-sm font-medium ${
             tab === "sent" ? "bg-white shadow text-heading" : "text-text/70"
           }`}
         >
-          {isAnnouncementsRoute ? "Sent announcements" : "Sent notifications"} ({sentCount})
+          Sent announcements ({sentCount})
         </button>
         <button
           type="button"
           onClick={() => {
-            selectTab("inbox");
+            setTab("inbox");
             setActiveWindow("Inbox");
           }}
           className={`flex-1 rounded-3xl px-4 py-2 text-sm font-medium ${
@@ -1066,9 +924,9 @@ function AdminNotificationsPage() {
               onChange={(e) => setFilterAudience(e.target.value)}
             >
               <option value="">All audiences</option>
-              {AUDIENCE_TYPE_OPTIONS.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
+              {AUDIENCE_TYPES.map((s) => (
+                <option key={s} value={s}>
+                  {s}
                 </option>
               ))}
             </select>
@@ -1092,11 +950,7 @@ function AdminNotificationsPage() {
                   {filtered.map((a) => (
                     <tr key={a.id} className="border-b border-black/5">
                       <td className="py-3 pr-3 font-medium">{a.title}</td>
-                      <td className="py-3 pr-3 text-text/80">
-                        <span className="line-clamp-2" title={formatAudienceSummary(a)}>
-                          {formatAudienceSummary(a)}
-                        </span>
-                      </td>
+                      <td className="py-3 pr-3 text-text/80">{a.audienceType}</td>
                       <td className="py-3 pr-3">{a.channel}</td>
                       <td className="py-3 pr-3">{a.status}</td>
                       <td className="py-3 pr-3">{a.priority}</td>
@@ -1115,11 +969,7 @@ function AdminNotificationsPage() {
                   ))}
                 </tbody>
               </table>
-              {!filtered.length ? (
-                <p className="py-6 text-center text-text/60">
-                  {isAnnouncementsRoute ? "No announcements yet." : "No notifications yet."}
-                </p>
-              ) : null}
+              {!filtered.length ? <p className="py-6 text-center text-text/60">No announcements yet.</p> : null}
             </div>
           )}
         </div>

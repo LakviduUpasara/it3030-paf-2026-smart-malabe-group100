@@ -10,7 +10,7 @@ export default defineConfig({
     /** Forward /api/* to Spring Boot so VITE_API_BASE_URL=/api/v1 hits the backend instead of static files. */
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:18080",
+        target: "http://127.0.0.1:18081",
         changeOrigin: true,
       },
     },
@@ -20,7 +20,7 @@ export default defineConfig({
     port: 4173,
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:18080",
+        target: "http://127.0.0.1:18081",
         changeOrigin: true,
       },
     },

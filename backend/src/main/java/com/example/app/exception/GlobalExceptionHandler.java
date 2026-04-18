@@ -7,7 +7,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.dao.DuplicateKeyException;
-import com.mongodb.MongoException;
 import org.springframework.data.mongodb.UncategorizedMongoDbException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -29,16 +28,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(UncategorizedMongoDbException.class)
     public ResponseEntity<Map<String, Object>> handleMongo(UncategorizedMongoDbException ex) {
-        log.error("MongoDB error: {}", ex.getMessage(), ex);
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .body(buildErrorResponse("Database connection is required", HttpStatus.SERVICE_UNAVAILABLE));
-    }
-
-    @ExceptionHandler(MongoException.class)
-    public ResponseEntity<Map<String, Object>> handleMongoDriver(MongoException ex) {
-        log.error("MongoDB driver error: {}", ex.getMessage(), ex);
-        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                .body(buildErrorResponse("Database unavailable", HttpStatus.SERVICE_UNAVAILABLE));
     }
 
     @ExceptionHandler(ApiException.class)
@@ -77,6 +68,9 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
+<<<<<<< HEAD
+    public ResponseEntity<Map<String, Object>> handleBadRequest(IllegalArgumentException ex) {
+=======
     public ResponseEntity<Map<String, Object>> handleIllegalArgumentException(IllegalArgumentException ex) {
         return ResponseEntity.badRequest()
                 .body(buildErrorResponse(ex.getMessage(), HttpStatus.BAD_REQUEST));
@@ -94,18 +88,13 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<Map<String, Object>> handleAccessDeniedException(AccessDeniedException ex) {
-        String message = ex.getMessage() != null && !ex.getMessage().isBlank() ? ex.getMessage() : "Access denied";
-        return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(buildErrorResponse(message, HttpStatus.FORBIDDEN));
-    }
-
-    @ExceptionHandler(ResourceNotFoundException.class)
-    public ResponseEntity<Map<String, Object>> handleResourceNotFound(ResourceNotFoundException ex) {
+>>>>>>> feature/technician-dashboard-ui
         Map<String, Object> response = new HashMap<>();
         response.put("timestamp", LocalDateTime.now());
-        response.put("status", HttpStatus.NOT_FOUND.value());
+        response.put("status", HttpStatus.BAD_REQUEST.value());
         response.put("message", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+
+        return ResponseEntity.badRequest().body(response);
     }
 
     @ExceptionHandler(NotFoundException.class)
@@ -130,7 +119,6 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGenericException(Exception ex) {
-        log.error("Unhandled error: {}", ex.getMessage(), ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(buildErrorResponse(ex.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR));
     }

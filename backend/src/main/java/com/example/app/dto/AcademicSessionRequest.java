@@ -20,8 +20,8 @@ public class AcademicSessionRequest {
     @NotNull(message = "Student group id is required")
     private Long studentGroupId;
 
-    @NotBlank(message = "Resource id is required")
-    private String resourceId;
+    @NotNull(message = "Resource id is required")
+    private Long resourceId;
 
     @NotNull(message = "Session type is required")
     private SessionType sessionType;

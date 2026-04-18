@@ -16,9 +16,9 @@ public interface ResourceService {
             Integer minCapacity,
             String location);
 
-    ResourceResponse getResourceById(String id);
+    ResourceResponse getResourceById(Long id);
 
-    ResourceResponse updateResource(String id, ResourceRequest request);
+    ResourceResponse updateResource(Long id, ResourceRequest request);
 
-    void deleteResource(String id);
+    void deleteResource(Long id);
 }

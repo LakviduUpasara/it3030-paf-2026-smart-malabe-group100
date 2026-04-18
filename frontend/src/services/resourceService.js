@@ -1,5 +1,15 @@
 import api, { createServiceError } from "./api";
 
+const TEMP_ADMIN_AUTH = {
+  username: "admin",
+  password: "admin123",
+};
+
+const TEMP_WRITE_REQUEST_CONFIG = {
+  // TEMP: use backend basic auth for resource writes during development/testing.
+  auth: TEMP_ADMIN_AUTH,
+};
+
 function buildQueryParams(filters = {}) {
   const params = {};
 
@@ -36,7 +46,8 @@ export async function getResources(filters = {}) {
 
 export async function createResource(payload) {
   try {
-    const response = await api.post("/resources", payload);
+    const response = await api.post("/resources", payload, TEMP_WRITE_REQUEST_CONFIG);
+
     return response.data;
   } catch (error) {
     throw createServiceError(error, "Unable to create resource.");
@@ -45,7 +56,7 @@ export async function createResource(payload) {
 
 export async function updateResource(id, payload) {
   try {
-    const response = await api.put(`/resources/${id}`, payload);
+    const response = await api.put(`/resources/${id}`, payload, TEMP_WRITE_REQUEST_CONFIG);
     return response.data;
   } catch (error) {
     throw createServiceError(error, "Unable to update resource.");
@@ -54,8 +65,9 @@ export async function updateResource(id, payload) {
 
 export async function deleteResource(id) {
   try {
-    await api.delete(`/resources/${id}`);
+    await api.delete(`/resources/${id}`, TEMP_WRITE_REQUEST_CONFIG);
   } catch (error) {
     throw createServiceError(error, "Unable to delete resource.");
   }
 }
+

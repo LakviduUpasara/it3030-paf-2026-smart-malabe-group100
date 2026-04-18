@@ -128,11 +128,6 @@ public class AuthServiceImpl implements AuthService {
          * requestedRole is the applicant's preference; the real Role is assigned only when an admin approves.
          */
         Role requestedRole = request.getRequestedRole() == null ? Role.USER : request.getRequestedRole();
-        if (requestedRole != Role.USER && requestedRole != Role.TECHNICIAN && requestedRole != Role.ADMIN) {
-            throw new ApiException(
-                    HttpStatus.BAD_REQUEST,
-                    "Public registration only supports User, Technician, or Admin access requests.");
-        }
 
         SignupRequest signupRequest = signupRequestRepository.findByEmailIgnoreCase(normalizedEmail)
                 .orElseGet(() -> SignupRequest.builder().id(UUID.randomUUID().toString()).build());

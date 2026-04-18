@@ -1,29 +1,18 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import Notification from '../components/Notification';
 import { bookingAPI } from '../services/api';
-import { getResources } from '../services/resourceService';
-import { useAuth } from '../hooks/useAuth';
-
-function normalizeTypeLabel(type) {
-  if (type == null) {
-    return 'Other';
-  }
-  if (typeof type === 'object' && type.name) {
-    return String(type.name).replace(/_/g, ' ');
-  }
-  return String(type).replace(/_/g, ' ');
-}
 
 const CreateBookingPage = () => {
-  const { user } = useAuth();
-  const navigate = useNavigate();
-  const [resources, setResources] = useState([]);
-  const [resourcesLoading, setResourcesLoading] = useState(true);
-  const [resourcesError, setResourcesError] = useState(null);
+  const resources = [
+    { id: 1, name: 'Lab A', type: 'Computer Lab' },
+    { id: 2, name: 'Lab B', type: 'Computer Lab' },
+    { id: 3, name: 'Meeting Room 1', type: 'Room' },
+    { id: 4, name: 'Projector 1', type: 'Equipment' },
+  ];
 
   const [formData, setFormData] = useState({
     resourceId: '',
+    userId: '',
     startTime: '',
     endTime: '',
     purpose: '',
@@ -35,39 +24,11 @@ const CreateBookingPage = () => {
 
   const emptyFormState = {
     resourceId: '',
+    userId: '',
     startTime: '',
     endTime: '',
     purpose: '',
   };
-
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      try {
-        const data = await getResources();
-        if (!active) return;
-        const list = Array.isArray(data) ? data : [];
-        setResources(
-          list.map((r) => ({
-            id: String(r.id),
-            name: r.name || `Resource ${r.id}`,
-            type: normalizeTypeLabel(r.type),
-          })),
-        );
-        setResourcesError(null);
-      } catch (e) {
-        if (active) {
-          setResources([]);
-          setResourcesError(e?.message || 'Unable to load resources.');
-        }
-      } finally {
-        if (active) setResourcesLoading(false);
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, []);
 
   useEffect(() => {
     const savedBookingData = sessionStorage.getItem('bookingData');
@@ -137,13 +98,6 @@ const CreateBookingPage = () => {
     setLoading(true);
 
     try {
-      if (!user?.id) {
-        setNotification({
-          type: 'error',
-          message: 'You must be signed in to create a booking.',
-        });
-        return;
-      }
       if (!formData.resourceId) {
         setNotification({
           type: 'warning',
@@ -162,27 +116,54 @@ const CreateBookingPage = () => {
       const safeEnd = selectedEnd < safeStart ? new Date(safeStart.getTime() + 60 * 60 * 1000) : selectedEnd;
 
       const payload = {
-        resourceId: String(formData.resourceId),
-        userId: String(user.id),
+        resourceId: Number(formData.resourceId),
+        userId: Number(formData.userId),
         startTime: formatDateTimeLocal(safeStart),
         endTime: formatDateTimeLocal(safeEnd),
         purpose: formData.purpose,
       };
 
+      console.log('═══════════════════════════════════');
+      console.log('BOOKING CREATION DEBUG INFO');
+      console.log('═══════════════════════════════════');
+      console.log('NOW:', now.toISOString(), '|', now.toString());
+      console.log('MIN TIME (NOW + 5 min):', minTime.toISOString(), '|', minTime.toString());
+      console.log('Selected Start:', selectedStart?.toISOString());
+      console.log('Safe Start:', safeStart.toISOString());
+      console.log('Selected End:', selectedEnd?.toISOString());
+      console.log('Safe End:', safeEnd.toISOString());
+      console.log('TIME CHECK: Safe Start > Now?', safeStart > now);
+      console.log('═══════════════════════════════════');
+      console.log('FINAL PAYLOAD (Local Time):');
+      console.log(JSON.stringify(payload, null, 2));
+      console.log('═══════════════════════════════════');
+      console.log('ISO Payload:');
+      console.log(JSON.stringify(payload, null, 2));
+      console.log('═══════════════════════════════════');
+      console.log('Payload Format Check:');
+      console.log('  startTime format:', payload.startTime, '✓ (UTC format: YYYY-MM-DDTHH:mm:ss)');
+      console.log('  endTime format:', payload.endTime, '✓ (UTC format: YYYY-MM-DDTHH:mm:ss)');
+      console.log('═══════════════════════════════════');
+
       await bookingAPI.createBooking(payload);
 
-      setNotification({
-        type: 'success',
-        message: 'Booking created successfully! Redirecting to My Bookings…',
-      });
+      setNotification({ type: 'success', message: 'Booking created successfully!' });
       setFormData(emptyFormState);
       setPrefilledFromAvailability(false);
       sessionStorage.removeItem('bookingData');
 
       setTimeout(() => {
-        navigate('/bookings', { replace: true });
-      }, 1200);
+        window.location.href = '/bookings';
+      }, 2000);
     } catch (error) {
+      console.error('═══════════════════════════════════');
+      console.error('BOOKING CREATION FAILED');
+      console.error('═══════════════════════════════════');
+      console.error('FULL ERROR:', error.response?.data);
+      console.error('Error Status:', error.response?.status);
+      console.error('Error Message:', error.message);
+      console.error('═══════════════════════════════════');
+
       setNotification({
         type: 'error',
         message:
@@ -227,12 +208,6 @@ const CreateBookingPage = () => {
     <div className="min-h-screen bg-gray-50 py-12 px-4">
       <div className="bg-white rounded-xl shadow-md p-8 max-w-2xl mx-auto">
         <h1 className="text-3xl font-bold mb-8 text-gray-900 text-center">Create Booking</h1>
-        {resourcesLoading ? <p className="mb-4 text-center text-sm text-gray-600">Loading resources…</p> : null}
-        {resourcesError ? (
-          <p className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-center text-sm text-red-800">
-            {resourcesError}
-          </p>
-        ) : null}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Resource */}
@@ -264,13 +239,17 @@ const CreateBookingPage = () => {
             )}
           </div>
 
+          {/* User ID */}
           <div>
-            <label className="text-gray-600 text-sm font-medium mb-1 block">Booked as</label>
+            <label className="text-gray-600 text-sm font-medium mb-1 block">User ID</label>
             <input
-              type="text"
-              readOnly
-              value={user?.email ? `${user.email} (${user.id})` : user?.id || '—'}
-              className="w-full cursor-not-allowed bg-gray-100 px-4 py-2 border border-gray-300 rounded-lg text-gray-700"
+              type="number"
+              name="userId"
+              value={formData.userId}
+              onChange={handleChange}
+              placeholder="Enter user ID"
+              required
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
 

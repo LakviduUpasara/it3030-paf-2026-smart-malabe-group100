@@ -15,27 +15,27 @@ public interface AcademicSessionRepository extends JpaRepository<AcademicSession
             from AcademicSession s
             where (:moduleOfferingId is null or s.moduleOffering.id = :moduleOfferingId)
               and (:studentGroupId is null or s.studentGroup.id = :studentGroupId)
-              and (:resourceId is null or s.campusResourceId = :resourceId)
+              and (:resourceId is null or s.resource.id = :resourceId)
               and (:sessionDate is null or s.sessionDate = :sessionDate)
             order by s.sessionDate asc, s.startTime asc
             """)
     List<AcademicSession> findAllByFilters(
             @Param("moduleOfferingId") Long moduleOfferingId,
             @Param("studentGroupId") Long studentGroupId,
-            @Param("resourceId") String resourceId,
+            @Param("resourceId") Long resourceId,
             @Param("sessionDate") LocalDate sessionDate);
 
     @Query("""
             select case when count(s) > 0 then true else false end
             from AcademicSession s
-            where s.campusResourceId = :resourceId
+            where s.resource.id = :resourceId
               and s.sessionDate = :sessionDate
               and (:excludeId is null or s.id <> :excludeId)
               and s.startTime < :endTime
               and s.endTime > :startTime
             """)
     boolean existsOverlappingSession(
-            @Param("resourceId") String resourceId,
+            @Param("resourceId") Long resourceId,
             @Param("sessionDate") LocalDate sessionDate,
             @Param("startTime") LocalTime startTime,
             @Param("endTime") LocalTime endTime,

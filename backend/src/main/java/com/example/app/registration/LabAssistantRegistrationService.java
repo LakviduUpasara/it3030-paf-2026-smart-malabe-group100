@@ -112,7 +112,6 @@ public class LabAssistantRegistrationService {
                         .role(Role.LAB_ASSISTANT)
                         .status(mapUserStatus(status))
                         .provider(AuthProvider.LOCAL)
-                        .twoFactorEnabled(false)
                         .mustChangePassword(true)
                         .labAssistantRef(labAssistant.getId())
                         .build();

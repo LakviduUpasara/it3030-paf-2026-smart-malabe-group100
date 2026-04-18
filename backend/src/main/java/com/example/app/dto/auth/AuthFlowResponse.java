@@ -17,6 +17,8 @@ public class AuthFlowResponse {
     private String token;
     /** When present, session is restricted (first-login setup). Values match {@link com.example.app.entity.SessionPhase}. */
     private String sessionPhase;
+    /** When present, session is restricted (first-login setup). Values match {@link com.example.app.entity.SessionPhase}. */
+    private String sessionPhase;
     private PendingApprovalResponse pendingApproval;
     private TwoFactorChallengeResponse twoFactorChallenge;
 

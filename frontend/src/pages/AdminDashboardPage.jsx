@@ -2,11 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
-  CalendarCheck,
-  CalendarClock,
-  CalendarX,
   ClipboardCheck,
-  ListOrdered,
   MapPin,
   Package,
 } from "lucide-react";
@@ -16,18 +12,15 @@ import AdminKpiGrid from "../components/admin/AdminKpiGrid";
 import AdminPageHeader from "../components/admin/AdminPageHeader";
 import AdminStatTile from "../components/admin/AdminStatTile";
 import LoadingSpinner from "../components/LoadingSpinner";
-import { useAuth } from "../hooks/useAuth";
-import { getAdminBookingSummary, getAdminBookings, getPendingBookings } from "../services/bookingService";
+import { getPendingBookings } from "../services/bookingService";
 import { getResources } from "../services/resourceService";
 import { getManagedTickets } from "../services/ticketService";
-import { LMS_ROLES, normalizeRole, resolveAdminConsoleRole, ROLES } from "../utils/roleUtils";
 import { toToken } from "../utils/formatters";
 
 const initialSummary = {
   resources: [],
   bookings: [],
   tickets: [],
-  bookingStats: null,
 };
 
 function resourceIsAvailable(resource) {
@@ -46,11 +39,6 @@ function resourceIsMaintenance(resource) {
 
 function AdminDashboardPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const consoleRole = resolveAdminConsoleRole(user?.role);
-  const isPlatformAdmin = normalizeRole(user?.role) === ROLES.ADMIN;
-  const showCampusAssignmentModules =
-    consoleRole === LMS_ROLES.SUPER_ADMIN || consoleRole === LMS_ROLES.MANAGER;
   const [summary, setSummary] = useState(initialSummary);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -63,47 +51,17 @@ function AdminDashboardPage() {
       setError("");
 
       try {
-        const [resources, ticketsRes] = await Promise.all([
+        const [resources, bookings, tickets] = await Promise.all([
           getResources(),
+          getPendingBookings(),
           getManagedTickets(),
         ]);
 
-        let bookings = [];
-        let bookingStats = null;
-        if (isPlatformAdmin) {
-          const [stats, pendingPage] = await Promise.all([
-            getAdminBookingSummary(),
-            getAdminBookings({ page: 0, size: 5, status: "PENDING" }),
-          ]);
-          bookingStats = stats;
-          const content = Array.isArray(pendingPage?.content) ? pendingPage.content : [];
-          bookings = content.map((row) => ({
-            id: row.id,
-            facility: row.resourceName || row.resourceId,
-            requestedBy: row.userFullName || row.userEmail || row.userId,
-            date: row.startTime ? new Date(row.startTime).toLocaleDateString() : "—",
-            time:
-              row.startTime && row.endTime
-                ? `${new Date(row.startTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} – ${new Date(row.endTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
-                : "—",
-            attendees: 0,
-            status: row.status?.name || row.status || "PENDING",
-          }));
-        } else {
-          bookings = await getPendingBookings();
-        }
-
         if (active) {
-          const ticketRows = Array.isArray(ticketsRes)
-            ? ticketsRes
-            : Array.isArray(ticketsRes?.data)
-              ? ticketsRes.data
-              : [];
           setSummary({
-            resources: Array.isArray(resources) ? resources : [],
+            resources,
             bookings,
-            tickets: ticketRows,
-            bookingStats,
+            tickets,
           });
         }
       } catch (loadError) {
@@ -122,7 +80,7 @@ function AdminDashboardPage() {
     return () => {
       active = false;
     };
-  }, [user?.role]);
+  }, []);
 
   const availableResources = summary.resources.filter(resourceIsAvailable).length;
   const maintenanceResources = summary.resources.filter(resourceIsMaintenance).length;
@@ -134,9 +92,6 @@ function AdminDashboardPage() {
     (total, booking) => total + Number(booking.attendees || 0),
     0,
   );
-  const pendingApprovalCount = isPlatformAdmin
-    ? Number(summary.bookingStats?.pending ?? 0)
-    : summary.bookings.length;
   const trackedLocations = new Set(summary.resources.map((resource) => resource.location)).size;
 
   const availPct = summary.resources.length
@@ -154,73 +109,14 @@ function AdminDashboardPage() {
             <Button onClick={() => navigate("/admin/bookings")} variant="secondary" type="button">
               Review approvals
             </Button>
-            <Button onClick={() => navigate("/admin/resources/facilities")} variant="primary" type="button">
-              Open resources catalogue
+            <Button onClick={() => navigate("/admin/campus/resources")} variant="primary" type="button">
+              Open resources
             </Button>
           </>
         }
         description="Monitor approvals, resource availability, and operational support from one control center."
         title="Campus operations"
       />
-
-      {showCampusAssignmentModules ? (
-        <section
-          className="rounded-3xl border border-border bg-card/80 p-5 shadow-shadow"
-          aria-label="Assignment modules"
-        >
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-text/60">
-            PAF modules in this console
-          </p>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <button
-              type="button"
-              className="rounded-2xl border border-border bg-tint px-4 py-3 text-left transition-colors hover:bg-card"
-              onClick={() => navigate("/admin/resources/facilities")}
-            >
-              <p className="text-sm font-semibold text-heading">Module A — Resources catalogue</p>
-              <p className="mt-1 text-xs text-text/70">
-                Bookable resources (halls, labs, equipment), metadata, availability windows, search and filters.
-              </p>
-            </button>
-            <button
-              type="button"
-              className="rounded-2xl border border-border bg-tint px-4 py-3 text-left transition-colors hover:bg-card"
-              onClick={() => navigate("/admin/campus/availability")}
-            >
-              <p className="text-sm font-semibold text-heading">Resource availability</p>
-              <p className="mt-1 text-xs text-text/70">
-                Check open slots against approved bookings (hiruni booking flow).
-              </p>
-            </button>
-            <button
-              type="button"
-              className="rounded-2xl border border-border bg-tint px-4 py-3 text-left transition-colors hover:bg-card"
-              onClick={() => navigate("/admin/bookings")}
-            >
-              <p className="text-sm font-semibold text-heading">Module B — Bookings</p>
-              <p className="mt-1 text-xs text-text/70">
-                Requests, approvals, conflicts, and lifecycle (pending → approved / rejected).
-              </p>
-            </button>
-            <button
-              type="button"
-              className="rounded-2xl border border-border bg-tint px-4 py-3 text-left transition-colors hover:bg-card"
-              onClick={() => navigate("/admin/tickets")}
-            >
-              <p className="text-sm font-semibold text-heading">Module C — Incidents</p>
-              <p className="mt-1 text-xs text-text/70">
-                Ticketing workflow, assignments, evidence, and service desk actions.
-              </p>
-            </button>
-          </div>
-          {consoleRole === LMS_ROLES.SUPER_ADMIN ? (
-            <p className="mt-3 text-xs text-text/60">
-              Academic reference data (faculties, programs, module catalog) lives under{" "}
-              <strong className="font-medium text-text/80">Academic catalogue</strong> in the sidebar.
-            </p>
-          ) : null}
-        </section>
-      ) : null}
 
       {error ? (
         <section
@@ -232,40 +128,6 @@ function AdminDashboardPage() {
         </section>
       ) : null}
 
-      {isPlatformAdmin && summary.bookingStats ? (
-        <section className="mb-6" aria-label="Booking counts from database">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.12em] text-text/60">
-            Booking summary (live from MongoDB)
-          </p>
-          <AdminKpiGrid>
-            <AdminStatTile
-              detail="All booking documents"
-              icon={ListOrdered}
-              label="Total bookings"
-              value={Number(summary.bookingStats.totalBookings ?? 0)}
-            />
-            <AdminStatTile
-              detail="Confirmed"
-              icon={CalendarCheck}
-              label="Approved"
-              value={Number(summary.bookingStats.approved ?? 0)}
-            />
-            <AdminStatTile
-              detail="Awaiting decision"
-              icon={CalendarClock}
-              label="Pending"
-              value={Number(summary.bookingStats.pending ?? 0)}
-            />
-            <AdminStatTile
-              detail="With reason stored"
-              icon={CalendarX}
-              label="Rejected"
-              value={Number(summary.bookingStats.rejected ?? 0)}
-            />
-          </AdminKpiGrid>
-        </section>
-      ) : null}
-
       <AdminKpiGrid>
         <AdminStatTile
           detail={`${availableResources} ready for booking`}
@@ -274,14 +136,10 @@ function AdminDashboardPage() {
           value={summary.resources.length}
         />
         <AdminStatTile
-          detail={
-            isPlatformAdmin
-              ? `${pendingApprovalCount} pending in database`
-              : `${pendingAttendees} attendees waiting`
-          }
+          detail={`${pendingAttendees} attendees waiting`}
           icon={ClipboardCheck}
           label="Pending approvals"
-          value={pendingApprovalCount}
+          value={summary.bookings.length}
         />
         <AdminStatTile
           detail={`${urgentTickets} need rapid attention`}
@@ -317,7 +175,7 @@ function AdminDashboardPage() {
                   </p>
                 </div>
                 <span className="inline-flex w-fit rounded-full border border-border bg-tint px-2.5 py-1 text-xs font-semibold text-text">
-                  {pendingApprovalCount} approval items
+                  {summary.bookings.length} approval items
                 </span>
               </div>
               <div className="mt-6 grid gap-4 sm:grid-cols-3">
@@ -437,16 +295,9 @@ function AdminDashboardPage() {
                 <button
                   className="rounded-2xl border border-border bg-card px-4 py-2.5 text-left text-sm font-medium text-heading transition-colors hover:bg-tint"
                   type="button"
-                  onClick={() => navigate("/admin/resources/facilities")}
+                  onClick={() => navigate("/admin/campus/resources")}
                 >
-                  Resources catalogue
-                </button>
-                <button
-                  className="rounded-2xl border border-border bg-card px-4 py-2.5 text-left text-sm font-medium text-heading transition-colors hover:bg-tint"
-                  type="button"
-                  onClick={() => navigate("/admin/campus/availability")}
-                >
-                  Resource availability
+                  Asset portfolio
                 </button>
                 <button
                   className="rounded-2xl border border-border bg-card px-4 py-2.5 text-left text-sm font-medium text-heading transition-colors hover:bg-tint"

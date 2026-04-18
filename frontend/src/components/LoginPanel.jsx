@@ -7,7 +7,6 @@ import Button from "./Button";
 import GoogleIdentityButton from "./GoogleIdentityButton";
 import LoadingSpinner from "./LoadingSpinner";
 import { useAuth } from "../hooks/useAuth";
-import { normalizeAuthStatus } from "../services/authService";
 import { getDefaultRouteForRole, normalizeRole, ROLES } from "../utils/roleUtils";
 import { formatCountdownMs, parseBackendDateTime } from "../utils/dateTimeParse";
 
@@ -18,8 +17,6 @@ const OTP_CHALLENGE_MINUTES_FALLBACK = Number(
 
 const DEMO_LOCAL_ADMIN_EMAIL = "admin@smartcampus.edu";
 const DEMO_LOCAL_ADMIN_PASSWORD = "Admin@12345";
-const DEMO_LOCAL_STUDENT_EMAIL = "user@smartcampus.edu";
-const DEMO_LOCAL_TECHNICIAN_EMAIL = "technician@smartcampus.edu";
 
 const viteDeveloperFlag = String(import.meta.env.VITE_DEVELOPER_MODE ?? "")
   .trim()
@@ -50,7 +47,6 @@ function LoginPanel({ showHeading = true }) {
     resendEmailOtp,
     changeFirstLoginPassword,
     selectFirstLoginTwoFactorMethod,
-    skipFirstLoginTwoFactor,
     clearError,
     clearTwoFactor,
     logout,
@@ -163,14 +159,12 @@ function LoginPanel({ showHeading = true }) {
       return;
     }
 
-    const status = normalizeAuthStatus(response.authStatus);
-
-    if (status === "AUTHENTICATED" && response.user) {
+    if (response.authStatus === "AUTHENTICATED" && response.user) {
       redirectToWorkspace(response.user);
       return;
     }
 
-    if (status === "PENDING_APPROVAL") {
+    if (response.authStatus === "PENDING_APPROVAL") {
       navigate("/approval-pending", { replace: true });
     }
 
@@ -225,40 +219,6 @@ function LoginPanel({ showHeading = true }) {
 
     try {
       const response = await devLogin(normalizedEmail);
-      handleAuthResponse(response);
-    } catch (quickLoginError) {
-      return quickLoginError;
-    }
-  };
-
-  const handleDevStudentLogin = async (event) => {
-    event.preventDefault();
-    setLocalError("");
-    clearError();
-
-    try {
-      setCredentials((currentCredentials) => ({
-        ...currentCredentials,
-        email: DEMO_LOCAL_STUDENT_EMAIL,
-      }));
-      const response = await devLogin(DEMO_LOCAL_STUDENT_EMAIL);
-      handleAuthResponse(response);
-    } catch (quickLoginError) {
-      return quickLoginError;
-    }
-  };
-
-  const handleDevTechnicianLogin = async (event) => {
-    event.preventDefault();
-    setLocalError("");
-    clearError();
-
-    try {
-      setCredentials((currentCredentials) => ({
-        ...currentCredentials,
-        email: DEMO_LOCAL_TECHNICIAN_EMAIL,
-      }));
-      const response = await devLogin(DEMO_LOCAL_TECHNICIAN_EMAIL);
       handleAuthResponse(response);
     } catch (quickLoginError) {
       return quickLoginError;
@@ -485,8 +445,9 @@ function LoginPanel({ showHeading = true }) {
       ) : sessionPhase === "TWO_FACTOR_METHOD_SELECTION" ? (
         <div className="login-form auth-verification-form">
           <p className="supporting-text">
-            2-step verification is optional. Email sends a code to your inbox. Authenticator shows a QR code once to link
-            the app; after that, sign-in uses the app. You can skip now and configure this later in System Settings.
+            Choose your preferred second step. Email sends a code to your inbox. Authenticator shows a QR code to link the
+            app once; after that, sign-in uses the app. Until the app is linked, email codes are used if authenticator is
+            not set up yet.
           </p>
           <div className="auth-actions-row signup-form-actions flex-col gap-2 sm:flex-row">
             <Button
@@ -509,35 +470,15 @@ function LoginPanel({ showHeading = true }) {
             </Button>
           </div>
           {activeError ? <p className="alert alert-error">{activeError}</p> : null}
-          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <Button
-              className="login-secondary-action"
-              disabled={isLoading}
-              onClick={handleBackToLogin}
-              type="button"
-              variant="secondary"
-            >
-              Back
-            </Button>
-            <Button
-              className="login-secondary-action"
-              disabled={isLoading}
-              onClick={async () => {
-                setLocalError("");
-                clearError();
-                try {
-                  const response = await skipFirstLoginTwoFactor();
-                  handleAuthResponse(response);
-                } catch {
-                  /* error surfaced via context */
-                }
-              }}
-              type="button"
-              variant="secondary"
-            >
-              Skip for now
-            </Button>
-          </div>
+          <Button
+            className="login-secondary-action mt-2"
+            disabled={isLoading}
+            onClick={handleBackToLogin}
+            type="button"
+            variant="secondary"
+          >
+            Back
+          </Button>
         </div>
       ) : twoFactorChallenge ? (
         <form className="login-form auth-verification-form" onSubmit={handleVerifyTwoFactor}>
@@ -694,24 +635,6 @@ function LoginPanel({ showHeading = true }) {
                 >
                   Quick sign-in (email only)
                 </Button>
-                <Button
-                  className="login-secondary-action"
-                  disabled={isLoading}
-                  onClick={handleDevStudentLogin}
-                  type="button"
-                  variant="secondary"
-                >
-                  Sign in as Student
-                </Button>
-                <Button
-                  className="login-secondary-action"
-                  disabled={isLoading}
-                  onClick={handleDevTechnicianLogin}
-                  type="button"
-                  variant="secondary"
-                >
-                  Sign in as Technician
-                </Button>
               </div>
               <div className="auth-divider">
                 <span>or standard sign-in</span>
@@ -841,36 +764,47 @@ function LoginPanel({ showHeading = true }) {
               onError={(message) => setLocalError(message)}
               size="medium"
             />
+
             <button
-              className="social-button"
+              className="social-button social-button-apple"
               disabled={isLoading}
               onClick={handleAppleLogin}
               type="button"
             >
-              <span className="social-icon" aria-hidden="true">
+              <span className="social-button-icon-shell" aria-hidden="true">
                 <FaApple />
               </span>
-              <span className="social-button-label">Continue with Apple</span>
+              <span className="social-button-copy">
+                <span className="social-button-label">Continue with Apple</span>
+                <small className="social-button-caption">Use your approved Apple ID</small>
+              </span>
             </button>
           </div>
 
-          <p className="login-demo-note">
-            Need access? Contact Campus IT Services. Demo accounts:{" "}
-            <strong>user@smartcampus.edu</strong> (student),{" "}
-            <strong>admin@smartcampus.edu</strong>, and{" "}
-            <strong>technician@smartcampus.edu</strong>.
+          <p className="login-demo-note auth-assist-note">
+            {developerMode ? (
+              <>
+                Demo admin (local): <strong>{DEMO_LOCAL_ADMIN_EMAIL}</strong> + password{" "}
+                <strong>{DEMO_LOCAL_ADMIN_PASSWORD}</strong> (exact capitals/symbols). Quick sign-in still needs{" "}
+                <code>APP_DEVELOPER_MODE</code> or Spring <code>dev</code> profile on the API.
+              </>
+            ) : (
+              <>
+                Test admin access: <strong>{DEMO_LOCAL_ADMIN_EMAIL}</strong> / <strong>{DEMO_LOCAL_ADMIN_PASSWORD}</strong>.
+              </>
+            )}
           </p>
-
-          <p className="auth-switch-copy">
-            Need access?{" "}
-            <Link className="text-link" to="/signup">
-              Create an account
-            </Link>
-          </p>
-
-          {isLoading ? <LoadingSpinner label="Authenticating your access..." /> : null}
         </>
       )}
+
+      <p className="auth-switch-copy">
+        Need access?{" "}
+        <Link className="text-link" to="/signup">
+          Create an account
+        </Link>
+      </p>
+
+      {isLoading ? <LoadingSpinner label="Authenticating your access..." /> : null}
     </div>
   );
 }

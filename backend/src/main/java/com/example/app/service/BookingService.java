@@ -3,9 +3,6 @@ package com.example.app.service;
 import com.example.app.dto.BookingAvailabilityResponse;
 import com.example.app.dto.BookingRequest;
 import com.example.app.dto.BookingResponse;
-import com.example.app.dto.admin.AdminBookingRowResponse;
-import com.example.app.dto.admin.AdminBookingSummaryResponse;
-import com.example.app.entity.BookingStatus;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -17,25 +14,15 @@ public interface BookingService {
 
     BookingResponse createBooking(BookingRequest request);
 
-    Page<BookingResponse> getAllBookings(
-            Optional<String> resourceId,
-            Optional<String> userId,
-            Optional<LocalDate> date,
-            Pageable pageable);
+    Page<BookingResponse> getAllBookings(Optional<Long> resourceId, Optional<Long> userId, Optional<LocalDate> date, Pageable pageable);
 
-    List<BookingResponse> getBookingsByUser(String userId);
+    List<BookingResponse> getBookingsByUser(Long userId);
 
-    List<BookingResponse> getPendingBookings();
+    BookingResponse approveBooking(Long bookingId);
 
-    AdminBookingSummaryResponse getAdminBookingSummary();
+    BookingResponse rejectBooking(Long bookingId, String reason);
 
-    Page<AdminBookingRowResponse> getAdminBookings(Optional<BookingStatus> status, Pageable pageable);
+    BookingResponse cancelBooking(Long bookingId);
 
-    BookingResponse approveBooking(String bookingId);
-
-    BookingResponse rejectBooking(String bookingId, String reason);
-
-    BookingResponse cancelBooking(String bookingId);
-
-    BookingAvailabilityResponse checkAvailability(String resourceId, LocalDateTime startTime, LocalDateTime endTime);
+    BookingAvailabilityResponse checkAvailability(Long resourceId, LocalDateTime startTime, LocalDateTime endTime);
 }

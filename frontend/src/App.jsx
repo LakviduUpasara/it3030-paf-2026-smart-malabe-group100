@@ -1,51 +1,31 @@
 import { BrowserRouter, useLocation } from "react-router-dom";
-import { AuthProvider } from "./context/AuthProvider";
+import { AuthProvider } from "./context/AuthContext";
 import Navbar from "./components/Navbar";
-import GoogleTwoFactorPromptModal from "./components/GoogleTwoFactorPromptModal";
 import TwoFactorSetupReminder from "./components/TwoFactorSetupReminder";
 import { useAuth } from "./hooks/useAuth";
 import AppRoutes from "./routes/AppRoutes";
-
-function GoogleTwoFactorPromptHost() {
-  const { isAuthenticated, googleTwoFactorPrompt } = useAuth();
-  const location = useLocation();
-  if (!isAuthenticated || !googleTwoFactorPrompt) {
-    return null;
-  }
-  if (location.pathname === "/login" || location.pathname === "/signup") {
-    return null;
-  }
-  return <GoogleTwoFactorPromptModal />;
-}
 
 function AppLayout() {
   const { isAuthenticated } = useAuth();
   const location = useLocation();
   const isAdminWorkspace = isAuthenticated && location.pathname.startsWith("/admin");
-  const isUserWorkspace =
-    isAuthenticated &&
-    (location.pathname === "/dashboard" ||
-      location.pathname === "/bookings" ||
-      location.pathname.startsWith("/bookings/") ||
-      location.pathname === "/tickets" ||
-      location.pathname === "/notifications" ||
-      location.pathname === "/settings/security");
   const isPublicMarketingRoute =
     !isAuthenticated &&
     ["/", "/login", "/signup", "/approval-pending"].includes(location.pathname);
-  const isTicketsWideLayout =
-    isAuthenticated &&
-    (location.pathname === "/tickets" ||
-      location.pathname === "/technician" ||
-      location.pathname === "/technician/resolved" ||
-      location.pathname === "/admin/tickets");
-  const isAdminTicketsPage = isAuthenticated && location.pathname === "/admin/tickets";
 
   const shellClass = ["app-shell", isPublicMarketingRoute ? "app-shell-auth" : ""]
     .filter(Boolean)
     .join(" ");
 
-  if (isAdminWorkspace || isUserWorkspace) {
+  const mainClass = [
+    "page-shell",
+    isPublicMarketingRoute ? "page-shell-auth" : "",
+    isAdminWorkspace ? "page-shell-admin" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  if (isAdminWorkspace) {
     return (
       <div className={shellClass}>
         <AppRoutes />
@@ -58,17 +38,7 @@ function AppLayout() {
       <div className="app-background" />
       <Navbar />
       <TwoFactorSetupReminder />
-      <main
-        className={
-          isPublicMarketingRoute
-            ? "page-shell page-shell-auth"
-            : isAdminTicketsPage
-              ? "page-shell page-shell--tickets-wide page-shell--admin-tickets"
-              : isTicketsWideLayout
-                ? "page-shell page-shell--tickets-wide"
-                : "page-shell"
-        }
-      >
+      <main className={mainClass}>
         <AppRoutes />
       </main>
     </div>
@@ -77,17 +47,11 @@ function AppLayout() {
 
 function App() {
   return (
-    <BrowserRouter
-      future={{
-        v7_startTransition: true,
-        v7_relativeSplatPath: true,
-      }}
-    >
-      <AuthProvider>
+    <AuthProvider>
+      <BrowserRouter>
         <AppLayout />
-        <GoogleTwoFactorPromptHost />
-      </AuthProvider>
-    </BrowserRouter>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
 

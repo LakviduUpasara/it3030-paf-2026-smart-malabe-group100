@@ -27,8 +27,6 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // CORS preflight must not require auth (browser sends OPTIONS without Bearer token).
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers("/h2-console/**").permitAll()
-                        .requestMatchers("/api/health/**", "/api/v1/health/**").permitAll()
                         .requestMatchers("/api/v1/health/**", "/api/v1/auth/**").permitAll()
                         // Public sign-up: load the same faculty/degree/intake/module metadata as the admin console forms.
                         .requestMatchers(HttpMethod.GET, "/api/v1/faculties", "/api/v1/faculties/**")
@@ -47,22 +45,6 @@ public class SecurityConfig {
                         // confused with other admin APIs (e.g. /api/v1/admin/...).
                         .requestMatchers("/api/v1/admins", "/api/v1/admins/**")
                                 .hasAnyRole("ADMIN", "LOST_ITEM_ADMIN")
-                        .requestMatchers("/api/v1/technician/**").hasRole("TECHNICIAN")
-                        // Campus resources catalogue: reads for any signed-in user; writes for ops roles only.
-                        .requestMatchers(HttpMethod.POST, "/api/v1/resources")
-                                .hasAnyRole("ADMIN", "LOST_ITEM_ADMIN", "MANAGER")
-                        .requestMatchers(HttpMethod.PUT, "/api/v1/resources/**")
-                                .hasAnyRole("ADMIN", "LOST_ITEM_ADMIN", "MANAGER")
-                        .requestMatchers(HttpMethod.DELETE, "/api/v1/resources/**")
-                                .hasAnyRole("ADMIN", "LOST_ITEM_ADMIN", "MANAGER")
-                        // Booking approval queue (Module B).
-                        .requestMatchers(HttpMethod.GET, "/api/v1/bookings/pending")
-                                .hasAnyRole("ADMIN", "LOST_ITEM_ADMIN", "MANAGER")
-                        .requestMatchers(HttpMethod.PUT, "/api/v1/bookings/*/approve", "/api/v1/bookings/*/reject")
-                                .hasAnyRole("ADMIN", "LOST_ITEM_ADMIN", "MANAGER")
-                        // Incident desk: campus managers may triage alongside platform admins.
-                        .requestMatchers("/api/v1/admin/tickets", "/api/v1/admin/tickets/**")
-                                .hasAnyRole("ADMIN", "LOST_ITEM_ADMIN", "MANAGER")
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/lecturers", "/api/v1/lecturers/**")
                                 .hasAnyRole("ADMIN", "LOST_ITEM_ADMIN", "MANAGER")
@@ -93,8 +75,6 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/catalog/modules/**")
                                 .hasAnyRole("ADMIN", "LOST_ITEM_ADMIN", "LECTURER")
                         .anyRequest().authenticated())
-                .headers(headers -> headers
-                        .frameOptions(frameOptions -> frameOptions.disable()))
                 .addFilterBefore(sessionAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(firstLoginSessionAuthorizationFilter, SessionAuthenticationFilter.class)
                 .httpBasic(AbstractHttpConfigurer::disable)
@@ -103,5 +83,3 @@ public class SecurityConfig {
         return http.build();
     }
 }
-
-

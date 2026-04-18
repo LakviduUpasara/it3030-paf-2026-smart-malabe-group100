@@ -104,7 +104,6 @@ public class LecturerRegistrationService {
                         .role(Role.LECTURER)
                         .status(mapUserStatus(status))
                         .provider(AuthProvider.LOCAL)
-                        .twoFactorEnabled(false)
                         .mustChangePassword(true)
                         .lecturerRef(lecturer.getId())
                         .build();

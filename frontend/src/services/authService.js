@@ -16,20 +16,6 @@ function validateEmail(email, fallbackMessage) {
   }
 }
 
-/** Backend may send enum as string or `{ name: "AUTHENTICATED" }` depending on serializers. */
-export function normalizeAuthStatus(raw) {
-  if (raw == null) {
-    return undefined;
-  }
-  if (typeof raw === "string") {
-    return raw.trim();
-  }
-  if (typeof raw === "object" && raw !== null && typeof raw.name === "string") {
-    return raw.name.trim();
-  }
-  return String(raw);
-}
-
 export async function loginWithCredentials({ email, password }) {
   const normalizedEmail = normalizeEmail(email || "");
 
@@ -167,17 +153,9 @@ export async function changeFirstLoginPassword({ currentPassword, newPassword })
   }
 }
 
-export async function selectFirstLoginTwoFactor({ method, skipTwoFactor }) {
-  if (skipTwoFactor) {
-    try {
-      const response = await api.post("/auth/first-login/select-2fa-method", { skipTwoFactor: true });
-      return response.data;
-    } catch (error) {
-      throw createServiceError(error, "Unable to skip 2-step verification.");
-    }
-  }
+export async function selectFirstLoginTwoFactor({ method }) {
   if (!method) {
-    throw new Error("Choose email or authenticator verification, or skip 2-step verification.");
+    throw new Error("Choose email or authenticator verification.");
   }
   try {
     const response = await api.post("/auth/first-login/select-2fa-method", { method });
@@ -261,8 +239,7 @@ export async function logout() {
 
 export async function fetchHealthStatus() {
   try {
-    // Resolve to /api/health (not /api/v1/health) so older backends that only expose /api/health still work.
-    const response = await api.get("../health");
+    const response = await api.get("/health");
     return response.data;
   } catch (error) {
     throw createServiceError(error, "Unable to reach the campus API.");

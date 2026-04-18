@@ -36,7 +36,7 @@ public class AcademicSessionController {
     public List<AcademicSessionResponse> getAllAcademicSessions(
             @RequestParam(required = false) Long moduleOfferingId,
             @RequestParam(required = false) Long studentGroupId,
-            @RequestParam(required = false) String resourceId,
+            @RequestParam(required = false) Long resourceId,
             @RequestParam(required = false) LocalDate sessionDate) {
         return academicSessionService.getAllAcademicSessions(
                 moduleOfferingId,

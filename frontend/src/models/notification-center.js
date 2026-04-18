@@ -184,20 +184,12 @@ export function buildNotificationAudience(announcement) {
   return base;
 }
 
-/**
- * Parses comma/semicolon-separated role tokens. Returns [] when empty (caller may apply defaults).
- */
-export function parseAudienceRolesFromLabel(label) {
+function parseAudienceRoles(label) {
   const s = norm(label);
-  if (!s) return [];
+  if (!s) return ["STUDENT"];
   return s
     .split(/[,;/]+/)
     .map((x) => x.trim())
     .filter(Boolean)
     .map((x) => x.toUpperCase().replace(/\s+/g, "_"));
-}
-
-function parseAudienceRoles(label) {
-  const parsed = parseAudienceRolesFromLabel(label);
-  return parsed.length ? parsed : ["STUDENT"];
 }

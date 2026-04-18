@@ -14,25 +14,14 @@ import lombok.Setter;
 @Builder
 public class BookingAvailabilityResponse {
 
-    /** e.g. AVAILABLE, OUT_OF_SERVICE, OUTSIDE_WEEKLY_WINDOW, APPROVED_BOOKING_OVERLAP */
-    private String reasonCode;
-
-    private String resourceId;
+    private Long resourceId;
     private LocalDateTime startTime;
     private LocalDateTime endTime;
     private boolean available;
     private String message;
 
-    public String getReasonCode() {
-        return reasonCode;
-    }
-
-    public void setReasonCode(String reasonCode) {
-        this.reasonCode = reasonCode;
-    }
-
-    public String getResourceId() { return resourceId; }
-    public void setResourceId(String resourceId) { this.resourceId = resourceId; }
+    public Long getResourceId() { return resourceId; }
+    public void setResourceId(Long resourceId) { this.resourceId = resourceId; }
     public LocalDateTime getStartTime() { return startTime; }
     public void setStartTime(LocalDateTime startTime) { this.startTime = startTime; }
     public LocalDateTime getEndTime() { return endTime; }
