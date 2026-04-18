@@ -22,6 +22,7 @@ import com.example.app.exception.ApiException;
 import com.example.app.repository.IncidentTicketRepository;
 import com.example.app.repository.UserAccountRepository;
 import com.example.app.security.AuthenticatedUser;
+import com.example.app.service.NotificationMessageBuilder;
 import com.example.app.service.NotificationService;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -44,6 +45,7 @@ public class IncidentTicketServiceImpl implements IncidentTicketService {
     private final IncidentTicketRepository incidentTicketRepository;
     private final UserAccountRepository userAccountRepository;
     private final NotificationService notificationService;
+    private final NotificationMessageBuilder messageBuilder;
 
     @Override
     public IncidentTicketResponse createTicket(AuthenticatedUser reporter, CreateTicketRequest request) {
@@ -68,15 +70,17 @@ public class IncidentTicketServiceImpl implements IncidentTicketService {
                     .filter(u -> u.getStatus() == AccountStatus.ACTIVE)
                     .map(UserAccount::getId)
                     .toList();
-            notificationService.deliverMany(
-                    adminIds,
-                    NotificationType.TICKET_CREATED,
-                    NotificationCategory.TICKET,
-                    "New incident ticket",
-                    "Ticket " + saved.getReference() + ": " + saved.getTitle(),
-                    NotificationRelatedEntity.TICKET,
-                    saved.getId(),
-                    reporter.getUserId());
+            UserAccount reporterAccount = userAccountRepository.findById(reporter.getUserId()).orElse(null);
+            NotificationMessageBuilder.Text text = messageBuilder.ticketCreated(saved, reporterAccount);
+            notificationService.deliverMany(adminIds, NotificationService.DeliverRequest.builder()
+                    .type(NotificationType.TICKET_CREATED)
+                    .category(NotificationCategory.TICKET)
+                    .title(text.title())
+                    .message(text.message())
+                    .relatedEntityType(NotificationRelatedEntity.TICKET)
+                    .relatedEntityId(saved.getId())
+                    .actor(reporterAccount)
+                    .build());
         } catch (RuntimeException ignored) {
             // notification failures must not break ticket creation
         }
@@ -122,24 +126,32 @@ public class IncidentTicketServiceImpl implements IncidentTicketService {
         IncidentTicket saved = incidentTicketRepository.save(ticket);
 
         try {
-            notificationService.deliver(
-                    assignee.getId(),
-                    NotificationType.TICKET_ASSIGNED,
-                    NotificationCategory.TICKET,
-                    "Ticket assigned to you",
-                    "Ticket " + saved.getReference() + ": " + saved.getTitle(),
-                    NotificationRelatedEntity.TICKET,
-                    saved.getId(),
-                    admin.getUserId());
-            notificationService.deliver(
-                    saved.getReporterUserId(),
-                    NotificationType.TICKET_STATUS_CHANGED,
-                    NotificationCategory.TICKET,
-                    "Your ticket is now " + saved.getStatus(),
-                    "Ticket " + saved.getReference() + " has been assigned to a technician.",
-                    NotificationRelatedEntity.TICKET,
-                    saved.getId(),
-                    admin.getUserId());
+            UserAccount adminAccount = userAccountRepository.findById(admin.getUserId()).orElse(null);
+            NotificationMessageBuilder.Text assigned =
+                    messageBuilder.ticketAssigned(saved, assignee, adminAccount);
+            notificationService.deliver(NotificationService.DeliverRequest.builder()
+                    .recipientUserId(assignee.getId())
+                    .type(NotificationType.TICKET_ASSIGNED)
+                    .category(NotificationCategory.TICKET)
+                    .title(assigned.title())
+                    .message(assigned.message())
+                    .relatedEntityType(NotificationRelatedEntity.TICKET)
+                    .relatedEntityId(saved.getId())
+                    .actor(adminAccount)
+                    .build());
+
+            NotificationMessageBuilder.Text statusForReporter =
+                    messageBuilder.ticketStatusChanged(saved, "OPEN", adminAccount);
+            notificationService.deliver(NotificationService.DeliverRequest.builder()
+                    .recipientUserId(saved.getReporterUserId())
+                    .type(NotificationType.TICKET_STATUS_CHANGED)
+                    .category(NotificationCategory.TICKET)
+                    .title(statusForReporter.title())
+                    .message(statusForReporter.message())
+                    .relatedEntityType(NotificationRelatedEntity.TICKET)
+                    .relatedEntityId(saved.getId())
+                    .actor(adminAccount)
+                    .build());
         } catch (RuntimeException ignored) {
             // best-effort
         }
@@ -179,9 +191,10 @@ public class IncidentTicketServiceImpl implements IncidentTicketService {
                     "Use POST /api/v1/technician/tickets/{id}/actions/resolve to resolve this ticket."
             );
         }
+        IncidentTicketStatus prev = ticket.getStatus();
         ticket.setStatus(next);
         IncidentTicket saved = incidentTicketRepository.save(ticket);
-        notifyStatusChange(saved, technician.getUserId());
+        notifyStatusChange(saved, technician.getUserId(), prev.name());
         return withNames(saved);
     }
 
@@ -212,15 +225,19 @@ public class IncidentTicketServiceImpl implements IncidentTicketService {
         }
         IncidentTicket saved = incidentTicketRepository.save(ticket);
         try {
-            notificationService.deliver(
-                    saved.getReporterUserId(),
-                    NotificationType.TICKET_COMMENTED,
-                    NotificationCategory.TICKET,
-                    "New update on your ticket",
-                    "Ticket " + saved.getReference() + ": " + note.getContent(),
-                    NotificationRelatedEntity.COMMENT,
-                    saved.getId(),
-                    technician.getUserId());
+            UserAccount actor = userAccountRepository.findById(technician.getUserId()).orElse(null);
+            NotificationMessageBuilder.Text text =
+                    messageBuilder.ticketCommented(saved, note, actor, false);
+            notificationService.deliver(NotificationService.DeliverRequest.builder()
+                    .recipientUserId(saved.getReporterUserId())
+                    .type(NotificationType.TICKET_COMMENTED)
+                    .category(NotificationCategory.TICKET)
+                    .title(text.title())
+                    .message(text.message())
+                    .relatedEntityType(NotificationRelatedEntity.COMMENT)
+                    .relatedEntityId(saved.getId())
+                    .actor(actor)
+                    .build());
         } catch (RuntimeException ignored) {
         }
         return withNames(saved);
@@ -251,27 +268,52 @@ public class IncidentTicketServiceImpl implements IncidentTicketService {
         if (ticket.getStatus() == IncidentTicketStatus.RESOLVED || ticket.getStatus() == IncidentTicketStatus.CLOSED) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Ticket is already resolved or closed.");
         }
+        IncidentTicketStatus prev = ticket.getStatus();
         ticket.setStatus(IncidentTicketStatus.RESOLVED);
         ticket.setResolvedAt(LocalDateTime.now());
         if (request != null && StringUtils.hasText(request.getResolutionNotes())) {
             ticket.setResolutionNotes(request.getResolutionNotes().trim());
         }
         IncidentTicket saved = incidentTicketRepository.save(ticket);
-        notifyStatusChange(saved, technician.getUserId());
+        try {
+            UserAccount actor = userAccountRepository.findById(technician.getUserId()).orElse(null);
+            NotificationMessageBuilder.Text text = messageBuilder.ticketResolved(saved, actor);
+            notificationService.deliver(NotificationService.DeliverRequest.builder()
+                    .recipientUserId(saved.getReporterUserId())
+                    .type(NotificationType.TICKET_RESOLVED)
+                    .category(NotificationCategory.TICKET)
+                    .title(text.title())
+                    .message(text.message())
+                    .relatedEntityType(NotificationRelatedEntity.TICKET)
+                    .relatedEntityId(saved.getId())
+                    .actor(actor)
+                    .build());
+        } catch (RuntimeException ignored) {
+            // best-effort; ignore fallback so the caller still gets the resolved ticket.
+            // Previous status captured for future extensions:
+            String prevName = prev != null ? prev.name() : null;
+            if (prevName != null) {
+                // (kept for log readability in IDEs)
+            }
+        }
         return withNames(saved);
     }
 
-    private void notifyStatusChange(IncidentTicket saved, String actorUserId) {
+    private void notifyStatusChange(IncidentTicket saved, String actorUserId, String previousStatus) {
         try {
-            notificationService.deliver(
-                    saved.getReporterUserId(),
-                    NotificationType.TICKET_STATUS_CHANGED,
-                    NotificationCategory.TICKET,
-                    "Ticket status: " + saved.getStatus(),
-                    "Your ticket " + saved.getReference() + " is now " + saved.getStatus() + ".",
-                    NotificationRelatedEntity.TICKET,
-                    saved.getId(),
-                    actorUserId);
+            UserAccount actor = userAccountRepository.findById(actorUserId).orElse(null);
+            NotificationMessageBuilder.Text text =
+                    messageBuilder.ticketStatusChanged(saved, previousStatus, actor);
+            notificationService.deliver(NotificationService.DeliverRequest.builder()
+                    .recipientUserId(saved.getReporterUserId())
+                    .type(NotificationType.TICKET_STATUS_CHANGED)
+                    .category(NotificationCategory.TICKET)
+                    .title(text.title())
+                    .message(text.message())
+                    .relatedEntityType(NotificationRelatedEntity.TICKET)
+                    .relatedEntityId(saved.getId())
+                    .actor(actor)
+                    .build());
         } catch (RuntimeException ignored) {
         }
     }

@@ -35,12 +35,34 @@ function toError(error, fallback) {
   return err;
 }
 
-export async function getMyNotifications({ unread = false, page = 0, size = 20 } = {}) {
+/**
+ * @param {{ unread?: boolean, page?: number, size?: number, category?: string, type?: string }} params
+ */
+export async function getMyNotifications({ unread = false, page = 0, size = 20, category, type } = {}) {
   try {
-    const res = await api.get("/notifications", { params: { unread, page, size } });
+    const res = await api.get("/notifications", {
+      params: {
+        unread,
+        page,
+        size,
+        ...(category ? { category } : {}),
+        ...(type ? { type } : {}),
+      },
+    });
     return unwrap(res);
   } catch (e) {
     throw toError(e, "Unable to load notifications.");
+  }
+}
+
+/** Optimised endpoint for the bell dropdown: returns the latest N items (max 10). */
+export async function getRecentNotifications(limit = 6) {
+  try {
+    const res = await api.get("/notifications/recent", { params: { limit } });
+    const body = unwrap(res);
+    return Array.isArray(body) ? body : [];
+  } catch (e) {
+    throw toError(e, "Unable to load recent notifications.");
   }
 }
 

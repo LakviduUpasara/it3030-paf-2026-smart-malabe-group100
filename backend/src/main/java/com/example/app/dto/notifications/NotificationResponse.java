@@ -29,6 +29,9 @@ public class NotificationResponse {
     private LocalDateTime readAt;
     private LocalDateTime createdAt;
     private String createdBy;
+    private String actorUserId;
+    private String actorNameSnapshot;
+    private String actorRoleSnapshot;
     private String metadataJson;
 
     public static NotificationResponse from(Notification n) {
@@ -45,6 +48,9 @@ public class NotificationResponse {
                 .readAt(n.getReadAt())
                 .createdAt(n.getCreatedAt())
                 .createdBy(n.getCreatedBy())
+                .actorUserId(n.getActorUserId())
+                .actorNameSnapshot(n.getActorNameSnapshot())
+                .actorRoleSnapshot(n.getActorRoleSnapshot())
                 .metadataJson(n.getMetadataJson())
                 .build();
     }

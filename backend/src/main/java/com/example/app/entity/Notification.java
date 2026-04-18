@@ -67,6 +67,15 @@ public class Notification {
     /** UserAccount id of the actor who triggered the notification (or SYSTEM for automatic). */
     private String createdBy;
 
+    /** UserAccount id of the actor who performed the action (nullable for SYSTEM events). */
+    private String actorUserId;
+
+    /** Actor display name at delivery time — stored so the message stays readable if the account changes later. */
+    private String actorNameSnapshot;
+
+    /** Actor role at delivery time (e.g. ADMIN, TECHNICIAN, USER). */
+    private String actorRoleSnapshot;
+
     /** Extensible JSON payload (e.g. booking.resourceName, ticket.title) for the UI. */
     private String metadataJson;
 }

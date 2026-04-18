@@ -22,6 +22,8 @@ import com.example.app.exception.NotFoundException;
 import com.example.app.repository.BookingRepository;
 import com.example.app.repository.ResourceRepository;
 import com.example.app.repository.UserAccountRepository;
+import com.example.app.security.AuthenticatedUser;
+import com.example.app.service.NotificationMessageBuilder;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -56,6 +58,7 @@ public class BookingServiceImpl implements BookingService {
     private final UserAccountRepository userAccountRepository;
     private final MongoTemplate mongoTemplate;
     private final NotificationService notificationService;
+    private final NotificationMessageBuilder messageBuilder;
 
     @Override
     @Transactional
@@ -165,16 +168,19 @@ public class BookingServiceImpl implements BookingService {
         bookingRepository.save(booking);
         logger.info("Booking {} approved successfully", bookingId);
 
-        String resourceName = resource != null ? resource.getName() : booking.getResourceId();
-        notificationService.deliver(
-                booking.getUserId(),
-                NotificationType.BOOKING_APPROVED,
-                NotificationCategory.BOOKING,
-                "Booking approved",
-                "Your booking for " + safe(resourceName) + " has been approved.",
-                NotificationRelatedEntity.BOOKING,
-                booking.getId(),
-                null);
+        UserAccount actor = currentActor();
+        NotificationMessageBuilder.Text approvedText =
+                messageBuilder.bookingApproved(booking, resource, actor);
+        notificationService.deliver(NotificationService.DeliverRequest.builder()
+                .recipientUserId(booking.getUserId())
+                .type(NotificationType.BOOKING_APPROVED)
+                .category(NotificationCategory.BOOKING)
+                .title(approvedText.title())
+                .message(approvedText.message())
+                .relatedEntityType(NotificationRelatedEntity.BOOKING)
+                .relatedEntityId(booking.getId())
+                .actor(actor)
+                .build());
 
         return mapToResponse(booking);
     }
@@ -204,16 +210,19 @@ public class BookingServiceImpl implements BookingService {
         logger.info("Booking {} rejected successfully with reason: {}", bookingId, reason);
 
         Resource bookingResource = resourceRepository.findById(booking.getResourceId()).orElse(null);
-        String resourceName = bookingResource != null ? bookingResource.getName() : booking.getResourceId();
-        notificationService.deliver(
-                booking.getUserId(),
-                NotificationType.BOOKING_REJECTED,
-                NotificationCategory.BOOKING,
-                "Booking rejected",
-                "Your booking for " + safe(resourceName) + " was rejected. Reason: " + reason.trim(),
-                NotificationRelatedEntity.BOOKING,
-                booking.getId(),
-                null);
+        UserAccount actor = currentActor();
+        NotificationMessageBuilder.Text rejectedText =
+                messageBuilder.bookingRejected(booking, bookingResource, actor, reason);
+        notificationService.deliver(NotificationService.DeliverRequest.builder()
+                .recipientUserId(booking.getUserId())
+                .type(NotificationType.BOOKING_REJECTED)
+                .category(NotificationCategory.BOOKING)
+                .title(rejectedText.title())
+                .message(rejectedText.message())
+                .relatedEntityType(NotificationRelatedEntity.BOOKING)
+                .relatedEntityId(booking.getId())
+                .actor(actor)
+                .build());
 
         return mapToResponse(booking);
     }
@@ -221,27 +230,38 @@ public class BookingServiceImpl implements BookingService {
     private void notifyAdminsBookingCreated(Booking booking) {
         try {
             Resource resource = resourceRepository.findById(booking.getResourceId()).orElse(null);
-            String resourceName = resource != null ? resource.getName() : booking.getResourceId();
+            UserAccount requester = userAccountRepository.findById(booking.getUserId()).orElse(null);
             List<String> admins = userAccountRepository.findByRoleOrderByFullNameAsc(Role.ADMIN).stream()
                     .filter(u -> u.getStatus() == AccountStatus.ACTIVE)
                     .map(UserAccount::getId)
                     .toList();
-            notificationService.deliverMany(
-                    admins,
-                    NotificationType.BOOKING_CREATED,
-                    NotificationCategory.BOOKING,
-                    "New booking request",
-                    "A new booking request for " + safe(resourceName) + " is awaiting approval.",
-                    NotificationRelatedEntity.BOOKING,
-                    booking.getId(),
-                    booking.getUserId());
+            NotificationMessageBuilder.Text text =
+                    messageBuilder.bookingCreated(booking, resource, requester);
+            notificationService.deliverMany(admins, NotificationService.DeliverRequest.builder()
+                    .type(NotificationType.BOOKING_CREATED)
+                    .category(NotificationCategory.BOOKING)
+                    .title(text.title())
+                    .message(text.message())
+                    .relatedEntityType(NotificationRelatedEntity.BOOKING)
+                    .relatedEntityId(booking.getId())
+                    .actor(requester)
+                    .build());
         } catch (RuntimeException e) {
             logger.warn("Failed to notify admins about new booking {}: {}", booking.getId(), e.getMessage());
         }
     }
 
-    private static String safe(String v) {
-        return v == null ? "" : v;
+    private UserAccount currentActor() {
+        try {
+            var ctx = org.springframework.security.core.context.SecurityContextHolder.getContext();
+            var auth = ctx != null ? ctx.getAuthentication() : null;
+            if (auth == null || !(auth.getPrincipal() instanceof AuthenticatedUser au)) {
+                return null;
+            }
+            return userAccountRepository.findById(au.getUserId()).orElse(null);
+        } catch (RuntimeException ignored) {
+            return null;
+        }
     }
 
     @Override
