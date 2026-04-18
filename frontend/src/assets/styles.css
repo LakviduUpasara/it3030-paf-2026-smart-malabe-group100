@@ -4487,6 +4487,11 @@ a {
   overscroll-behavior: contain;
 }
 
+/** Stacked above a modal that is already open (e.g. technician detail + return flow). */
+.modal-backdrop--stack {
+  z-index: 50;
+}
+
 .modal-panel {
   width: min(620px, 100%);
   max-height: calc(100vh - 2rem);

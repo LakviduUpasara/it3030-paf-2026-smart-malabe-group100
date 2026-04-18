@@ -15,7 +15,11 @@ import {
 } from "../services/ticketService";
 import { parseTicketDescription } from "../utils/ticketDescription";
 import { formatDateTime, toToken } from "../utils/formatters";
-import { formatWithdrawalReasonForDisplay } from "../utils/withdrawalReason";
+import {
+  WITHDRAWAL_REASON_OPTIONS,
+  formatWithdrawalReasonForDisplay,
+} from "../utils/withdrawalReason";
+import { isTechnicianAcceptanceRejected } from "../utils/technicianTicketFlow";
 
 function formatTicketStatusLabel(status) {
   const raw = String(status || "OPEN").trim().toUpperCase().replace(/\s+/g, "_");
@@ -86,6 +90,151 @@ const VALID_ADMIN_SECTIONS = new Set([
   "technicians",
 ]);
 
+const TICKET_LIST_SECTIONS = new Set(["open", "assigned", "resolved", "withdrawn"]);
+
+function buildTicketSearchText(ticket) {
+  const parsed = parseTicketDescription(ticket?.description || "");
+  const withdrawalDisplay = formatWithdrawalReasonForDisplay(ticket);
+  const parts = [
+    ticket?.id,
+    ticket?.title,
+    ticket?.createdByUsername,
+    ticket?.createdByUserId,
+    ticket?.assignedTechnicianUsername,
+    ticket?.assignedTechnicianUserId,
+    ticket?.categoryId,
+    ticket?.subCategoryId,
+    parsed.content,
+    parsed.location,
+    parsed.priority,
+    parsed.contactMethod,
+    parsed.contactDetails,
+    ticket?.description,
+    ticket?.withdrawalReasonCode,
+    ticket?.withdrawalReasonNote,
+    withdrawalDisplay,
+  ];
+  return parts
+    .filter((x) => x != null && String(x).trim() !== "")
+    .map((x) => String(x))
+    .join(" ")
+    .toLowerCase();
+}
+
+function ticketMatchesSearchQuery(ticket, query) {
+  const q = String(query || "")
+    .trim()
+    .toLowerCase();
+  if (!q) return true;
+  return buildTicketSearchText(ticket).includes(q);
+}
+
+/** Refine within the current sidebar bucket (each subsection has its own options). */
+function passesSubsectionRefine(section, ticket, refine) {
+  if (!refine || refine === "all") return true;
+  const s = normalizeTicketStatus(ticket?.status);
+
+  if (section === "open") {
+    // Desk queue: new OPEN tickets vs returned after technician decline (API keeps status OPEN + technicianAcceptance REJECTED).
+    if (refine === "OPEN") {
+      return s === "OPEN" && !isTechnicianAcceptanceRejected(ticket);
+    }
+    if (refine === "REJECTED") {
+      return s === "REJECTED" || isTechnicianAcceptanceRejected(ticket);
+    }
+    return true;
+  }
+
+  if (section === "assigned") {
+    return s === refine;
+  }
+
+  if (section === "resolved") {
+    const p = String(parseTicketDescription(ticket?.description).priority || "Normal")
+      .trim()
+      .toLowerCase();
+    return p === String(refine).trim().toLowerCase();
+  }
+
+  if (section === "withdrawn") {
+    if (refine === "UNSPECIFIED") {
+      const code = ticket?.withdrawalReasonCode;
+      return code == null || String(code).trim() === "";
+    }
+    return String(ticket?.withdrawalReasonCode || "") === refine;
+  }
+
+  return true;
+}
+
+function createEmptyListUi() {
+  return {
+    open: { search: "", refine: "all" },
+    assigned: { search: "", refine: "all" },
+    resolved: { search: "", refine: "all" },
+    withdrawn: { search: "", refine: "all" },
+  };
+}
+
+function AdminTicketRefineSelect({ section, value, onChange }) {
+  if (section === "open") {
+    return (
+      <label className="my-tickets-filter-field">
+        <span>Queue</span>
+        <select value={value} onChange={(event) => onChange(event.target.value)}>
+          <option value="all">All in this queue</option>
+          <option value="OPEN">Open only</option>
+          <option value="REJECTED">Declined by technician</option>
+        </select>
+      </label>
+    );
+  }
+  if (section === "assigned") {
+    return (
+      <label className="my-tickets-filter-field">
+        <span>Workflow</span>
+        <select value={value} onChange={(event) => onChange(event.target.value)}>
+          <option value="all">All assigned</option>
+          <option value="IN_PROGRESS">In progress</option>
+          <option value="ASSIGNED">Awaiting technician</option>
+          <option value="ACCEPTED">Accepted</option>
+        </select>
+      </label>
+    );
+  }
+  if (section === "resolved") {
+    return (
+      <label className="my-tickets-filter-field">
+        <span>Priority</span>
+        <select value={value} onChange={(event) => onChange(event.target.value)}>
+          <option value="all">All priorities</option>
+          <option value="low">Low</option>
+          <option value="normal">Normal</option>
+          <option value="high">High</option>
+          <option value="critical">Critical</option>
+        </select>
+      </label>
+    );
+  }
+  if (section === "withdrawn") {
+    return (
+      <label className="my-tickets-filter-field">
+        <span>Withdrawal type</span>
+        <select value={value} onChange={(event) => onChange(event.target.value)}>
+          <option value="all">All withdrawals</option>
+          {WITHDRAWAL_REASON_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+          <option value="UNSPECIFIED">Reason not recorded</option>
+        </select>
+      </label>
+    );
+  }
+  return null;
+}
+
 function ManageTicketsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -120,6 +269,9 @@ function ManageTicketsPage() {
   const [assignSubmitting, setAssignSubmitting] = useState(false);
   const [assignActionError, setAssignActionError] = useState("");
   const [assignIdCopied, setAssignIdCopied] = useState(false);
+
+  /** Search + refine are independent per sidebar subsection so switching tabs does not lose work. */
+  const [listUiBySection, setListUiBySection] = useState(createEmptyListUi);
 
   const [requesterPreviewById, setRequesterPreviewById] = useState({});
   const [technicianPreviewById, setTechnicianPreviewById] = useState({});
@@ -181,7 +333,7 @@ function ManageTicketsPage() {
     };
   }, []);
 
-  const filteredTickets = useMemo(() => {
+  const sectionBucketTickets = useMemo(() => {
     if (activeSection === "categories" || activeSection === "technicians") {
       return [];
     }
@@ -198,6 +350,36 @@ function ManageTicketsPage() {
       return s === want;
     });
   }, [tickets, activeSection]);
+
+  const listUi = TICKET_LIST_SECTIONS.has(activeSection)
+    ? listUiBySection[activeSection]
+    : { search: "", refine: "all" };
+
+  const visibleTickets = useMemo(() => {
+    if (!TICKET_LIST_SECTIONS.has(activeSection)) {
+      return [];
+    }
+    const { search, refine } = listUiBySection[activeSection];
+    return sectionBucketTickets.filter(
+      (t) =>
+        passesSubsectionRefine(activeSection, t, refine) && ticketMatchesSearchQuery(t, search),
+    );
+  }, [activeSection, sectionBucketTickets, listUiBySection]);
+
+  const patchListUi = (sectionId, patch) => {
+    setListUiBySection((prev) => ({
+      ...prev,
+      [sectionId]: { ...prev[sectionId], ...patch },
+    }));
+  };
+
+  const clearListFiltersForSection = (sectionId) => {
+    patchListUi(sectionId, { search: "", refine: "all" });
+  };
+
+  const hasActiveListFilters =
+    TICKET_LIST_SECTIONS.has(activeSection) &&
+    (listUi.search.trim() !== "" || listUi.refine !== "all");
 
   useEffect(() => {
     let active = true;
@@ -475,6 +657,8 @@ function ManageTicketsPage() {
 
   const showTicketList = activeSection !== "categories" && activeSection !== "technicians";
 
+  const activeSectionMeta = ADMIN_TICKET_SECTIONS.find((s) => s.id === activeSection);
+
   return (
     <>
       <div className="admin-tickets-layout admin-tickets-layout--no-rail">
@@ -487,12 +671,64 @@ function ManageTicketsPage() {
                 <p className="supporting-text">No tickets yet.</p>
               )}
 
-              {!error && tickets.length > 0 && filteredTickets.length === 0 && (
+              {!error && tickets.length > 0 ? (
+                <div
+                  className="my-tickets-filters admin-tickets-subsection-filters"
+                  aria-label={`Search and filter ${activeSectionMeta?.label || "tickets"}`}
+                >
+                  <div className="my-tickets-filters-search-row">
+                    <label className="my-tickets-filters-search">
+                      <span>Search</span>
+                      <input
+                        autoComplete="off"
+                        type="search"
+                        placeholder="Title, ticket ID, requester, technician, location, description…"
+                        value={listUi.search}
+                        onChange={(event) => patchListUi(activeSection, { search: event.target.value })}
+                      />
+                    </label>
+                  </div>
+                  <div className="my-tickets-filters-controls">
+                    <AdminTicketRefineSelect
+                      section={activeSection}
+                      value={listUi.refine}
+                      onChange={(refine) => patchListUi(activeSection, { refine })}
+                    />
+                    {hasActiveListFilters ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => clearListFiltersForSection(activeSection)}
+                      >
+                        Clear filters
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+
+              {!error && tickets.length > 0 && sectionBucketTickets.length === 0 && (
                 <p className="supporting-text">{emptySectionMessage}</p>
               )}
 
+              {!error &&
+              tickets.length > 0 &&
+              sectionBucketTickets.length > 0 &&
+              visibleTickets.length === 0 ? (
+                <p className="supporting-text my-tickets-filter-empty">
+                  No tickets match your search or filters.{" "}
+                  <button
+                    type="button"
+                    className="link-button"
+                    onClick={() => clearListFiltersForSection(activeSection)}
+                  >
+                    Clear filters
+                  </button>
+                </p>
+              ) : null}
+
               <div className="list-stack">
-                {filteredTickets.map((ticket, index) => (
+                {visibleTickets.map((ticket, index) => (
                   <TicketCard
                     key={ticket.id != null ? ticket.id : `ticket-${index}`}
                     ticket={ticket}

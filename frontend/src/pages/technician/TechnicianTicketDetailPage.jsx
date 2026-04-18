@@ -53,7 +53,7 @@ function TechnicianTicketDetailPage() {
 
   const workspacePath = ticketId ? `/technician/tickets/${ticketId}/work` : "/technician/tickets";
   const acceptPath = ticketId ? `/technician/tickets/${ticketId}/accept` : "/technician/accept";
-  const rejectPath = ticketId ? `/technician/tickets/${ticketId}/reject` : "/technician/reject";
+  const rejectPath = ticketId ? `/technician/tickets/${ticketId}/reject` : "/technician/tickets";
 
   const load = async () => {
     if (!ticketId) {
@@ -171,8 +171,8 @@ function TechnicianTicketDetailPage() {
                   Accept queue
                 </Link>
                 <span className="text-text/40">·</span>
-                <Link className="text-sm font-semibold text-heading underline underline-offset-2" to="/technician/reject">
-                  Reject queue
+                <Link className="text-sm font-semibold text-heading underline underline-offset-2" to="/technician/tickets">
+                  My tickets
                 </Link>
               </div>
             </>
