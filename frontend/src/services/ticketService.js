@@ -1,20 +1,21 @@
-import api, { requestWithFallback, createServiceError } from "./api";
-import { mockTickets } from "../utils/mockData";
+import api, { createServiceError } from "./api";
 
 export async function getMyTickets() {
-  return requestWithFallback(
-    () => api.get("/tickets/my"),
-    () => [...mockTickets],
-    "Unable to load tickets.",
-  );
+  try {
+    const { data } = await api.get("/tickets/my");
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    throw createServiceError(error, "Unable to load tickets.");
+  }
 }
 
 export async function getManagedTickets() {
-  return requestWithFallback(
-    () => api.get("/admin/tickets"),
-    () => [...mockTickets],
-    "Unable to load managed tickets.",
-  );
+  try {
+    const { data } = await api.get("/admin/tickets");
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    throw createServiceError(error, "Unable to load managed tickets.");
+  }
 }
 
 export async function getAssignableTechnicians() {

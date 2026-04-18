@@ -1,5 +1,4 @@
-import api, { requestWithFallback, createServiceError } from "./api";
-import { buildCreatedBooking, mockBookings, mockPendingBookings } from "../utils/mockData";
+import api, { createServiceError } from "./api";
 
 /** Spring returns `{ success, message, data }` for booking APIs. */
 function unwrapBookingPayload(response) {
@@ -17,8 +16,8 @@ function mapPendingForAdminUi(booking) {
   const statusLabel = String(statusRaw).replace(/_/g, " ");
   return {
     id: booking.id,
-    facility: `Resource #${booking.resourceId}`,
-    requestedBy: `User #${booking.userId}`,
+    facility: `Resource ${booking.resourceId}`,
+    requestedBy: `User ${booking.userId}`,
     date: start ? start.toLocaleDateString() : "—",
     time:
       start && end
@@ -30,10 +29,6 @@ function mapPendingForAdminUi(booking) {
   };
 }
 
-/**
- * Availability check (resource weekly windows + approved booking overlap).
- * Same server logic as {@code GET /api/v1/bookings/check} via {@code BookingService#checkAvailability}.
- */
 export async function checkResourceAvailability(resourceId, startIso, endIso) {
   const response = await api.get(`/resources/${resourceId}/availability`, {
     params: { start: startIso, end: endIso },
@@ -41,7 +36,6 @@ export async function checkResourceAvailability(resourceId, startIso, endIso) {
   return unwrapBookingPayload(response);
 }
 
-/** Legacy URL; identical behaviour to {@link checkResourceAvailability}. */
 export async function checkResourceAvailabilityBookingsCheck(resourceId, startIso, endIso) {
   const response = await api.get("/bookings/check", {
     params: { resourceId, start: startIso, end: endIso },
@@ -50,11 +44,13 @@ export async function checkResourceAvailabilityBookingsCheck(resourceId, startIs
 }
 
 export async function getMyBookings() {
-  return requestWithFallback(
-    () => api.get("/bookings/my"),
-    () => [...mockBookings],
-    "Unable to load bookings.",
-  );
+  try {
+    const response = await api.get("/bookings/me");
+    const data = unwrapBookingPayload(response);
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    throw createServiceError(error, "Unable to load bookings.");
+  }
 }
 
 export async function createBooking(payload) {
@@ -62,10 +58,6 @@ export async function createBooking(payload) {
     const response = await api.post("/bookings", payload);
     return unwrapBookingPayload(response);
   } catch (error) {
-    if (!error?.response || error.response.status === 404) {
-      return buildCreatedBooking(payload);
-    }
-
     throw createServiceError(error, "Unable to create booking.");
   }
 }
@@ -77,9 +69,6 @@ export async function getPendingBookings() {
     const rows = Array.isArray(list) ? list : [];
     return rows.map(mapPendingForAdminUi);
   } catch (error) {
-    if (!error?.response || error.response.status === 404) {
-      return [...mockPendingBookings];
-    }
     throw createServiceError(error, "Unable to load pending approvals.");
   }
 }
@@ -89,10 +78,6 @@ export async function approveBooking(bookingId) {
     const response = await api.put(`/bookings/${bookingId}/approve`);
     return unwrapBookingPayload(response);
   } catch (error) {
-    if (!error?.response || error.response.status === 404) {
-      return { success: true, bookingId, status: "Approved" };
-    }
-
     throw createServiceError(error, "Unable to approve booking.");
   }
 }
@@ -102,10 +87,6 @@ export async function rejectBooking(bookingId, reason = "Rejected by administrat
     const response = await api.put(`/bookings/${bookingId}/reject`, { reason });
     return unwrapBookingPayload(response);
   } catch (error) {
-    if (!error?.response || error.response.status === 404) {
-      return { success: true, bookingId, status: "Rejected" };
-    }
-
     throw createServiceError(error, "Unable to reject booking.");
   }
 }

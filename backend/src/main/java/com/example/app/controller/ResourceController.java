@@ -53,7 +53,7 @@ public class ResourceController {
      */
     @GetMapping("/{id}/availability")
     public ApiResponse<BookingAvailabilityResponse> checkResourceAvailability(
-            @PathVariable Long id,
+            @PathVariable String id,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end) {
         BookingAvailabilityResponse availability = bookingService.checkAvailability(id, start, end);
@@ -61,20 +61,20 @@ public class ResourceController {
     }
 
     @GetMapping("/{id}")
-    public ResourceResponse getResourceById(@PathVariable Long id) {
+    public ResourceResponse getResourceById(@PathVariable String id) {
         return resourceService.getResourceById(id);
     }
 
     @PutMapping("/{id}")
     public ResourceResponse updateResource(
-            @PathVariable Long id,
+            @PathVariable String id,
             @Valid @RequestBody ResourceRequest request) {
         return resourceService.updateResource(id, request);
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void deleteResource(@PathVariable Long id) {
+    public void deleteResource(@PathVariable String id) {
         resourceService.deleteResource(id);
     }
 }

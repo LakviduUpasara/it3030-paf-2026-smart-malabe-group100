@@ -39,9 +39,11 @@ public class AcademicSession {
     @JoinColumn(name = "student_group_id", nullable = false)
     private StudentGroup studentGroup;
 
-    @ManyToOne(optional = false)
-    @JoinColumn(name = "resource_id", nullable = false)
-    private Resource resource;
+    /**
+     * MongoDB {@code resources} document id (campus resource catalogue). Kept in JPA as a string FK.
+     */
+    @Column(name = "campus_resource_id", nullable = false, length = 48)
+    private String campusResourceId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "session_type", nullable = false, length = 20)

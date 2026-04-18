@@ -10,7 +10,7 @@ import lombok.Getter;
 @Builder
 public class ResourceResponse {
 
-    private Long id;
+    private String id;
     private String name;
     private ResourceType type;
     private Integer capacity;

@@ -15,8 +15,12 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -24,6 +28,7 @@ import org.springframework.stereotype.Service;
 public class ResourceServiceImpl implements ResourceService {
 
     private final ResourceRepository resourceRepository;
+    private final MongoTemplate mongoTemplate;
 
     @Override
     public ResourceResponse createResource(ResourceRequest request) {
@@ -47,7 +52,7 @@ public class ResourceServiceImpl implements ResourceService {
         if (type == null && status == null && minCapacity == null && normalizedLocation == null) {
             resources = resourceRepository.findAll();
         } else {
-            resources = resourceRepository.findAllByFilters(type, status, minCapacity, normalizedLocation);
+            resources = findByFilters(type, status, minCapacity, normalizedLocation);
         }
 
         return resources.stream()
@@ -56,13 +61,13 @@ public class ResourceServiceImpl implements ResourceService {
     }
 
     @Override
-    public ResourceResponse getResourceById(Long id) {
+    public ResourceResponse getResourceById(String id) {
         Resource resource = findResourceById(id);
         return mapToResponse(resource);
     }
 
     @Override
-    public ResourceResponse updateResource(Long id, ResourceRequest request) {
+    public ResourceResponse updateResource(String id, ResourceRequest request) {
         validateAvailabilityWindows(request.getAvailabilityWindows());
 
         Resource resource = findResourceById(id);
@@ -78,12 +83,40 @@ public class ResourceServiceImpl implements ResourceService {
     }
 
     @Override
-    public void deleteResource(Long id) {
+    public void deleteResource(String id) {
         Resource resource = findResourceById(id);
         resourceRepository.delete(resource);
     }
 
-    private Resource findResourceById(Long id) {
+    private List<Resource> findByFilters(
+            ResourceType type,
+            ResourceStatus status,
+            Integer minCapacity,
+            String location) {
+        List<Criteria> parts = new ArrayList<>();
+        if (type != null) {
+            parts.add(Criteria.where("type").is(type));
+        }
+        if (status != null) {
+            parts.add(Criteria.where("status").is(status));
+        }
+        if (minCapacity != null) {
+            parts.add(Criteria.where("capacity").gte(minCapacity));
+        }
+        if (location != null) {
+            parts.add(Criteria.where("location")
+                    .regex(".*" + Pattern.quote(location) + ".*", "i"));
+        }
+        Query query = new Query();
+        if (parts.size() == 1) {
+            query.addCriteria(parts.get(0));
+        } else if (parts.size() > 1) {
+            query.addCriteria(new Criteria().andOperator(parts.toArray(new Criteria[0])));
+        }
+        return mongoTemplate.find(query, Resource.class);
+    }
+
+    private Resource findResourceById(String id) {
         return resourceRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(id));
     }
@@ -141,6 +174,8 @@ public class ResourceServiceImpl implements ResourceService {
             throw new IllegalArgumentException("At least one availability window is required");
         }
 
+        normalizeAndValidateWindowDays(windows);
+
         Set<String> uniqueWindows = new HashSet<>();
 
         for (AvailabilityWindowRequest window : windows) {
@@ -182,10 +217,6 @@ public class ResourceServiceImpl implements ResourceService {
                 && first.getEndTime().isAfter(second.getStartTime());
     }
 
-    /**
-     * Derives {@link DayOfWeek} from {@link AvailabilityWindowRequest#getAnchorDate()} when present;
-     * rejects mismatches if the client also sent {@code dayOfWeek}.
-     */
     private void normalizeAndValidateWindowDays(List<AvailabilityWindowRequest> windows) {
         for (AvailabilityWindowRequest w : windows) {
             if (w.getAnchorDate() != null) {

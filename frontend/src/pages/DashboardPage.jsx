@@ -19,7 +19,11 @@ const initialSummary = {
 };
 
 function bookingStatusUpper(booking) {
-  return String(booking?.status ?? "").toUpperCase();
+  const s = booking?.status;
+  if (s != null && typeof s === "object" && s.name) {
+    return String(s.name).toUpperCase();
+  }
+  return String(s ?? "").toUpperCase();
 }
 
 function isTicketOpen(ticket) {

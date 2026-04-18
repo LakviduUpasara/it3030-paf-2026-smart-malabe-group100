@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.dao.DuplicateKeyException;
+import com.mongodb.MongoException;
 import org.springframework.data.mongodb.UncategorizedMongoDbException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -28,8 +29,16 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(UncategorizedMongoDbException.class)
     public ResponseEntity<Map<String, Object>> handleMongo(UncategorizedMongoDbException ex) {
+        log.error("MongoDB error: {}", ex.getMessage(), ex);
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .body(buildErrorResponse("Database connection is required", HttpStatus.SERVICE_UNAVAILABLE));
+    }
+
+    @ExceptionHandler(MongoException.class)
+    public ResponseEntity<Map<String, Object>> handleMongoDriver(MongoException ex) {
+        log.error("MongoDB driver error: {}", ex.getMessage(), ex);
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(buildErrorResponse("Database unavailable", HttpStatus.SERVICE_UNAVAILABLE));
     }
 
     @ExceptionHandler(ApiException.class)
@@ -88,6 +97,15 @@ public class GlobalExceptionHandler {
         String message = ex.getMessage() != null && !ex.getMessage().isBlank() ? ex.getMessage() : "Access denied";
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(buildErrorResponse(message, HttpStatus.FORBIDDEN));
+    }
+
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleResourceNotFound(ResourceNotFoundException ex) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("timestamp", LocalDateTime.now());
+        response.put("status", HttpStatus.NOT_FOUND.value());
+        response.put("message", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
     }
 
     @ExceptionHandler(NotFoundException.class)

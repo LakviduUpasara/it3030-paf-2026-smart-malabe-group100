@@ -17,7 +17,7 @@ public class BookingAvailabilityResponse {
     /** e.g. AVAILABLE, OUT_OF_SERVICE, OUTSIDE_WEEKLY_WINDOW, APPROVED_BOOKING_OVERLAP */
     private String reasonCode;
 
-    private Long resourceId;
+    private String resourceId;
     private LocalDateTime startTime;
     private LocalDateTime endTime;
     private boolean available;
@@ -31,8 +31,8 @@ public class BookingAvailabilityResponse {
         this.reasonCode = reasonCode;
     }
 
-    public Long getResourceId() { return resourceId; }
-    public void setResourceId(Long resourceId) { this.resourceId = resourceId; }
+    public String getResourceId() { return resourceId; }
+    public void setResourceId(String resourceId) { this.resourceId = resourceId; }
     public LocalDateTime getStartTime() { return startTime; }
     public void setStartTime(LocalDateTime startTime) { this.startTime = startTime; }
     public LocalDateTime getEndTime() { return endTime; }
