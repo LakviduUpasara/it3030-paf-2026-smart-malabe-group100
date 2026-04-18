@@ -1,5 +1,6 @@
 import { BrowserRouter, useLocation } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
+import SessionInvalidationBridge from "./components/SessionInvalidationBridge";
 import Navbar from "./components/Navbar";
 import GoogleTwoFactorPromptModal from "./components/GoogleTwoFactorPromptModal";
 import TwoFactorSetupReminder from "./components/TwoFactorSetupReminder";
@@ -71,6 +72,7 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <SessionInvalidationBridge />
         <AppLayout />
         <GoogleTwoFactorPromptHost />
       </AuthProvider>

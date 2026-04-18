@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { readStorageValue, STORAGE_KEYS } from '../utils/storage';
+import { clearAllAuthStorage, readStorageValue, STORAGE_KEYS } from '../utils/storage';
 
 const DEFAULT_API_BASE = "http://127.0.0.1:18080/api/v1";
 
@@ -50,6 +50,43 @@ api.interceptors.request.use((config) => {
   }
   return config;
 });
+
+/**
+ * 401 on a protected call with a stored session usually means the account was removed or the token revoked.
+ * Do not clear on public auth endpoints where 401 means "wrong password" only — those still benefit from clearing stale tokens.
+ */
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const status = error.response?.status;
+    const reqUrl = String(error.config?.url || "");
+    if (status !== 401) {
+      return Promise.reject(error);
+    }
+    const sessionVal = readStorageValue(STORAGE_KEYS.SESSION);
+    const hadSession = typeof sessionVal === "string" && sessionVal.trim();
+    if (!hadSession) {
+      return Promise.reject(error);
+    }
+    const isPublicAuth =
+      /\/auth\/(login|register|google|apple|dev-login|verify-2fa|resend-email-otp|security-hints)(\?|$)/.test(reqUrl)
+      || /\/auth\/signup-requests\//.test(reqUrl)
+      || /\/auth\/first-login\//.test(reqUrl);
+    if (isPublicAuth) {
+      return Promise.reject(error);
+    }
+    const message =
+      error.response?.data?.message
+      || "Your session is no longer valid. You may have been signed out because your account was removed.";
+    clearAllAuthStorage();
+    window.dispatchEvent(
+      new CustomEvent("smart-campus:session-invalid", {
+        detail: { message },
+      }),
+    );
+    return Promise.reject(error);
+  },
+);
 
 /**
  * Builds an Error from an axios failure, preferring server message when present.

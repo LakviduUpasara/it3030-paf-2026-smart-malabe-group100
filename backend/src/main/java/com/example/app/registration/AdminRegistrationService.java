@@ -4,14 +4,18 @@ import com.example.app.entity.UserAccount;
 import com.example.app.entity.enums.AccountStatus;
 import com.example.app.entity.enums.AuthProvider;
 import com.example.app.entity.enums.Role;
+import com.example.app.entity.enums.SignupRequestStatus;
 import com.example.app.exception.ApiException;
 import com.example.app.registration.dto.AdminCreateRequest;
 import com.example.app.registration.dto.AdminCreateResponse;
 import com.example.app.registration.dto.AdminUpdateRequest;
 import com.example.app.registration.dto.AdminUserResponse;
+import com.example.app.repository.SignupRequestRepository;
 import com.example.app.repository.UserAccountRepository;
+import com.example.app.service.AuthSessionRevocationService;
 import com.example.app.service.PlatformSecurityService;
 import com.example.app.security.AuthenticatedUser;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
@@ -41,6 +45,9 @@ public class AdminRegistrationService {
     private final UserAccountRepository userAccountRepository;
     private final PasswordEncoder passwordEncoder;
     private final MongoTemplate mongoTemplate;
+    private final PlatformSecurityService platformSecurityService;
+    private final AuthSessionRevocationService authSessionRevocationService;
+    private final SignupRequestRepository signupRequestRepository;
 
     @Value("${app.registration.generated-password-length:14}")
     private int generatedPasswordLength;
@@ -200,6 +207,15 @@ public class AdminRegistrationService {
         if (!MANAGEABLE_ROLES.contains(user.getRole())) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "This account cannot be removed from the console user directory");
         }
+        authSessionRevocationService.revokeAllForUser(id);
+        signupRequestRepository.findByEmailIgnoreCase(user.getEmail()).ifPresent(sr -> {
+            if (sr.getStatus() == SignupRequestStatus.APPROVED) {
+                sr.setStatus(SignupRequestStatus.REJECTED);
+                sr.setRejectionReason("Account removed by administrator.");
+                sr.setReviewedAt(LocalDateTime.now());
+                signupRequestRepository.save(sr);
+            }
+        });
         userAccountRepository.deleteById(id);
     }
 

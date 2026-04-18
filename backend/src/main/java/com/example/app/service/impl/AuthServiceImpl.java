@@ -205,10 +205,6 @@ public class AuthServiceImpl implements AuthService {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "Invalid email or password.");
         }
 
-        if (appProperties.isDeveloperMode()) {
-            return authenticatedResponse(userAccount, "Developer mode: second factor is disabled.");
-        }
-
         if (userAccount.isMustChangePassword()) {
             return passwordChangeRequiredResponse(userAccount);
         }
@@ -322,10 +318,6 @@ public class AuthServiceImpl implements AuthService {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "This Google account does not match the approved campus account.");
         }
 
-        if (appProperties.isDeveloperMode()) {
-            return authenticatedResponse(userAccount, "Developer mode: second factor is disabled.");
-        }
-
         if (userAccount.isMustChangePassword()) {
             userAccount.setMustChangePassword(false);
             userAccountRepository.save(userAccount);
@@ -434,18 +426,15 @@ public class AuthServiceImpl implements AuthService {
                 .findById(challenge.getUserId())
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Account not found."));
 
-        if (appProperties.isDeveloperMode()) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Developer mode is on: email OTP resend is not used.");
-        }
-
         String otpCode = generateOtpCode();
         challenge.setOtpCode(otpCode);
         challenge.setExpiresAt(LocalDateTime.now().plusMinutes(challengeMinutes));
         challenge.setLastOtpSentAt(LocalDateTime.now());
 
         TwoFactorChallenge saved = twoFactorChallengeRepository.save(challenge);
+        AuthEmailOtpNotifier.SignInOtpEmailOutcome otpOutcome;
         try {
-            authEmailOtpNotifier.sendSignInOtp(userAccount.getEmail(), otpCode);
+            otpOutcome = authEmailOtpNotifier.sendSignInOtp(userAccount.getEmail(), otpCode);
         } catch (RuntimeException ex) {
             twoFactorChallengeRepository.deleteById(saved.getId());
             throw ex;
@@ -453,10 +442,12 @@ public class AuthServiceImpl implements AuthService {
 
         log.info("Email OTP resent for user {} challenge {}", userAccount.getId(), saved.getId());
 
+        boolean emailed = otpOutcome == AuthEmailOtpNotifier.SignInOtpEmailOutcome.SENT;
+
         return AuthFlowResponse.builder()
                 .authStatus(AuthFlowStatus.TWO_FACTOR_REQUIRED)
                 .message("A new verification code was sent to your email.")
-                .twoFactorChallenge(toTwoFactorResponse(saved, userAccount, AuthFlowStatus.TWO_FACTOR_REQUIRED))
+                .twoFactorChallenge(toTwoFactorResponse(saved, userAccount, AuthFlowStatus.TWO_FACTOR_REQUIRED, emailed))
                 .build();
     }
 
@@ -496,10 +487,6 @@ public class AuthServiceImpl implements AuthService {
                 ));
 
         ensureActiveUser(userAccount);
-
-        if (appProperties.isDeveloperMode()) {
-            return authenticatedResponse(userAccount, "Developer mode: second factor is disabled.");
-        }
 
         if (userAccount.isMustChangePassword()) {
             return passwordChangeRequiredResponse(userAccount);
@@ -651,10 +638,6 @@ public class AuthServiceImpl implements AuthService {
                 .findById(userAccount.getId())
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "Account not found."));
 
-        if (appProperties.isDeveloperMode()) {
-            return authenticatedResponse(reloaded, "Developer mode: 2FA method saved, second factor is disabled.");
-        }
-
         boolean enrollmentStep = method == TwoFactorMethod.AUTHENTICATOR_APP;
         return buildTwoFactorChallenge(reloaded, enrollmentStep);
     }
@@ -780,16 +763,18 @@ public class AuthServiceImpl implements AuthService {
                         "We sent a one-time code to your email. Use it to sign in. If you have not finished linking Google Authenticator, you can complete that later from your account settings.";
             }
             TwoFactorChallenge saved = twoFactorChallengeRepository.save(challenge);
+            AuthEmailOtpNotifier.SignInOtpEmailOutcome otpOutcome;
             try {
-                authEmailOtpNotifier.sendSignInOtp(userAccount.getEmail(), otpCode);
+                otpOutcome = authEmailOtpNotifier.sendSignInOtp(userAccount.getEmail(), otpCode);
             } catch (RuntimeException ex) {
                 twoFactorChallengeRepository.deleteById(saved.getId());
                 throw ex;
             }
+            boolean emailed = otpOutcome == AuthEmailOtpNotifier.SignInOtpEmailOutcome.SENT;
             return AuthFlowResponse.builder()
                     .authStatus(authFlowStatus)
                     .message(message)
-                    .twoFactorChallenge(toTwoFactorResponse(saved, userAccount, authFlowStatus))
+                    .twoFactorChallenge(toTwoFactorResponse(saved, userAccount, authFlowStatus, emailed))
                     .build();
         }
 
@@ -800,16 +785,19 @@ public class AuthServiceImpl implements AuthService {
             challenge.setOtpCode(otpCode);
             challenge.setLastOtpSentAt(LocalDateTime.now());
             TwoFactorChallenge saved = twoFactorChallengeRepository.save(challenge);
+            AuthEmailOtpNotifier.SignInOtpEmailOutcome otpOutcome;
             try {
-                authEmailOtpNotifier.sendSignInOtp(userAccount.getEmail(), otpCode);
+                otpOutcome = authEmailOtpNotifier.sendSignInOtp(userAccount.getEmail(), otpCode);
             } catch (RuntimeException ex) {
                 twoFactorChallengeRepository.deleteById(saved.getId());
                 throw ex;
             }
+            boolean exposeEmailOtp =
+                    exposeDevelopmentOtp || otpOutcome != AuthEmailOtpNotifier.SignInOtpEmailOutcome.SENT;
             return AuthFlowResponse.builder()
                     .authStatus(authFlowStatus)
                     .message(message)
-                    .twoFactorChallenge(toTwoFactorResponse(saved, userAccount, authFlowStatus))
+                    .twoFactorChallenge(toTwoFactorResponse(saved, userAccount, authFlowStatus, exposeEmailOtp))
                     .build();
         }
 
@@ -823,7 +811,7 @@ public class AuthServiceImpl implements AuthService {
         return AuthFlowResponse.builder()
                 .authStatus(authFlowStatus)
                 .message(message)
-                .twoFactorChallenge(toTwoFactorResponse(savedChallenge, userAccount, authFlowStatus))
+                .twoFactorChallenge(toTwoFactorResponse(savedChallenge, userAccount, authFlowStatus, null))
                 .build();
     }
 
@@ -940,12 +928,30 @@ public class AuthServiceImpl implements AuthService {
         return challenge.getMethod() == TwoFactorMethod.AUTHENTICATOR_APP && !userAccount.isAuthenticatorConfirmed();
     }
 
+    /**
+     * @param signInEmailDelivered {@code true}/{@code false} when the challenge is email OTP (whether SMTP send ran
+     * successfully); {@code null} for authenticator challenges.
+     */
     private TwoFactorChallengeResponse toTwoFactorResponse(
             TwoFactorChallenge challenge,
             UserAccount userAccount,
-            AuthFlowStatus authFlowStatus
+            AuthFlowStatus authFlowStatus,
+            Boolean signInEmailDelivered
     ) {
         boolean emailOtp = challenge.getMethod() == TwoFactorMethod.EMAIL_OTP;
+        boolean exposeEmailOtpInResponse = emailOtp
+                && (exposeDevelopmentOtp || !Boolean.TRUE.equals(signInEmailDelivered));
+        String emailHint;
+        if (!emailOtp) {
+            emailHint = null;
+        } else if (!Boolean.TRUE.equals(signInEmailDelivered)) {
+            emailHint = "Use the verification code shown below (sign-in email was not sent for this session).";
+        } else if (exposeDevelopmentOtp) {
+            emailHint = "The one-time code was sent to your campus email address. It is also shown below while "
+                    + "app.auth.dev-expose-otp is enabled.";
+        } else {
+            emailHint = "The one-time code was sent to your campus email address.";
+        }
         return TwoFactorChallengeResponse.builder()
                 .challengeId(challenge.getId())
                 .method(challenge.getMethod())
@@ -956,9 +962,7 @@ public class AuthServiceImpl implements AuthService {
                         ? "Complete your authenticator app setup to finish sign-in."
                         : "Complete your second verification step to finish sign-in.")
                 .deliveryHint(challenge.getMethod() == TwoFactorMethod.EMAIL_OTP
-                        ? (appProperties.getNotifications().getEmail().isEnabled()
-                        ? "The one-time code was sent to your campus email address."
-                        : "Email delivery is turned off; use the development-only code below if your administrator enabled it.")
+                        ? emailHint
                         : (!userAccount.isAuthenticatorConfirmed()
                         ? "Scan the QR code or add the manual key, then enter the code from your authenticator app."
                         : "Open your authenticator app and enter the current 6-digit code."))
@@ -968,7 +972,7 @@ public class AuthServiceImpl implements AuthService {
                 .qrCodeUri(showAuthenticatorEnrollmentUi(challenge, userAccount)
                         ? buildOtpAuthUri(userAccount)
                         : null)
-                .debugCode(exposeDevelopmentOtp && challenge.getMethod() == TwoFactorMethod.EMAIL_OTP
+                .debugCode(exposeEmailOtpInResponse && challenge.getMethod() == TwoFactorMethod.EMAIL_OTP
                         ? challenge.getOtpCode()
                         : null)
                 .build();
@@ -1077,10 +1081,6 @@ public class AuthServiceImpl implements AuthService {
                     HttpStatus.UNAUTHORIZED,
                     providerLabel + " sign-in is not configured for this account."
             );
-        }
-
-        if (appProperties.isDeveloperMode()) {
-            return authenticatedResponse(userAccount, "Developer mode: second factor is disabled.");
         }
 
         if (userAccount.isMustChangePassword()) {

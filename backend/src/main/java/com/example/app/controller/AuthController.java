@@ -167,7 +167,10 @@ public class AuthController {
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader
     ) {
         if (authenticatedUser == null) {
-            throw new ApiException(HttpStatus.UNAUTHORIZED, "No active session was found.");
+            throw new ApiException(
+                    HttpStatus.UNAUTHORIZED,
+                    "No active session was found. If you were signed in, your account may have been removed—please sign in again."
+            );
         }
 
         return ResponseEntity.ok(authService.getCurrentSession(authenticatedUser, authorizationHeader));

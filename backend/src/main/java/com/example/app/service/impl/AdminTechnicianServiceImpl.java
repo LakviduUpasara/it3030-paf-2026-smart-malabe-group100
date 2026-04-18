@@ -14,6 +14,7 @@ import com.example.app.entity.PlatformSecuritySettings;
 import com.example.app.repository.TicketRepository;
 import com.example.app.repository.UserAccountRepository;
 import com.example.app.service.AdminTechnicianService;
+import com.example.app.service.AuthSessionRevocationService;
 import com.example.app.service.PlatformSecurityService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +29,8 @@ public class AdminTechnicianServiceImpl implements AdminTechnicianService {
     private final UserAccountRepository userAccountRepository;
     private final TicketRepository ticketRepository;
     private final PasswordEncoder passwordEncoder;
+    private final PlatformSecurityService platformSecurityService;
+    private final AuthSessionRevocationService authSessionRevocationService;
 
     @Override
     public List<TechnicianSummaryResponse> listTechnicians() {
@@ -108,6 +111,7 @@ public class AdminTechnicianServiceImpl implements AdminTechnicianService {
         if (!assigned.isEmpty()) {
             ticketRepository.saveAll(assigned);
         }
+        authSessionRevocationService.revokeAllForUser(id);
         userAccountRepository.deleteById(id);
     }
 

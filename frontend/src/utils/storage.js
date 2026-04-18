@@ -31,3 +31,10 @@ export function writeStorageValue(key, value) {
 export function clearStorage(key) {
   window.localStorage.removeItem(key);
 }
+
+/** Clears all client auth keys (use when session is invalid server-side). */
+export function clearAllAuthStorage() {
+  Object.values(STORAGE_KEYS).forEach((key) => {
+    window.localStorage.removeItem(key);
+  });
+}

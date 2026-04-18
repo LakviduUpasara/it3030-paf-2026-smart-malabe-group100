@@ -42,6 +42,7 @@ public class SessionAuthenticationFilter extends OncePerRequestFilter {
             sessionToken.ifPresent(token -> {
                 Optional<UserAccount> userAccount = userAccountRepository.findById(token.getUserId());
                 if (userAccount.isEmpty()) {
+                    sessionTokenRepository.deleteById(tokenValue);
                     return;
                 }
 

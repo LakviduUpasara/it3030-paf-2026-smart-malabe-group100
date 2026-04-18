@@ -57,6 +57,11 @@ public class AccountSecurityServiceImpl implements AccountSecurityService {
                 account.setAuthenticatorSecret(null);
                 account.setAuthenticatorConfirmed(false);
             } else {
+                if (account.getPreferredTwoFactorMethod() == null) {
+                    account.setAuthenticatorSecret(null);
+                    account.setAuthenticatorConfirmed(false);
+                    account.setPreferredTwoFactorMethod(TwoFactorMethod.EMAIL_OTP);
+                }
                 if (account.getPreferredTwoFactorMethod() == TwoFactorMethod.AUTHENTICATOR_APP
                         && !account.isAuthenticatorConfirmed()) {
                     throw new ApiException(

@@ -513,6 +513,20 @@ function LoginPanel({ showHeading = true }) {
           <div className="auth-help-panel">
             <p className="supporting-text">{twoFactorChallenge.deliveryHint}</p>
 
+            {twoFactorChallenge.debugCode ? (
+              <div
+                className="rounded-2xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-sm text-amber-950"
+                role="status"
+              >
+                <p className="font-medium text-heading">Your verification code</p>
+                <code className="mt-2 block text-lg font-semibold tracking-widest">{twoFactorChallenge.debugCode}</code>
+                <p className="mt-2 text-xs text-amber-900/85">
+                  The server returned this code in the response (for example in developer mode, when email is not sent,
+                  or when dev-expose-otp is on). Enter it above to continue.
+                </p>
+              </div>
+            ) : null}
+
             {twoFactorChallenge.method === "EMAIL_OTP" ? (
               <div className="auth-otp-meta-row" aria-live="polite">
                 <span>
@@ -650,8 +664,9 @@ function LoginPanel({ showHeading = true }) {
             <>
               <div className="auth-help-panel login-dev-banner">
                 <p className="supporting-text">
-                  <strong>Developer mode (API):</strong> the server skips second-factor and allows quick sign-in. This
-                  banner only appears when the backend reports developer mode (see
+                  <strong>Developer mode (API):</strong> standard sign-in still enforces 2-step verification when it is
+                  enabled for your account. Use quick sign-in below only when you intentionally want to bypass password
+                  and second factor. This banner appears when the backend reports developer mode (see
                   <code> APP_DEVELOPER_MODE</code> or Spring <code>dev</code> profile).
                 </p>
                 <Button

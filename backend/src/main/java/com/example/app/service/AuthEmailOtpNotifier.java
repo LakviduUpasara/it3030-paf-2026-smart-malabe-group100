@@ -25,21 +25,34 @@ import org.springframework.util.StringUtils;
 @Slf4j
 public class AuthEmailOtpNotifier {
 
+    /** Outcome so the API can expose an inline OTP when nothing was mailed. */
+    public enum SignInOtpEmailOutcome {
+        /** SMTP send attempted and succeeded. */
+        SENT,
+        /** Developer mode: inbox is intentionally skipped. */
+        SKIPPED_DEVELOPER_MODE,
+        /** {@code app.notifications.email.enabled} is false. */
+        SKIPPED_NOTIFICATIONS_DISABLED
+    }
+
     private final AppProperties appProperties;
     private final ObjectProvider<JavaMailSender> mailSenderProvider;
 
     @Value("${spring.mail.username:}")
     private String springMailUsername;
 
+    @Value("${spring.mail.host:}")
+    private String springMailHost;
+
     /**
-     * Sends a sign-in OTP email. Never swallows failures when email delivery is expected.
+     * Sends a sign-in OTP email when configured. Otherwise returns a skip outcome (caller may expose the code in JSON).
      *
-     * @throws ApiException with {@link HttpStatus#SERVICE_UNAVAILABLE} if SMTP is not configured or send fails
+     * @throws ApiException with {@link HttpStatus#SERVICE_UNAVAILABLE} if SMTP is expected but not configured or send fails
      */
-    public void sendSignInOtp(String toEmail, String code) {
+    public SignInOtpEmailOutcome sendSignInOtp(String toEmail, String code) {
         if (appProperties.isDeveloperMode()) {
             log.debug("Developer mode: skipping outbound sign-in OTP email for {}", toEmail);
-            return;
+            return SignInOtpEmailOutcome.SKIPPED_DEVELOPER_MODE;
         }
 
         if (!appProperties.getNotifications().getEmail().isEnabled()) {
@@ -47,7 +60,20 @@ public class AuthEmailOtpNotifier {
                     "Email notifications disabled (app.notifications.email.enabled=false); sign-in OTP for {} not sent",
                     toEmail
             );
-            return;
+            return SignInOtpEmailOutcome.SKIPPED_NOTIFICATIONS_DISABLED;
+        }
+
+        if (!StringUtils.hasText(springMailHost)) {
+            log.error(
+                    "Sign-in OTP for {} was not emailed: spring.mail.host is blank. "
+                            + "Set SPRING_MAIL_HOST (e.g. smtp.gmail.com) or set app.notifications.email.enabled=false.",
+                    toEmail
+            );
+            throw new ApiException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "Email is enabled but SMTP host is not set. Add SPRING_MAIL_HOST (e.g. smtp.gmail.com) and mail "
+                            + "credentials, or disable app.notifications.email.enabled until SMTP is configured."
+            );
         }
 
         JavaMailSender sender = mailSenderProvider.getIfAvailable();
@@ -93,7 +119,16 @@ public class AuthEmailOtpNotifier {
                             + ex.getMessage(),
                     ex
             );
+        } catch (Exception ex) {
+            // Jakarta mail / transport sometimes throws checked or non-MailException errors — avoid raw500 on login.
+            log.error("Unexpected error sending sign-in OTP email to {}: {}", toEmail, ex.getMessage(), ex);
+            throw new ApiException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "Could not send verification email: " + ex.getMessage(),
+                    ex
+            );
         }
+        return SignInOtpEmailOutcome.SENT;
     }
 
     private String resolveFromAddress() {

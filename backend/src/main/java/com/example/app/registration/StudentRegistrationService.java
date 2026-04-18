@@ -21,6 +21,7 @@ import com.example.app.registration.repository.EnrollmentRepository;
 import com.example.app.registration.repository.IntakeRepository;
 import com.example.app.registration.repository.StudentRepository;
 import com.example.app.repository.UserAccountRepository;
+import com.example.app.service.AuthSessionRevocationService;
 import com.example.app.service.PlatformSecurityService;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -62,6 +63,7 @@ public class StudentRegistrationService {
     private final PasswordEncoder passwordEncoder;
     private final MongoTemplate mongoTemplate;
     private final PlatformSecurityService platformSecurityService;
+    private final AuthSessionRevocationService authSessionRevocationService;
 
     @Value("${app.registration.student-email-domain:student.smartcampus.local}")
     private String studentEmailDomain;
@@ -310,6 +312,7 @@ public class StudentRegistrationService {
                 studentRepository.findById(id).orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Student not found"));
         enrollmentRepository.deleteByStudentProfileId(id);
         if (student.getUserAccountId() != null) {
+            authSessionRevocationService.revokeAllForUser(student.getUserAccountId());
             userAccountRepository.deleteById(student.getUserAccountId());
         }
         studentRepository.deleteById(id);

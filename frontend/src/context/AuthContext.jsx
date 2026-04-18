@@ -120,9 +120,7 @@ export function AuthProvider({ children }) {
         clearStorage(STORAGE_KEYS.SESSION_PHASE);
         setPendingApproval(null);
         clearStorage(STORAGE_KEYS.PENDING_APPROVAL);
-        if (response.twoFactorChallenge) {
-          setTwoFactorChallenge(response.twoFactorChallenge);
-        }
+        setTwoFactorChallenge(response.twoFactorChallenge ?? null);
         break;
       default:
         break;
@@ -289,6 +287,7 @@ export function AuthProvider({ children }) {
     clearError,
     clearPendingApproval,
     clearTwoFactor,
+    clearClientState,
     login,
     devLogin,
     register,

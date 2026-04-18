@@ -11,6 +11,7 @@ import com.example.app.registration.dto.LecturerCreateRequest;
 import com.example.app.registration.dto.LecturerResponse;
 import com.example.app.registration.repository.LecturerRepository;
 import com.example.app.repository.UserAccountRepository;
+import com.example.app.service.AuthSessionRevocationService;
 import com.example.app.service.PlatformSecurityService;
 import java.util.ArrayList;
 import java.util.List;
@@ -41,6 +42,7 @@ public class LecturerRegistrationService {
     private final ModuleOfferingSyncService moduleOfferingSyncService;
     private final MongoTemplate mongoTemplate;
     private final PlatformSecurityService platformSecurityService;
+    private final AuthSessionRevocationService authSessionRevocationService;
 
     @Value("${app.registration.lecturer-email-domain:lecturer.smartcampus.local}")
     private String lecturerEmailDomain;
@@ -190,7 +192,12 @@ public class LecturerRegistrationService {
     public void delete(String id) {
         Lecturer lecturer =
                 lecturerRepository.findById(id).orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Lecturer not found"));
-        userAccountRepository.findByLecturerRef(id).ifPresent(userAccountRepository::delete);
+        userAccountRepository
+                .findByLecturerRef(id)
+                .ifPresent(user -> {
+                    authSessionRevocationService.revokeAllForUser(user.getId());
+                    userAccountRepository.delete(user);
+                });
         lecturerRepository.delete(lecturer);
     }
 
