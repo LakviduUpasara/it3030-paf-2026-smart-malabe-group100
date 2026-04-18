@@ -472,12 +472,14 @@ public class AuthServiceImpl implements AuthService {
         SignupRequest signupRequest = signupRequestRepository.findByIdAndEmailIgnoreCase(requestId, normalizeEmail(email))
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Sign up request was not found."));
 
-        if (signupRequest.getStatus() == SignupRequestStatus.PENDING) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "This sign up request is still waiting for administrator approval.");
-        }
-
-        if (signupRequest.getStatus() == SignupRequestStatus.REJECTED) {
-            throw new ApiException(HttpStatus.FORBIDDEN, "This sign up request was rejected and cannot open a workspace.");
+        if (signupRequest.getStatus() != SignupRequestStatus.APPROVED) {
+            if (signupRequest.getStatus() == SignupRequestStatus.PENDING) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "This sign up request is still waiting for administrator approval.");
+            }
+            if (signupRequest.getStatus() == SignupRequestStatus.REJECTED) {
+                throw new ApiException(HttpStatus.FORBIDDEN, "This sign up request was rejected and cannot open a workspace.");
+            }
+            throw new ApiException(HttpStatus.BAD_REQUEST, "This sign up request cannot be activated.");
         }
 
         UserAccount userAccount = userAccountRepository.findByEmailIgnoreCase(signupRequest.getEmail())

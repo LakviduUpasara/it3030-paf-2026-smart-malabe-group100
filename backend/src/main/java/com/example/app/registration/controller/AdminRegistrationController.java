@@ -31,7 +31,7 @@ public class AdminRegistrationController {
     private final AdminRegistrationService adminRegistrationService;
 
     @PostMapping
-    public AdminCreateResponse create(@RequestBody AdminCreateRequest request) {
+    public AdminCreateResponse create(@Valid @RequestBody AdminCreateRequest request) {
         return adminRegistrationService.create(request);
     }
 

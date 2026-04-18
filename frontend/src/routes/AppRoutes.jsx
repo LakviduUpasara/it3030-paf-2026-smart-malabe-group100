@@ -38,6 +38,7 @@ import TechnicianTicketsPage from "../pages/technician/TechnicianTicketsPage";
 import AdminConsoleLayout from "../components/admin/AdminConsoleLayout";
 import AdminRoute from "./AdminRoute";
 import RequireSuperAdmin from "./RequireSuperAdmin";
+import RequireAdminBooking from "./RequireAdminBooking";
 import RequireCampusOperator from "./RequireCampusOperator";
 import RequireUserRegistrar from "./RequireUserRegistrar";
 import ProtectedRoute from "./ProtectedRoute";
@@ -238,7 +239,9 @@ function AppRoutes() {
           <Route path="resources/facilities" element={<ManageResourcesPage />} />
           <Route path="campus/resources" element={<Navigate to="/admin/resources/facilities" replace />} />
           <Route path="campus/availability" element={<ResourceAvailabilityPage />} />
-          <Route path="bookings" element={<ApproveBookingsPage />} />
+          <Route element={<RequireAdminBooking />}>
+            <Route path="bookings" element={<ApproveBookingsPage />} />
+          </Route>
           <Route path="tickets" element={<ManageTicketsPage />} />
         </Route>
       </Route>

@@ -183,27 +183,4 @@ public class AuthController {
     ) {
         return ResponseEntity.ok(authService.getSignupRequestStatus(requestId, email));
     }
-
-    /**
-     * Applicant opens workspace after approval. GET supported for direct browser access.
-     */
-    @PostMapping("/signup-requests/{requestId}/activate")
-    public ResponseEntity<AuthFlowResponse> activateApprovedSignupPost(
-            @PathVariable String requestId,
-            @RequestParam("email") @NotBlank(message = "email is required") String email
-    ) {
-        return activateApprovedSignup(requestId, email);
-    }
-
-    @GetMapping("/signup-requests/{requestId}/activate")
-    public ResponseEntity<AuthFlowResponse> activateApprovedSignupGet(
-            @PathVariable String requestId,
-            @RequestParam("email") @NotBlank(message = "email is required") String email
-    ) {
-        return activateApprovedSignup(requestId, email);
-    }
-
-    private ResponseEntity<AuthFlowResponse> activateApprovedSignup(String requestId, String email) {
-        return ResponseEntity.ok(authService.activateApprovedSignup(requestId, email.trim()));
-    }
 }

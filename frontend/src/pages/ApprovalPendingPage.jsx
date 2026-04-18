@@ -4,7 +4,18 @@ import Button from "../components/Button";
 import Card from "../components/Card";
 import LoadingSpinner from "../components/LoadingSpinner";
 import { useAuth } from "../hooks/useAuth";
+import { normalizeAuthStatus } from "../services/authService";
 import { getDefaultRouteForRole } from "../utils/roleUtils";
+
+function needsLoginWorkspaceStep(response) {
+  const s = normalizeAuthStatus(response?.authStatus);
+  return (
+    s === "TWO_FACTOR_REQUIRED"
+    || s === "AUTHENTICATOR_SETUP_REQUIRED"
+    || s === "PASSWORD_CHANGE_REQUIRED"
+    || s === "TWO_FACTOR_METHOD_SELECTION_REQUIRED"
+  );
+}
 
 function ApprovalPendingPage() {
   const {
@@ -69,16 +80,14 @@ function ApprovalPendingPage() {
           return;
         }
 
-        if (
-          response?.authStatus === "TWO_FACTOR_REQUIRED"
-          || response?.authStatus === "AUTHENTICATOR_SETUP_REQUIRED"
-          || response?.authStatus === "PASSWORD_CHANGE_REQUIRED"
-          || response?.authStatus === "TWO_FACTOR_METHOD_SELECTION_REQUIRED"
-        ) {
+        if (needsLoginWorkspaceStep(response)) {
           navigate("/login", { replace: true });
+        } else if (normalizeAuthStatus(response?.authStatus) === "AUTHENTICATED") {
+          navigate(getDefaultRouteForRole(response?.user?.role), { replace: true });
         }
       })
-      .catch(() => {
+      .catch(() => undefined)
+      .finally(() => {
         if (isActive) {
           setIsTransitioningToWorkspace(false);
         }
@@ -146,13 +155,10 @@ function ApprovalPendingPage() {
         email: pendingApproval.email,
       });
 
-      if (
-        response?.authStatus === "TWO_FACTOR_REQUIRED"
-        || response?.authStatus === "AUTHENTICATOR_SETUP_REQUIRED"
-        || response?.authStatus === "PASSWORD_CHANGE_REQUIRED"
-        || response?.authStatus === "TWO_FACTOR_METHOD_SELECTION_REQUIRED"
-      ) {
+      if (needsLoginWorkspaceStep(response)) {
         navigate("/login", { replace: true });
+      } else if (normalizeAuthStatus(response?.authStatus) === "AUTHENTICATED") {
+        navigate(getDefaultRouteForRole(response?.user?.role), { replace: true });
       }
     } catch (activationError) {
       return activationError;
