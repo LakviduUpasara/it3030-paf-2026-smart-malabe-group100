@@ -11,6 +11,11 @@ import com.example.app.entity.BookingStatus;
 import com.example.app.entity.Resource;
 import com.example.app.entity.ResourceStatus;
 import com.example.app.entity.UserAccount;
+import com.example.app.entity.enums.AccountStatus;
+import com.example.app.entity.enums.NotificationCategory;
+import com.example.app.entity.enums.NotificationRelatedEntity;
+import com.example.app.entity.enums.NotificationType;
+import com.example.app.entity.enums.Role;
 import com.example.app.exception.ApiException;
 import com.example.app.exception.BookingConflictException;
 import com.example.app.exception.NotFoundException;
@@ -50,6 +55,7 @@ public class BookingServiceImpl implements BookingService {
     private final ResourceRepository resourceRepository;
     private final UserAccountRepository userAccountRepository;
     private final MongoTemplate mongoTemplate;
+    private final NotificationService notificationService;
 
     @Override
     @Transactional
@@ -78,6 +84,9 @@ public class BookingServiceImpl implements BookingService {
 
         Booking saved = bookingRepository.save(booking);
         logger.info("Booking created with ID: {}", saved.getId());
+
+        notifyAdminsBookingCreated(saved);
+
         return mapToResponse(saved);
     }
 
@@ -155,6 +164,18 @@ public class BookingServiceImpl implements BookingService {
         booking.setUpdatedAt(LocalDateTime.now());
         bookingRepository.save(booking);
         logger.info("Booking {} approved successfully", bookingId);
+
+        String resourceName = resource != null ? resource.getName() : booking.getResourceId();
+        notificationService.deliver(
+                booking.getUserId(),
+                NotificationType.BOOKING_APPROVED,
+                NotificationCategory.BOOKING,
+                "Booking approved",
+                "Your booking for " + safe(resourceName) + " has been approved.",
+                NotificationRelatedEntity.BOOKING,
+                booking.getId(),
+                null);
+
         return mapToResponse(booking);
     }
 
@@ -181,7 +202,46 @@ public class BookingServiceImpl implements BookingService {
         booking.setUpdatedAt(LocalDateTime.now());
         bookingRepository.save(booking);
         logger.info("Booking {} rejected successfully with reason: {}", bookingId, reason);
+
+        Resource bookingResource = resourceRepository.findById(booking.getResourceId()).orElse(null);
+        String resourceName = bookingResource != null ? bookingResource.getName() : booking.getResourceId();
+        notificationService.deliver(
+                booking.getUserId(),
+                NotificationType.BOOKING_REJECTED,
+                NotificationCategory.BOOKING,
+                "Booking rejected",
+                "Your booking for " + safe(resourceName) + " was rejected. Reason: " + reason.trim(),
+                NotificationRelatedEntity.BOOKING,
+                booking.getId(),
+                null);
+
         return mapToResponse(booking);
+    }
+
+    private void notifyAdminsBookingCreated(Booking booking) {
+        try {
+            Resource resource = resourceRepository.findById(booking.getResourceId()).orElse(null);
+            String resourceName = resource != null ? resource.getName() : booking.getResourceId();
+            List<String> admins = userAccountRepository.findByRoleOrderByFullNameAsc(Role.ADMIN).stream()
+                    .filter(u -> u.getStatus() == AccountStatus.ACTIVE)
+                    .map(UserAccount::getId)
+                    .toList();
+            notificationService.deliverMany(
+                    admins,
+                    NotificationType.BOOKING_CREATED,
+                    NotificationCategory.BOOKING,
+                    "New booking request",
+                    "A new booking request for " + safe(resourceName) + " is awaiting approval.",
+                    NotificationRelatedEntity.BOOKING,
+                    booking.getId(),
+                    booking.getUserId());
+        } catch (RuntimeException e) {
+            logger.warn("Failed to notify admins about new booking {}: {}", booking.getId(), e.getMessage());
+        }
+    }
+
+    private static String safe(String v) {
+        return v == null ? "" : v;
     }
 
     @Override
