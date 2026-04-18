@@ -6,6 +6,7 @@ import {
   HiOutlineInformationCircle,
   HiOutlinePhone,
 } from "react-icons/hi2";
+import "./Navbar.css";
 import brandLogo from "../assets/smart-campus-logo.svg";
 import { useAuth } from "../hooks/useAuth";
 import {
@@ -139,10 +140,17 @@ function Navbar() {
       (item) => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`),
     );
 
+  const navbarClassName = [
+    "navbar",
+    !isAuthenticated ? "navbar-public" : "",
+    isPublicPage ? "navbar-auth-shell" : "",
+    isAdminWorkspace ? "navbar-enterprise" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
-    <header
-      className={`navbar ${isPublicPage ? "navbar-auth-shell" : ""} ${isAdminWorkspace ? "navbar-enterprise" : ""}`.trim()}
-    >
+    <header className={navbarClassName}>
       <div className="navbar-brand">
         <button
           className="brand-button"
@@ -169,7 +177,11 @@ function Navbar() {
       ) : null}
 
       {isAuthenticated && !isAdminWorkspace ? (
-        <nav className="navbar-links navbar-links-app" ref={navigationMenuRef}>
+        <nav
+          className="navbar-links navbar-links-app"
+          ref={navigationMenuRef}
+          aria-label="Application navigation"
+        >
           {navigationItems.map((item) => (
             <NavLink
               end={item.end === true}
@@ -222,7 +234,7 @@ function Navbar() {
       ) : null}
 
       {!isAuthenticated ? (
-        <nav className="navbar-links navbar-links-public">
+        <nav className="navbar-links navbar-links-public" aria-label="Public navigation">
           {publicNavigationItems.map((item) => (
             <button
               key={item.sectionId}
@@ -258,17 +270,17 @@ function Navbar() {
         ) : (
           <div className="navbar-auth-actions">
             <Button
-              className="auth-nav-button"
+              className="auth-nav-button auth-nav-button-subtle"
               onClick={() => navigate("/login")}
-              variant="primary"
+              variant="secondary"
               aria-current={isLoginPage ? "page" : undefined}
             >
               Login
             </Button>
             <Button
-              className="auth-nav-button auth-nav-button-transparent"
+              className="auth-nav-button auth-nav-button-emphasis"
               onClick={() => navigate("/signup")}
-              variant={isSignupPage ? "secondary" : "primary"}
+              variant="primary"
               aria-current={isSignupPage ? "page" : undefined}
             >
               Sign Up
