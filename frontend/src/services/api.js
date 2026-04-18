@@ -98,18 +98,14 @@ export async function requestWithFallback(requestFn, fallbackFn, errorMessage) {
 }
 
 export const bookingAPI = {
-  createBooking: (data) => api.post("/bookings", data),
-  /** Admin: paged list with filters (resourceId, userId, date, page, size). */
-  getAllBookings: (params) => api.get("/bookings", { params }),
+  createBooking: (data) => api.post('/bookings', data),
+  getAllBookings: (params) => api.get('/bookings', { params }),
   getBookingsByUser: (userId) => api.get(`/bookings/user/${userId}`),
-  getMyBookings: () => api.get("/bookings/me"),
-  getPendingBookings: () => api.get("/bookings/pending"),
   approveBooking: (bookingId) => api.put(`/bookings/${bookingId}/approve`),
-  rejectBooking: (bookingId, reason) =>
-    api.put(`/bookings/${bookingId}/reject`, { reason }),
+  rejectBooking: (bookingId) => api.put(`/bookings/${bookingId}/reject`),
   cancelBooking: (bookingId) => api.put(`/bookings/${bookingId}/cancel`),
   checkAvailability: (resourceId, start, end) =>
-    api.get("/bookings/check", { params: { resourceId, start, end } }),
+    api.get(`/resources/${resourceId}/availability`, { params: { start, end } }),
 };
 
 export const messageAPI = {

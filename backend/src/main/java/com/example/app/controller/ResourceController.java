@@ -1,13 +1,18 @@
 package com.example.app.controller;
 
+import com.example.app.dto.ApiResponse;
+import com.example.app.dto.BookingAvailabilityResponse;
 import com.example.app.dto.ResourceRequest;
 import com.example.app.dto.ResourceResponse;
 import com.example.app.entity.ResourceStatus;
 import com.example.app.entity.ResourceType;
+import com.example.app.service.BookingService;
 import com.example.app.service.ResourceService;
 import jakarta.validation.Valid;
+import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,6 +31,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class ResourceController {
 
     private final ResourceService resourceService;
+    private final BookingService bookingService;
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -40,6 +46,18 @@ public class ResourceController {
             @RequestParam(required = false) Integer minCapacity,
             @RequestParam(required = false) String location) {
         return resourceService.getAllResources(type, status, minCapacity, location);
+    }
+
+    /**
+     * Availability for a campus resource (same logic as {@code GET /api/v1/bookings/check}).
+     */
+    @GetMapping("/{id}/availability")
+    public ApiResponse<BookingAvailabilityResponse> checkResourceAvailability(
+            @PathVariable Long id,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end) {
+        BookingAvailabilityResponse availability = bookingService.checkAvailability(id, start, end);
+        return ApiResponse.success("Availability checked", availability);
     }
 
     @GetMapping("/{id}")
