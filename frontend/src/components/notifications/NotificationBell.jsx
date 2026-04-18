@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Bell, Check, CircleAlert, ClipboardCheck, MailOpen } from "lucide-react";
 import {
   getMyNotifications,
@@ -20,6 +20,11 @@ import {
  */
 function NotificationBell({ pollMs = 30_000 }) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isAdminConsole = location.pathname.startsWith("/admin");
+  const notificationsPath = isAdminConsole
+    ? "/admin/notifications?tab=inbox"
+    : "/notifications";
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState([]);
   const [unread, setUnread] = useState(0);
@@ -79,10 +84,9 @@ function NotificationBell({ pollMs = 30_000 }) {
         /* soft fail; navigation still proceeds */
       }
     }
-    const target = linkFor(n);
-    if (target) {
-      navigate(target);
-    }
+    // Route to the Notifications tab for the current console so the user always lands on
+    // a working page, regardless of whether the deep-link for the related entity exists.
+    navigate(notificationsPath);
   };
 
   const handleMarkAll = async () => {
@@ -196,19 +200,6 @@ function iconFor(n) {
   if (n.category === "BOOKING") return ClipboardCheck;
   if (n.category === "TICKET") return CircleAlert;
   return Bell;
-}
-
-function linkFor(n) {
-  if (!n?.relatedEntityType || !n?.relatedEntityId) return null;
-  switch (n.relatedEntityType) {
-    case "BOOKING":
-      return `/bookings/${encodeURIComponent(n.relatedEntityId)}`;
-    case "TICKET":
-    case "COMMENT":
-      return `/tickets/${encodeURIComponent(n.relatedEntityId)}`;
-    default:
-      return null;
-  }
 }
 
 function formatRelative(iso) {
