@@ -3,6 +3,9 @@ package com.example.app.service;
 import com.example.app.dto.BookingAvailabilityResponse;
 import com.example.app.dto.BookingRequest;
 import com.example.app.dto.BookingResponse;
+import com.example.app.dto.admin.AdminBookingRowResponse;
+import com.example.app.dto.admin.AdminBookingSummaryResponse;
+import com.example.app.entity.BookingStatus;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -23,6 +26,10 @@ public interface BookingService {
     List<BookingResponse> getBookingsByUser(String userId);
 
     List<BookingResponse> getPendingBookings();
+
+    AdminBookingSummaryResponse getAdminBookingSummary();
+
+    Page<AdminBookingRowResponse> getAdminBookings(Optional<BookingStatus> status, Pageable pageable);
 
     BookingResponse approveBooking(String bookingId);
 
