@@ -110,6 +110,7 @@ export function getNavigationItems(role) {
     ...commonItems,
     { label: "My Bookings", path: "/bookings" },
     { label: "Create Booking", path: "/bookings/new" },
+    { label: "Check availability", path: "/bookings/availability" },
     { label: "My Tickets", path: "/tickets" },
     { label: "Notifications", path: "/notifications" },
   ];

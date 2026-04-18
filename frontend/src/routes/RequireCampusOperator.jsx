@@ -3,7 +3,7 @@ import { useAuth } from "../hooks/useAuth";
 import { LMS_ROLES, resolveAdminConsoleRole } from "../utils/roleUtils";
 
 /**
- * Facilities catalogue, booking approvals, and incident desk — super admins and campus managers.
+ * Resources catalogue, booking approvals, and incident desk — super admins and campus managers.
  */
 function RequireCampusOperator({ children }) {
   const { user } = useAuth();

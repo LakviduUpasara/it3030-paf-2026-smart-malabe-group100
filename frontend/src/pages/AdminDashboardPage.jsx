@@ -18,7 +18,6 @@ import { getResources } from "../services/resourceService";
 import { getManagedTickets } from "../services/ticketService";
 import { LMS_ROLES, resolveAdminConsoleRole } from "../utils/roleUtils";
 import { toToken } from "../utils/formatters";
-import { normalizeBookingQueueRow } from "../utils/bookingDisplay";
 
 const initialSummary = {
   resources: [],
@@ -95,8 +94,7 @@ function AdminDashboardPage() {
   const urgentTickets = summary.tickets.filter(
     (ticket) => ["High", "Critical"].includes(ticket.priority) && ticket.status !== "Resolved",
   ).length;
-  const bookingsUi = summary.bookings.map(normalizeBookingQueueRow);
-  const pendingAttendees = bookingsUi.reduce(
+  const pendingAttendees = summary.bookings.reduce(
     (total, booking) => total + Number(booking.attendees || 0),
     0,
   );
@@ -117,8 +115,8 @@ function AdminDashboardPage() {
             <Button onClick={() => navigate("/admin/bookings")} variant="secondary" type="button">
               Review approvals
             </Button>
-            <Button onClick={() => navigate("/admin/campus/resources")} variant="primary" type="button">
-              Open resources
+            <Button onClick={() => navigate("/admin/resources/facilities")} variant="primary" type="button">
+              Open resources catalogue
             </Button>
           </>
         }
@@ -134,15 +132,25 @@ function AdminDashboardPage() {
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-text/60">
             PAF modules in this console
           </p>
-          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <button
               type="button"
               className="rounded-2xl border border-border bg-tint px-4 py-3 text-left transition-colors hover:bg-card"
-              onClick={() => navigate("/admin/campus/resources")}
+              onClick={() => navigate("/admin/resources/facilities")}
             >
-              <p className="text-sm font-semibold text-heading">Module A — Facilities catalogue</p>
+              <p className="text-sm font-semibold text-heading">Module A — Resources catalogue</p>
               <p className="mt-1 text-xs text-text/70">
-                Bookable resources, metadata, availability, search and filters.
+                Bookable resources (halls, labs, equipment), metadata, availability windows, search and filters.
+              </p>
+            </button>
+            <button
+              type="button"
+              className="rounded-2xl border border-border bg-tint px-4 py-3 text-left transition-colors hover:bg-card"
+              onClick={() => navigate("/admin/campus/availability")}
+            >
+              <p className="text-sm font-semibold text-heading">Resource availability</p>
+              <p className="mt-1 text-xs text-text/70">
+                Check open slots against approved bookings (hiruni booking flow).
               </p>
             </button>
             <button
@@ -241,11 +249,11 @@ function AdminDashboardPage() {
                     Booking queue
                   </p>
                   <p className="mt-2 font-semibold text-heading">
-                    {bookingsUi[0]?.facility || "No pending requests"}
+                    {summary.bookings[0]?.facility || "No pending requests"}
                   </p>
                   <p className="mt-1 text-sm text-text/72">
-                    {bookingsUi[0]
-                      ? `${bookingsUi[0].requestedBy} • ${bookingsUi[0].date} • ${bookingsUi[0].time}`
+                    {summary.bookings[0]
+                      ? `${summary.bookings[0].requestedBy} • ${summary.bookings[0].time}`
                       : "All booking requests are up to date."}
                   </p>
                 </article>
@@ -279,7 +287,7 @@ function AdminDashboardPage() {
             <div className="grid gap-6 lg:grid-cols-2">
               <Card title="Pending booking approvals" subtitle="Next decisions">
                 <div className="space-y-3">
-                  {bookingsUi.slice(0, 3).map((booking) => (
+                  {summary.bookings.slice(0, 3).map((booking) => (
                     <div
                       key={booking.id}
                       className="flex items-start justify-between gap-3 rounded-2xl border border-border bg-tint/80 px-4 py-3"
@@ -295,7 +303,7 @@ function AdminDashboardPage() {
                       </span>
                     </div>
                   ))}
-                  {!bookingsUi.length ? (
+                  {!summary.bookings.length ? (
                     <p className="text-sm text-text/70">No pending booking approvals.</p>
                   ) : null}
                 </div>
@@ -352,9 +360,16 @@ function AdminDashboardPage() {
                 <button
                   className="rounded-2xl border border-border bg-card px-4 py-2.5 text-left text-sm font-medium text-heading transition-colors hover:bg-tint"
                   type="button"
-                  onClick={() => navigate("/admin/campus/resources")}
+                  onClick={() => navigate("/admin/resources/facilities")}
                 >
-                  Asset portfolio
+                  Resources catalogue
+                </button>
+                <button
+                  className="rounded-2xl border border-border bg-card px-4 py-2.5 text-left text-sm font-medium text-heading transition-colors hover:bg-tint"
+                  type="button"
+                  onClick={() => navigate("/admin/campus/availability")}
+                >
+                  Resource availability
                 </button>
                 <button
                   className="rounded-2xl border border-border bg-card px-4 py-2.5 text-left text-sm font-medium text-heading transition-colors hover:bg-tint"

@@ -16,6 +16,7 @@ import ModuleOfferingsAdminPage from "../pages/admin/ModuleOfferingsAdminPage";
 import ApproveBookingsPage from "../pages/ApproveBookingsPage";
 import ApprovalPendingPage from "../pages/ApprovalPendingPage";
 import CreateBookingPage from "../pages/CreateBookingPage";
+import ResourceAvailabilityPage from "../pages/ResourceAvailabilityPage";
 import DashboardPage from "../pages/DashboardPage";
 import LoginPage from "../pages/LoginPage";
 import ManageSignupRequestsPage from "../pages/ManageSignupRequestsPage";
@@ -85,6 +86,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute allowedRoles={[ROLES.USER]}>
             <CreateBookingPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/bookings/availability"
+        element={
+          <ProtectedRoute allowedRoles={[ROLES.USER, ROLES.ADMIN, ROLES.MANAGER, ROLES.LECTURER]}>
+            <ResourceAvailabilityPage />
           </ProtectedRoute>
         }
       />
@@ -224,8 +233,10 @@ function AppRoutes() {
         </Route>
 
         <Route element={<RequireCampusOperator />}>
-          {/* Module A — bookable resources; Module B — approvals; Module C — ticketing (admin desk) */}
-          <Route path="campus/resources" element={<ManageResourcesPage />} />
+          {/* Hiruni-style facilities path + legacy alias (Module A / bookings branch) */}
+          <Route path="resources/facilities" element={<ManageResourcesPage />} />
+          <Route path="campus/resources" element={<Navigate to="/admin/resources/facilities" replace />} />
+          <Route path="campus/availability" element={<ResourceAvailabilityPage />} />
           <Route path="bookings" element={<ApproveBookingsPage />} />
           <Route path="tickets" element={<ManageTicketsPage />} />
         </Route>

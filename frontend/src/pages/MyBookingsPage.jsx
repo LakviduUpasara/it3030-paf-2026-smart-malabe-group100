@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Card from '../components/Card';
 import Button from '../components/Button';
 import Notification from '../components/Notification';
-import { getMyBookings, cancelBooking as cancelBookingRequest } from '../services/bookingService';
+import { bookingAPI } from '../services/api';
 import { FiCalendar, FiClock, FiUser, FiFileText, FiHash } from 'react-icons/fi';
 
 const MyBookingsPage = () => {
@@ -19,10 +19,13 @@ const MyBookingsPage = () => {
     try {
       setLoading(true);
       setError(null);
-      const list = await getMyBookings();
-      setBookings(Array.isArray(list) ? list : []);
-    } catch (err) {
-      setError(err.message || 'Failed to fetch bookings');
+      const response = await bookingAPI.getAllBookings({});
+      console.log('API Response:', response);
+      const bookingsData = response?.data?.data?.content || [];
+      setBookings(Array.isArray(bookingsData) ? bookingsData : []);
+    } catch (error) {
+      console.error('Error fetching bookings:', error.message, error);
+      setError(error.message || 'Failed to fetch bookings');
       setBookings([]);
     } finally {
       setLoading(false);
@@ -31,11 +34,12 @@ const MyBookingsPage = () => {
 
   const handleCancel = async (bookingId) => {
     try {
-      await cancelBookingRequest(bookingId);
+      await bookingAPI.cancelBooking(bookingId);
       setNotification({ type: 'success', message: 'Booking cancelled successfully' });
       fetchBookings();
-    } catch (err) {
-      setNotification({ type: 'error', message: err.message || 'Failed to cancel booking' });
+    } catch (error) {
+      console.error('Error cancelling booking:', error);
+      setNotification({ type: 'error', message: 'Failed to cancel booking' });
     }
   };
 
@@ -144,19 +148,6 @@ const MyBookingsPage = () => {
                 </p>
                 <p className="text-gray-800 mt-1">{booking.purpose}</p>
               </div>
-
-              {Number(booking.expectedAttendees) > 0 ? (
-                <div className="mb-4">
-                  <p className="text-gray-500 text-sm">Expected attendees</p>
-                  <p className="text-gray-800 mt-1">{booking.expectedAttendees}</p>
-                </div>
-              ) : null}
-
-              {booking.status === 'REJECTED' && booking.rejectionReason ? (
-                <div className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-800">
-                  <strong>Rejection reason:</strong> {booking.rejectionReason}
-                </div>
-              ) : null}
 
               {booking.status === 'APPROVED' && (
                 <button

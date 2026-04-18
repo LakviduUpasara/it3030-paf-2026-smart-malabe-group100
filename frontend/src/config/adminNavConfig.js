@@ -84,7 +84,7 @@ export const ADMIN_NAV_SECTIONS = [
   },
   {
     id: "facilities-operations",
-    label: "Facilities & operations",
+    label: "Resources & operations",
     icon: Building2,
     allowedRoles: [LMS_ROLES.SUPER_ADMIN, LMS_ROLES.MANAGER],
     defaultOpen: true,
@@ -92,8 +92,15 @@ export const ADMIN_NAV_SECTIONS = [
       {
         id: "resources-catalogue",
         label: "Resources catalogue",
-        href: "/admin/campus/resources",
-        matchHrefs: ["/admin/campus/resources"],
+        href: "/admin/resources/facilities",
+        matchHrefs: ["/admin/resources/facilities", "/admin/campus/resources"],
+        allowedRoles: [LMS_ROLES.SUPER_ADMIN, LMS_ROLES.MANAGER],
+      },
+      {
+        id: "resource-availability",
+        label: "Resource availability",
+        href: "/admin/campus/availability",
+        matchHrefs: ["/admin/campus/availability"],
         allowedRoles: [LMS_ROLES.SUPER_ADMIN, LMS_ROLES.MANAGER],
       },
       {
@@ -162,6 +169,8 @@ export const ADMIN_OPTIONAL_PATHS = [
   "/admin/announcements",
   "/admin/communication/messages",
   "/admin/campus/resources",
+  "/admin/resources/facilities",
+  "/admin/campus/availability",
   "/admin/bookings",
   "/admin/tickets",
 ];
