@@ -152,7 +152,7 @@ function AdminDashboardPage() {
             </Button>
           </>
         }
-        description="Monitor approvals, resource availability, and operational support from one control center."
+        description="Monitor approvals, resources, and operational support from one control center."
         title="Campus operations"
       />
 
@@ -164,7 +164,7 @@ function AdminDashboardPage() {
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-text/60">
             PAF modules in this console
           </p>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <button
               type="button"
               className="rounded-2xl border border-border bg-tint px-4 py-3 text-left transition-colors hover:bg-card"
@@ -172,17 +172,7 @@ function AdminDashboardPage() {
             >
               <p className="text-sm font-semibold text-heading">Module A — Resources catalogue</p>
               <p className="mt-1 text-xs text-text/70">
-                Bookable resources (halls, labs, equipment), metadata, availability windows, search and filters.
-              </p>
-            </button>
-            <button
-              type="button"
-              className="rounded-2xl border border-border bg-tint px-4 py-3 text-left transition-colors hover:bg-card"
-              onClick={() => navigate("/admin/campus/availability")}
-            >
-              <p className="text-sm font-semibold text-heading">Resource availability</p>
-              <p className="mt-1 text-xs text-text/70">
-                Check open slots against approved bookings (hiruni booking flow).
+                Bookable resources (halls, labs, equipment), metadata, search and filters.
               </p>
             </button>
             <button
@@ -433,13 +423,6 @@ function AdminDashboardPage() {
                   onClick={() => navigate("/admin/resources/facilities")}
                 >
                   Resources catalogue
-                </button>
-                <button
-                  className="rounded-2xl border border-border bg-card px-4 py-2.5 text-left text-sm font-medium text-heading transition-colors hover:bg-tint"
-                  type="button"
-                  onClick={() => navigate("/admin/campus/availability")}
-                >
-                  Resource availability
                 </button>
                 <button
                   className="rounded-2xl border border-border bg-card px-4 py-2.5 text-left text-sm font-medium text-heading transition-colors hover:bg-tint"

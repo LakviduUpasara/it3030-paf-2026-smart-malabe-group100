@@ -97,13 +97,6 @@ export const ADMIN_NAV_SECTIONS = [
         allowedRoles: [LMS_ROLES.SUPER_ADMIN, LMS_ROLES.MANAGER],
       },
       {
-        id: "resource-availability",
-        label: "Resource availability",
-        href: "/admin/campus/availability",
-        matchHrefs: ["/admin/campus/availability"],
-        allowedRoles: [LMS_ROLES.SUPER_ADMIN, LMS_ROLES.MANAGER],
-      },
-      {
         id: "booking-management",
         label: "Booking management",
         href: "/admin/bookings",
