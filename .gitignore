@@ -37,3 +37,4 @@ backend-java.args
 # OS files
 .DS_Store
 Thumbs.db
+backend/data/smartcampus.lock.db
