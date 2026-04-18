@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import Notification from "../components/Notification";
 import { checkResourceAvailability } from "../services/bookingService";
 import { getResources } from "../services/resourceService";
@@ -110,6 +110,8 @@ function buildHourlySlots(selectedDateStr) {
 
 function ResourceAvailabilityPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isAdminConsole = location.pathname.startsWith("/admin");
   const [resources, setResources] = useState([]);
   const [resourcesLoading, setResourcesLoading] = useState(true);
   const [resourcesError, setResourcesError] = useState(null);
@@ -362,18 +364,31 @@ function ResourceAvailabilityPage() {
                 ) : (
                   <div className="mb-3" />
                 )}
-                <button
-                  type="button"
-                  onClick={() => handleBookSlot(slot)}
-                  disabled={!slot.available}
-                  className={`w-full rounded-lg px-4 py-2 font-semibold transition-colors ${
-                    slot.available
-                      ? "bg-green-500 text-white hover:bg-green-600"
-                      : "cursor-not-allowed bg-gray-300 text-gray-500"
-                  }`}
-                >
-                  {slot.available ? "Book now" : "Unavailable"}
-                </button>
+                {isAdminConsole ? (
+                  <span
+                    aria-disabled="true"
+                    className={`w-full cursor-not-allowed rounded-lg px-4 py-2 text-center font-semibold ${
+                      slot.available
+                        ? "bg-green-100 text-green-700"
+                        : "bg-gray-200 text-gray-500"
+                    }`}
+                  >
+                    {slot.available ? "Available" : "Unavailable"}
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleBookSlot(slot)}
+                    disabled={!slot.available}
+                    className={`w-full rounded-lg px-4 py-2 font-semibold transition-colors ${
+                      slot.available
+                        ? "bg-green-500 text-white hover:bg-green-600"
+                        : "cursor-not-allowed bg-gray-300 text-gray-500"
+                    }`}
+                  >
+                    {slot.available ? "Book now" : "Unavailable"}
+                  </button>
+                )}
               </div>
             ))}
           </div>
