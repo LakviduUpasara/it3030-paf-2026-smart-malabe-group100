@@ -6,25 +6,32 @@ import AdminKpiGrid from "../components/admin/AdminKpiGrid";
 import AdminPageHeader from "../components/admin/AdminPageHeader";
 import AdminStatTile from "../components/admin/AdminStatTile";
 import LoadingSpinner from "../components/LoadingSpinner";
-import { getManagedTickets, resolveTicket } from "../services/ticketService";
+import {
+  assignTicketOnDesk,
+  getAssignableTechnicians,
+  getManagedTickets,
+} from "../services/ticketService";
 import { toToken } from "../utils/formatters";
 
 function ManageTicketsPage() {
   const [tickets, setTickets] = useState([]);
+  const [technicians, setTechnicians] = useState([]);
+  const [assignSelection, setAssignSelection] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
     let active = true;
 
-    async function loadTickets() {
+    async function load() {
       setLoading(true);
       setError("");
 
       try {
-        const data = await getManagedTickets();
+        const [ticketData, techData] = await Promise.all([getManagedTickets(), getAssignableTechnicians()]);
         if (active) {
-          setTickets(data);
+          setTickets(Array.isArray(ticketData) ? ticketData : []);
+          setTechnicians(Array.isArray(techData) ? techData : []);
         }
       } catch (loadError) {
         if (active) {
@@ -37,36 +44,44 @@ function ManageTicketsPage() {
       }
     }
 
-    loadTickets();
+    load();
 
     return () => {
       active = false;
     };
   }, []);
 
-  const handleResolve = async (ticketId) => {
+  const handleAssignChange = (ticketId, value) => {
+    setAssignSelection((prev) => ({ ...prev, [ticketId]: value }));
+  };
+
+  const handleAssign = async (ticketId) => {
+    const assigneeTechnicianId = assignSelection[ticketId];
+    if (!assigneeTechnicianId) {
+      return;
+    }
     try {
-      await resolveTicket(ticketId);
+      const updated = await assignTicketOnDesk(ticketId, assigneeTechnicianId);
       setTickets((previousTickets) =>
-        previousTickets.map((ticket) =>
-          ticket.id === ticketId ? { ...ticket, status: "Resolved" } : ticket,
-        ),
+        previousTickets.map((ticket) => (ticket.id === ticketId ? updated : ticket)),
       );
-    } catch (resolveError) {
-      setError(resolveError.message);
+    } catch (assignError) {
+      setError(assignError.message);
     }
   };
 
-  const resolvedTickets = tickets.filter((ticket) => ticket.status === "Resolved").length;
-  const activeTickets = tickets.filter((ticket) => ticket.status !== "Resolved").length;
+  const resolvedTickets = tickets.filter((ticket) => ticket.status === "RESOLVED").length;
+  const activeTickets = tickets.filter(
+    (ticket) => ticket.status !== "RESOLVED" && ticket.status !== "CLOSED",
+  ).length;
   const highPriorityTickets = tickets.filter((ticket) =>
-    ["High", "Critical"].includes(ticket.priority),
+    ["HIGH", "CRITICAL"].includes(ticket.priority),
   ).length;
 
   return (
     <>
       <AdminPageHeader
-        description="Track and resolve operational incidents from the service desk queue."
+        description="Assign incidents to technicians; resolution happens in the technician workspace."
         title="Incident & ticket desk"
       />
 
@@ -109,42 +124,63 @@ function ManageTicketsPage() {
             </Card>
           ) : (
             <Card subtitle="Managed incident queue" title="Service operations">
-              <div className="space-y-4">
-                {tickets.map((ticket) => (
-                  <article
-                    key={ticket.id}
-                    className="flex flex-col gap-4 rounded-2xl border border-border bg-tint/80 p-4 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-start justify-between gap-2">
-                        <div>
-                          <p className="font-semibold text-heading">{ticket.title}</p>
-                          <p className="text-sm text-text/72">
-                            {ticket.location} • {ticket.category}
-                          </p>
+              {!tickets.length ? (
+                <p className="text-sm text-text/70">No incident tickets yet.</p>
+              ) : (
+                <div className="space-y-4">
+                  {tickets.map((ticket) => (
+                    <article
+                      key={ticket.id}
+                      className="flex flex-col gap-4 rounded-2xl border border-border bg-tint/80 p-4 lg:flex-row lg:items-start lg:justify-between"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div>
+                            <p className="font-semibold text-heading">{ticket.title}</p>
+                            <p className="text-sm text-text/72">
+                              {ticket.location || "—"} • {ticket.category || "—"}
+                            </p>
+                          </div>
+                          <span className={`status-badge ${toToken(ticket.status)}`}>{ticket.status}</span>
                         </div>
-                        <span className={`status-badge ${toToken(ticket.status)}`}>{ticket.status}</span>
+                        <div className="mt-2 flex flex-wrap gap-3 text-sm text-text/72">
+                          <span>{ticket.priority} priority</span>
+                          <span>
+                            Assignee: {ticket.assigneeDisplayName || ticket.assigneeTechnicianId || "Unassigned"}
+                          </span>
+                          <span className="font-mono text-xs">{ticket.reference || ticket.id}</span>
+                        </div>
                       </div>
-                      <div className="mt-2 flex flex-wrap gap-3 text-sm text-text/72">
-                        <span>{ticket.priority} priority</span>
-                        <span>Assigned to {ticket.assignee}</span>
-                        <span className="font-mono text-xs">{ticket.id}</span>
-                      </div>
-                    </div>
-                    <div className="flex flex-1 flex-wrap gap-2 sm:flex-none sm:justify-end">
-                      {ticket.status !== "Resolved" ? (
-                        <Button onClick={() => handleResolve(ticket.id)} variant="primary">
-                          Mark resolved
+                      <div className="flex w-full flex-col gap-2 lg:w-64">
+                        <label className="text-xs font-semibold text-text/70" htmlFor={`assign-${ticket.id}`}>
+                          Assign technician
+                        </label>
+                        <select
+                          className="rounded-2xl border border-border bg-card px-3 py-2 text-sm"
+                          id={`assign-${ticket.id}`}
+                          onChange={(e) => handleAssignChange(ticket.id, e.target.value)}
+                          value={assignSelection[ticket.id] ?? ""}
+                        >
+                          <option value="">Select…</option>
+                          {technicians.map((tech) => (
+                            <option key={tech.id} value={tech.id}>
+                              {tech.fullName} ({tech.email})
+                            </option>
+                          ))}
+                        </select>
+                        <Button
+                          disabled={!assignSelection[ticket.id]}
+                          onClick={() => handleAssign(ticket.id)}
+                          variant="primary"
+                          type="button"
+                        >
+                          Save assignment
                         </Button>
-                      ) : (
-                        <span className="inline-flex rounded-full border border-border bg-tint px-2.5 py-1 text-xs font-semibold text-text/80">
-                          Completed
-                        </span>
-                      )}
-                    </div>
-                  </article>
-                ))}
-              </div>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
             </Card>
           )}
         </div>

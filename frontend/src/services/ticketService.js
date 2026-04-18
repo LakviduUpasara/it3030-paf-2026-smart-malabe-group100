@@ -1,5 +1,5 @@
 import api, { requestWithFallback, createServiceError } from "./api";
-import { mockAssignedTickets, mockTickets } from "../utils/mockData";
+import { mockTickets } from "../utils/mockData";
 
 export async function getMyTickets() {
   return requestWithFallback(
@@ -11,30 +11,35 @@ export async function getMyTickets() {
 
 export async function getManagedTickets() {
   return requestWithFallback(
-    () => api.get("/tickets"),
+    () => api.get("/admin/tickets"),
     () => [...mockTickets],
     "Unable to load managed tickets.",
   );
 }
 
-export async function getAssignedTickets() {
-  return requestWithFallback(
-    () => api.get("/tickets/assigned"),
-    () => [...mockAssignedTickets],
-    "Unable to load assigned tickets.",
-  );
-}
-
-export async function resolveTicket(ticketId) {
+export async function getAssignableTechnicians() {
   try {
-    const response = await api.patch(`/tickets/${ticketId}/resolve`);
-    return response.data;
+    const { data } = await api.get("/admin/tickets/assignable-technicians");
+    return data;
   } catch (error) {
-    if (!error?.response || error.response.status === 404) {
-      return { success: true, ticketId, status: "Resolved" };
-    }
-
-    throw createServiceError(error, "Unable to update ticket.");
+    throw createServiceError(error, "Unable to load technicians.");
   }
 }
 
+export async function assignTicketOnDesk(ticketId, assigneeTechnicianId) {
+  try {
+    const { data } = await api.patch(`/admin/tickets/${ticketId}/assignment`, { assigneeTechnicianId });
+    return data;
+  } catch (error) {
+    throw createServiceError(error, "Unable to assign ticket.");
+  }
+}
+
+export async function createCampusTicket(payload) {
+  try {
+    const { data } = await api.post("/tickets", payload);
+    return data;
+  } catch (error) {
+    throw createServiceError(error, "Unable to submit ticket.");
+  }
+}

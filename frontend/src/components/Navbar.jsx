@@ -172,6 +172,7 @@ function Navbar() {
         <nav className="navbar-links navbar-links-app" ref={navigationMenuRef}>
           {navigationItems.map((item) => (
             <NavLink
+              end={item.end === true}
               key={item.path}
               className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}
               to={item.path}

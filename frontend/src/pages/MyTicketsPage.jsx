@@ -47,6 +47,9 @@ function MyTicketsPage() {
     <Card title="My Tickets" subtitle="Track maintenance and incident requests">
       {error ? <p className="alert alert-error">{error}</p> : null}
       <div className="list-stack">
+        {!tickets.length ? (
+          <p className="supporting-text">You have not submitted any incident tickets yet.</p>
+        ) : null}
         {tickets.map((ticket) => (
           <article className="list-row" key={ticket.id}>
             <div>
@@ -55,7 +58,8 @@ function MyTicketsPage() {
                 {ticket.location} | {ticket.category}
               </p>
               <p className="supporting-text">
-                Priority: {ticket.priority} | Assignee: {ticket.assignee}
+                Priority: {ticket.priority} | Assignee:{" "}
+                {ticket.assigneeDisplayName || ticket.assigneeTechnicianId || "Unassigned"}
               </p>
             </div>
             <span className={`status-badge ${toToken(ticket.status)}`}>

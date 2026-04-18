@@ -28,7 +28,11 @@ import AdminNotificationsPage from "../pages/admin/AdminNotificationsPage";
 import NotFoundPage from "../pages/NotFoundPage";
 import PublicLandingPage from "../pages/PublicLandingPage";
 import SignupPage from "../pages/SignupPage";
-import TechnicianDashboardPage from "../pages/TechnicianDashboardPage";
+import TechnicianWorkspaceLayout from "../components/technician/TechnicianWorkspaceLayout";
+import TechnicianHomePage from "../pages/technician/TechnicianHomePage";
+import TechnicianNotificationsPage from "../pages/technician/TechnicianNotificationsPage";
+import TechnicianTicketDetailPage from "../pages/technician/TechnicianTicketDetailPage";
+import TechnicianTicketsPage from "../pages/technician/TechnicianTicketsPage";
 import AdminConsoleLayout from "../components/admin/AdminConsoleLayout";
 import AdminRoute from "./AdminRoute";
 import RequireSuperAdmin from "./RequireSuperAdmin";
@@ -111,10 +115,15 @@ function AppRoutes() {
         path="/technician"
         element={
           <ProtectedRoute allowedRoles={[ROLES.TECHNICIAN]}>
-            <TechnicianDashboardPage />
+            <TechnicianWorkspaceLayout />
           </ProtectedRoute>
         }
-      />
+      >
+        <Route index element={<TechnicianHomePage />} />
+        <Route path="tickets" element={<TechnicianTicketsPage />} />
+        <Route path="tickets/:ticketId" element={<TechnicianTicketDetailPage />} />
+        <Route path="notifications" element={<TechnicianNotificationsPage />} />
+      </Route>
 
       <Route
         path="/admin"

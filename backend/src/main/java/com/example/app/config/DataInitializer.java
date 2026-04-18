@@ -1,12 +1,21 @@
 package com.example.app.config;
 
+import com.example.app.entity.IncidentTicket;
+import com.example.app.entity.TicketProgressNote;
 import com.example.app.entity.UserAccount;
 import com.example.app.entity.enums.AccountStatus;
 import com.example.app.entity.enums.AuthProvider;
+import com.example.app.entity.enums.IncidentTicketStatus;
 import com.example.app.entity.enums.Role;
+import com.example.app.entity.enums.TicketPriority;
 import com.example.app.entity.enums.TwoFactorMethod;
-import java.util.Optional;
+import com.example.app.repository.IncidentTicketRepository;
 import com.example.app.repository.UserAccountRepository;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -70,6 +79,67 @@ public class DataInitializer {
                     Role.ADMIN,
                     AuthProvider.APPLE
             );
+        };
+    }
+
+    @Bean
+    public CommandLineRunner seedDemoIncidentTickets(
+            IncidentTicketRepository incidentTicketRepository,
+            UserAccountRepository userAccountRepository
+    ) {
+        return args -> {
+            if (incidentTicketRepository.count() > 0) {
+                return;
+            }
+            Optional<UserAccount> technician = userAccountRepository.findByEmailIgnoreCase("technician@smartcampus.edu");
+            Optional<UserAccount> reporter = userAccountRepository.findByEmailIgnoreCase("google.user@smartcampus.edu");
+            if (technician.isEmpty() || reporter.isEmpty()) {
+                return;
+            }
+            String techId = technician.get().getId();
+            String reporterId = reporter.get().getId();
+
+            List<TicketProgressNote> notes = new ArrayList<>();
+            notes.add(
+                    TicketProgressNote.builder()
+                            .id(UUID.randomUUID().toString())
+                            .content("On-site inspection scheduled; parts ordered.")
+                            .authorUserId(techId)
+                            .authorDisplayName(technician.get().getFullName())
+                            .createdAt(LocalDateTime.now().minusHours(2))
+                            .build()
+            );
+
+            IncidentTicket assigned = IncidentTicket.builder()
+                    .id(UUID.randomUUID().toString())
+                    .reference("TK-DEMO01")
+                    .title("Lab HVAC temperature fluctuation")
+                    .description("Climate readings swing more than 3°C during peak hours in Lab 2B.")
+                    .category("Facilities")
+                    .location("Engineering Lab 2B")
+                    .priority(TicketPriority.HIGH)
+                    .status(IncidentTicketStatus.IN_PROGRESS)
+                    .reporterUserId(reporterId)
+                    .assigneeTechnicianId(techId)
+                    .progressNotes(notes)
+                    .build();
+
+            IncidentTicket openQueue = IncidentTicket.builder()
+                    .id(UUID.randomUUID().toString())
+                    .reference("TK-DEMO02")
+                    .title("Broken projector in Seminar Room C")
+                    .description("HDMI input not detected; power LED blinks amber.")
+                    .category("AV")
+                    .location("Seminar Room C")
+                    .priority(TicketPriority.MEDIUM)
+                    .status(IncidentTicketStatus.OPEN)
+                    .reporterUserId(reporterId)
+                    .assigneeTechnicianId(null)
+                    .progressNotes(new ArrayList<>())
+                    .build();
+
+            incidentTicketRepository.save(assigned);
+            incidentTicketRepository.save(openQueue);
         };
     }
 

@@ -1,37 +1,20 @@
 import { useState } from "react";
 import { NavLink } from "react-router-dom";
 import {
-  HiAcademicCap,
   HiArrowTrendingUp,
   HiBars3,
   HiBellAlert,
-  HiBookOpen,
-  HiBuildingOffice2,
-  HiCalendarDays,
-  HiClipboardDocumentCheck,
-  HiClock,
-  HiOutlineChevronDown,
-  HiOutlineChevronRight,
-  HiRectangleStack,
   HiShieldCheck,
   HiSquares2X2,
-  HiUserGroup,
   HiUsers,
-  HiWrenchScrewdriver,
   HiXMark,
 } from "react-icons/hi2";
 import { useAuth } from "../hooks/useAuth";
-import { ADMIN_ACADEMIC_NAV_ITEMS } from "../utils/roleUtils";
 
 const PRIMARY_LINKS = [
   { label: "Overview", path: "/admin", icon: HiSquares2X2, end: true },
-  { label: "Resources", path: "/admin/resources", icon: HiBuildingOffice2, end: false },
   { label: "User requests", path: "/admin/users/requests", icon: HiUsers, end: false },
-  { label: "Booking Queue", path: "/admin/bookings", icon: HiClipboardDocumentCheck, end: false },
-  { label: "Ticket Desk", path: "/admin/tickets", icon: HiWrenchScrewdriver, end: false },
 ];
-
-const ACADEMIC_ICONS = [HiBookOpen, HiRectangleStack, HiCalendarDays, HiUserGroup, HiClipboardDocumentCheck, HiClock];
 
 function AdminWorkspaceLayout({
   eyebrow = "Admin Workspace",
@@ -43,7 +26,6 @@ function AdminWorkspaceLayout({
   children,
 }) {
   const { user } = useAuth();
-  const [academicOpen, setAcademicOpen] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const todayLabel = new Intl.DateTimeFormat("en-US", {
@@ -68,10 +50,9 @@ function AdminWorkspaceLayout({
       <aside className={`admin-sidebar ${sidebarOpen ? "is-open" : ""}`.trim()}>
         <div className="admin-sidebar-top">
           <div className="admin-sidebar-brand">
-            <span className="admin-sidebar-brandmark">SC</span>
             <div className="admin-sidebar-brandcopy">
-              <strong>Smart Campus</strong>
-              <span>Operations Hub</span>
+              <strong>Admin console</strong>
+              <span>Operations</span>
             </div>
             <button
               type="button"
@@ -115,48 +96,6 @@ function AdminWorkspaceLayout({
               </NavLink>
             );
           })}
-
-          <div className="admin-sidebar-group">
-            <button
-              type="button"
-              className="admin-sidebar-group-toggle"
-              aria-expanded={academicOpen}
-              onClick={() => setAcademicOpen((o) => !o)}
-            >
-              <span className="admin-sidebar-group-toggle-icon">
-                <HiAcademicCap />
-              </span>
-              <span className="admin-sidebar-group-label">Academic</span>
-              {academicOpen ? (
-                <HiOutlineChevronDown className="admin-sidebar-caret" />
-              ) : (
-                <HiOutlineChevronRight className="admin-sidebar-caret" />
-              )}
-            </button>
-            {academicOpen ? (
-              <div className="admin-sidebar-subnav">
-                {ADMIN_ACADEMIC_NAV_ITEMS.map((item, index) => {
-                  const SubIcon = ACADEMIC_ICONS[index % ACADEMIC_ICONS.length];
-
-                  return (
-                    <NavLink
-                      key={item.path}
-                      className={({ isActive }) =>
-                        `admin-sidebar-link admin-sidebar-sub ${isActive ? "is-active" : ""}`.trim()
-                      }
-                      to={item.path}
-                      onClick={closeSidebar}
-                    >
-                      <span className="admin-sidebar-link-icon" aria-hidden="true">
-                        <SubIcon />
-                      </span>
-                      <span>{item.label}</span>
-                    </NavLink>
-                  );
-                })}
-              </div>
-            ) : null}
-          </div>
 
           <NavLink
             className={({ isActive }) =>

@@ -45,6 +45,7 @@ public class SecurityConfig {
                         // confused with other admin APIs (e.g. /api/v1/admin/...).
                         .requestMatchers("/api/v1/admins", "/api/v1/admins/**")
                                 .hasAnyRole("ADMIN", "LOST_ITEM_ADMIN")
+                        .requestMatchers("/api/v1/technician/**").hasRole("TECHNICIAN")
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/lecturers", "/api/v1/lecturers/**")
                                 .hasAnyRole("ADMIN", "LOST_ITEM_ADMIN", "MANAGER")
