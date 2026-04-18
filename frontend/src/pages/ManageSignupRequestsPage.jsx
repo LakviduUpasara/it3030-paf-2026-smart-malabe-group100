@@ -11,21 +11,14 @@ import {
 } from "../services/authService";
 import { normalizeRole, ROLES } from "../utils/roleUtils";
 
-/** Campus managers may assign staff/student roles; platform admins may assign any role. */
-const SIGNUP_ROLES_MANAGER = [
-  ROLES.USER,
-  ROLES.STUDENT,
-  ROLES.LECTURER,
-  ROLES.LAB_ASSISTANT,
-  ROLES.TECHNICIAN,
-];
+/**
+ * Reviewers may only assign one of the three supported platform roles.
+ * Campus managers share the same list — the signup-request flow no longer
+ * exposes student/lecturer/lab-assistant/manager/lost-item-admin options.
+ */
+const SIGNUP_ROLES_MANAGER = [ROLES.USER, ROLES.TECHNICIAN, ROLES.ADMIN];
 
-const SIGNUP_ROLES_FULL = [
-  ...SIGNUP_ROLES_MANAGER,
-  ROLES.MANAGER,
-  ROLES.ADMIN,
-  ROLES.LOST_ITEM_ADMIN,
-];
+const SIGNUP_ROLES_FULL = [ROLES.USER, ROLES.TECHNICIAN, ROLES.ADMIN];
 
 function ManageSignupRequestsPage() {
   const { user } = useAuth();

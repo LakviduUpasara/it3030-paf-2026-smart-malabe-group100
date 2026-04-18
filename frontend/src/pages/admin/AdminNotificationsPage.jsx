@@ -117,8 +117,8 @@ function AdminNotificationsPage() {
   const [form, setForm] = useState({
     title: "",
     message: "",
-    audienceType: "All",
-    audienceLabel: "All users",
+    audienceType: "USER",
+    audienceLabel: "USER",
     channel: "Web",
     priority: "Normal",
     status: "Draft",
@@ -257,8 +257,8 @@ function AdminNotificationsPage() {
       setForm({
         title: "",
         message: "",
-        audienceType: "All",
-        audienceLabel: "All users",
+        audienceType: "USER",
+        audienceLabel: "USER",
         channel: "Both",
         priority: "Normal",
         status: "Draft",
@@ -269,8 +269,8 @@ function AdminNotificationsPage() {
       setForm({
         title: "",
         message: "",
-        audienceType: "All",
-        audienceLabel: "All users",
+        audienceType: "USER",
+        audienceLabel: "USER",
         channel: "Web",
         priority: "Normal",
         status: "Draft",
@@ -286,12 +286,16 @@ function AdminNotificationsPage() {
 
   const openEdit = (row) => {
     setEditing(row);
-    const audType = row.audienceType || "All";
+    // Legacy rows may have audienceType=All/Faculty/Semester/etc. Coerce to a role
+    // the simplified dropdown can show; default to USER when nothing matches.
+    const labelRoles = parseAudienceRolesFromLabel(row.audienceLabel);
+    const legacyRole = labelRoles.find((r) => ["USER", "ADMIN", "TECHNICIAN"].includes(r));
+    const audType = legacyRole || "USER";
     setForm({
       title: row.title,
       message: row.message,
       audienceType: audType,
-      audienceLabel: audType === "All" ? row.audienceLabel || "All users" : row.audienceLabel || "",
+      audienceLabel: audType,
       channel: normalizeChannelForForm(row.channel),
       priority: row.priority || "Normal",
       status: row.status || "Draft",
@@ -316,12 +320,13 @@ function AdminNotificationsPage() {
     }
     setSubmitting(true);
     try {
+      const stored = toStorageAudience(form);
       const row = {
         id: editing?.id || uid(),
         title: form.title,
         message: form.message,
-        audienceType: form.audienceType,
-        audienceLabel: form.audienceLabel,
+        audienceType: stored.audienceType,
+        audienceLabel: stored.audienceLabel,
         channel: form.channel,
         priority: form.priority,
         status: form.status,
@@ -432,13 +437,15 @@ function AdminNotificationsPage() {
 
   const duplicate = (row) => {
     setEditing(null);
-    const audType = row.audienceType || "All";
+    const labelRoles = parseAudienceRolesFromLabel(row.audienceLabel);
+    const legacyRole = labelRoles.find((r) => ["USER", "ADMIN", "TECHNICIAN"].includes(r));
+    const audType = legacyRole || "USER";
     if (isAnnouncementsRoute) {
       setForm({
         title: `${row.title} (copy)`,
         message: row.message,
-        audienceType: "All",
-        audienceLabel: "All users",
+        audienceType: audType,
+        audienceLabel: audType,
         channel: "Both",
         priority: row.priority || "Normal",
         status: "Draft",
@@ -452,7 +459,7 @@ function AdminNotificationsPage() {
         title: `${row.title} (copy)`,
         message: row.message,
         audienceType: audType,
-        audienceLabel: audType === "All" ? row.audienceLabel || "All users" : row.audienceLabel || "",
+        audienceLabel: audType,
         channel: normalizeChannelForForm(row.channel),
         priority: row.priority,
         status: "Draft",
@@ -602,10 +609,8 @@ function AdminNotificationsPage() {
                   audienceLabel: v,
                   targeting: emptyTargeting(),
                 }));
-                if (v !== "Degree Program") {
-                  setRoleFaculty("");
-                  setRoleDegree("");
-                }
+                setRoleFaculty("");
+                setRoleDegree("");
               }}
             >
               {AUDIENCE_TYPES.map((t) => (
