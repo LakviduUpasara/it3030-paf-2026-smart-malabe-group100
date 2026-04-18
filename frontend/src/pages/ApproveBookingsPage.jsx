@@ -194,7 +194,6 @@ function ApproveBookingsPage() {
             <table className="min-w-full divide-y divide-border text-sm">
               <thead className="bg-tint/80 text-left text-xs font-semibold uppercase tracking-wide text-text/60">
                 <tr>
-                  <th className="px-4 py-3">ID</th>
                   <th className="px-4 py-3">Resource</th>
                   <th className="px-4 py-3">User</th>
                   <th className="px-4 py-3">Start</th>
@@ -210,7 +209,6 @@ function ApproveBookingsPage() {
                   const canAct = st === "PENDING";
                   return (
                     <tr key={row.id} className="align-top text-text">
-                      <td className="px-4 py-3 font-mono text-xs text-text/80">{row.id}</td>
                       <td className="px-4 py-3">
                         <p className="font-medium text-heading">{row.resourceName || "—"}</p>
                         <p className="text-xs text-text/60">{row.resourceId}</p>

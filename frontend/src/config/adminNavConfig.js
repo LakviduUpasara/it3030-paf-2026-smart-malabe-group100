@@ -2,6 +2,7 @@ import {
   Building2,
   GraduationCap,
   LayoutDashboard,
+  LifeBuoy,
   Megaphone,
   Settings,
   Users,
@@ -110,11 +111,55 @@ export const ADMIN_NAV_SECTIONS = [
         matchHrefs: ["/admin/bookings"],
         allowedRoles: [LMS_ROLES.SUPER_ADMIN, LMS_ROLES.MANAGER],
       },
+    ],
+  },
+  {
+    id: "tickets",
+    label: "Tickets",
+    icon: LifeBuoy,
+    allowedRoles: [LMS_ROLES.SUPER_ADMIN, LMS_ROLES.MANAGER],
+    defaultOpen: true,
+    items: [
       {
-        id: "incident-ticketing",
-        label: "Incident ticketing",
+        id: "tickets-open",
+        label: "Open tickets",
         href: "/admin/tickets",
-        matchHrefs: ["/admin/tickets"],
+        section: "open",
+        allowedRoles: [LMS_ROLES.SUPER_ADMIN, LMS_ROLES.MANAGER],
+      },
+      {
+        id: "tickets-assigned",
+        label: "Assigned tickets",
+        href: "/admin/tickets?section=assigned",
+        section: "assigned",
+        allowedRoles: [LMS_ROLES.SUPER_ADMIN, LMS_ROLES.MANAGER],
+      },
+      {
+        id: "tickets-resolved",
+        label: "Resolved tickets",
+        href: "/admin/tickets?section=resolved",
+        section: "resolved",
+        allowedRoles: [LMS_ROLES.SUPER_ADMIN, LMS_ROLES.MANAGER],
+      },
+      {
+        id: "tickets-withdrawn",
+        label: "Withdrawn tickets",
+        href: "/admin/tickets?section=withdrawn",
+        section: "withdrawn",
+        allowedRoles: [LMS_ROLES.SUPER_ADMIN, LMS_ROLES.MANAGER],
+      },
+      {
+        id: "tickets-categories",
+        label: "Category setup",
+        href: "/admin/tickets?section=categories",
+        section: "categories",
+        allowedRoles: [LMS_ROLES.SUPER_ADMIN, LMS_ROLES.MANAGER],
+      },
+      {
+        id: "tickets-technicians",
+        label: "Technicians",
+        href: "/admin/tickets?section=technicians",
+        section: "technicians",
         allowedRoles: [LMS_ROLES.SUPER_ADMIN, LMS_ROLES.MANAGER],
       },
     ],
@@ -190,28 +235,40 @@ export function filterNavSectionsForRole(consoleRole, sections = ADMIN_NAV_SECTI
     .filter(Boolean);
 }
 
-/** Whether pathname matches item (including matchHrefs and prefix for detail routes). */
-export function isNavItemActive(pathname, item) {
-  if (item.end) {
-    const candidates = [item.href, ...(item.matchHrefs || [])];
-    return candidates.some((c) => pathname === c);
+/**
+ * Whether pathname (and optional URL search) matches an item.
+ * Supports optional item.section for query-driven sub-pages
+ * (e.g., /admin/tickets?section=resolved).
+ */
+export function isNavItemActive(pathname, item, search = "") {
+  const stripQuery = (value) => String(value || "").split("?")[0];
+  const hrefPath = stripQuery(item.href);
+  const candidates = [hrefPath, ...(item.matchHrefs || []).map(stripQuery)];
+
+  const pathMatches = item.end
+    ? candidates.some((c) => pathname === c)
+    : candidates.some((c) => pathname === c || pathname.startsWith(`${c}/`));
+
+  if (!pathMatches) {
+    return false;
   }
-  const candidates = [item.href, ...(item.matchHrefs || [])];
-  for (const c of candidates) {
-    if (pathname === c) {
-      return true;
+
+  if (item.section) {
+    const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+    const current = params.get("section");
+    if (item.section === "open") {
+      return current == null || current === "" || current === "open";
     }
-    if (pathname.startsWith(`${c}/`)) {
-      return true;
-    }
+    return current === item.section;
   }
-  return false;
+
+  return true;
 }
 
-export function findActiveNavItem(pathname, sections = ADMIN_NAV_SECTIONS) {
+export function findActiveNavItem(pathname, sections = ADMIN_NAV_SECTIONS, search = "") {
   for (const section of sections) {
     for (const item of section.items) {
-      if (isNavItemActive(pathname, item)) {
+      if (isNavItemActive(pathname, item, search)) {
         return { section, item };
       }
     }

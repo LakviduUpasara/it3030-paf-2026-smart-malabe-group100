@@ -122,7 +122,9 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
               {sections.map((section) => {
                 const SectionIcon = section.icon;
                 const isOpen = openSections[section.id] !== false;
-                const sectionActive = section.items.some((item) => isNavItemActive(location.pathname, item));
+                const sectionActive = section.items.some((item) =>
+                  isNavItemActive(location.pathname, item, location.search),
+                );
 
                 if (collapsed) {
                   return (
@@ -170,7 +172,7 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
                     {isOpen ? (
                       <div className="mt-1 flex flex-col gap-0.5 pl-2">
                         {section.items.map((item) => {
-                          const active = isNavItemActive(location.pathname, item);
+                          const active = isNavItemActive(location.pathname, item, location.search);
                           return (
                             <NavLink
                               key={item.id}
@@ -213,7 +215,7 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
                 </p>
                 <div className="flex flex-col gap-0.5 px-2">
                   {activeFlyoutSection.items.map((item) => {
-                    const active = isNavItemActive(location.pathname, item);
+                    const active = isNavItemActive(location.pathname, item, location.search);
                     return (
                       <NavLink
                         key={item.id}
