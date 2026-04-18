@@ -55,6 +55,7 @@ function formatCategoryLabel(name) {
 function formatTicketStatusLabel(status) {
   const raw = String(status || "OPEN").trim().toUpperCase().replace(/\s+/g, "_");
   if (raw === "IN_PROGRESS") return "In Progress";
+  if (raw === "ASSIGNED") return "Awaiting technician";
   if (raw === "OPEN") return "Open";
   if (raw === "RESOLVED") return "Resolved";
   if (raw === "WITHDRAWN") return "Withdrawn";
@@ -68,7 +69,7 @@ function isTicketEditable(status) {
     .trim()
     .toUpperCase()
     .replace(/\s+/g, "_");
-  return normalized === "OPEN" || normalized === "IN_PROGRESS";
+  return normalized === "OPEN" || normalized === "IN_PROGRESS" || normalized === "ASSIGNED";
 }
 
 function normalizeTicketStatus(status) {
@@ -78,9 +79,10 @@ function normalizeTicketStatus(status) {
     .replace(/\s+/g, "_");
 }
 
-/** Student view: IN_PROGRESS reads as "Assigned" once a technician is allocated. */
+/** Student view: IN_PROGRESS / ASSIGNED reads as "Assigned" once a technician is allocated. */
 function formatStudentTicketStatusLabel(status) {
-  if (normalizeTicketStatus(status) === "IN_PROGRESS") return "Assigned";
+  const n = normalizeTicketStatus(status);
+  if (n === "IN_PROGRESS" || n === "ASSIGNED") return "Assigned";
   return formatTicketStatusLabel(status);
 }
 
@@ -1202,6 +1204,7 @@ function MyTicketsPage() {
                         <select onChange={(event) => setFilterStatus(event.target.value)} value={filterStatus}>
                           <option value="">All statuses</option>
                           <option value="OPEN">Open</option>
+                          <option value="ASSIGNED">Awaiting technician</option>
                           <option value="IN_PROGRESS">In progress</option>
                           <option value="RESOLVED">Resolved</option>
                         </select>

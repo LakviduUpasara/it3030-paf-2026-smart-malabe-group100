@@ -33,6 +33,12 @@ import TechnicianWorkspaceLayout from "../components/technician/TechnicianWorksp
 import TechnicianHomePage from "../pages/technician/TechnicianHomePage";
 import TechnicianNotificationsPage from "../pages/technician/TechnicianNotificationsPage";
 import TechnicianTicketDetailPage from "../pages/technician/TechnicianTicketDetailPage";
+import TechnicianTicketWorkspacePage from "../pages/technician/TechnicianTicketWorkspacePage";
+import TechnicianAcceptQueuePage from "../pages/technician/TechnicianAcceptQueuePage";
+import TechnicianRejectQueuePage from "../pages/technician/TechnicianRejectQueuePage";
+import TechnicianTicketAcceptPage from "../pages/technician/TechnicianTicketAcceptPage";
+import TechnicianTicketRejectPage from "../pages/technician/TechnicianTicketRejectPage";
+import TechnicianResolvedTicketsPage from "../pages/technician/TechnicianResolvedTicketsPage";
 import TechnicianTicketsPage from "../pages/technician/TechnicianTicketsPage";
 import AdminConsoleLayout from "../components/admin/AdminConsoleLayout";
 import AdminRoute from "./AdminRoute";
@@ -131,6 +137,12 @@ function AppRoutes() {
       >
         <Route index element={<TechnicianHomePage />} />
         <Route path="tickets" element={<TechnicianTicketsPage />} />
+        <Route path="accept" element={<TechnicianAcceptQueuePage />} />
+        <Route path="reject" element={<TechnicianRejectQueuePage />} />
+        <Route path="resolved" element={<TechnicianResolvedTicketsPage />} />
+        <Route path="tickets/:ticketId/accept" element={<TechnicianTicketAcceptPage />} />
+        <Route path="tickets/:ticketId/reject" element={<TechnicianTicketRejectPage />} />
+        <Route path="tickets/:ticketId/work" element={<TechnicianTicketWorkspacePage />} />
         <Route path="tickets/:ticketId" element={<TechnicianTicketDetailPage />} />
         <Route path="notifications" element={<TechnicianNotificationsPage />} />
       </Route>

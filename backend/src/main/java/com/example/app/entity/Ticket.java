@@ -39,6 +39,11 @@ public class Ticket {
     /** Free text when withdrawalReasonCode is OTHER. */
     private String withdrawalReasonNote;
 
+    /**
+     * When a technician rejects an assignment, optional note for the desk (cleared on new assignment).
+     */
+    private String technicianAssignmentRejectionNote;
+
     public String getId() {
         return id;
     }
@@ -157,5 +162,13 @@ public class Ticket {
 
     public void setWithdrawalReasonNote(String withdrawalReasonNote) {
         this.withdrawalReasonNote = withdrawalReasonNote;
+    }
+
+    public String getTechnicianAssignmentRejectionNote() {
+        return technicianAssignmentRejectionNote;
+    }
+
+    public void setTechnicianAssignmentRejectionNote(String technicianAssignmentRejectionNote) {
+        this.technicianAssignmentRejectionNote = technicianAssignmentRejectionNote;
     }
 }

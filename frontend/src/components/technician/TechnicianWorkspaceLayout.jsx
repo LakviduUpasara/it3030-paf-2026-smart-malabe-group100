@@ -21,6 +21,26 @@ function TechnicianWorkspaceLayout() {
           My tickets
         </NavLink>
         <NavLink
+          end
+          className={({ isActive }) => `nav-link rounded-2xl px-3 py-2 ${isActive ? "active" : ""}`.trim()}
+          to="/technician/accept"
+        >
+          Accept
+        </NavLink>
+        <NavLink
+          end
+          className={({ isActive }) => `nav-link rounded-2xl px-3 py-2 ${isActive ? "active" : ""}`.trim()}
+          to="/technician/reject"
+        >
+          Reject
+        </NavLink>
+        <NavLink
+          className={({ isActive }) => `nav-link rounded-2xl px-3 py-2 ${isActive ? "active" : ""}`.trim()}
+          to="/technician/resolved"
+        >
+          Resolved
+        </NavLink>
+        <NavLink
           className={({ isActive }) => `nav-link rounded-2xl px-3 py-2 ${isActive ? "active" : ""}`.trim()}
           to="/technician/notifications"
         >

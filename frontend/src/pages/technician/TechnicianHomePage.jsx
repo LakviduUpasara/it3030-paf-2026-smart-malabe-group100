@@ -7,11 +7,31 @@ import AdminKpiGrid from "../../components/admin/AdminKpiGrid";
 import AdminPageHeader from "../../components/admin/AdminPageHeader";
 import AdminStatTile from "../../components/admin/AdminStatTile";
 import LoadingSpinner from "../../components/LoadingSpinner";
-import {
-  getTechnicianNotificationSummary,
-  listTechnicianTickets,
-} from "../../services/technicianWorkspaceService";
+import { getMyTickets } from "../../services/ticketService";
+import { getTechnicianNotificationSummary } from "../../services/technicianWorkspaceService";
+import { isActiveTicketStatus } from "../../utils/technicianTicketStatus";
 import { toToken } from "../../utils/formatters";
+
+function ticketDetailOrWorkspace(ticket) {
+  const s = String(ticket?.status || "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "_");
+  if (!ticket?.id) return "/technician/tickets";
+  if (s === "IN_PROGRESS") {
+    return `/technician/tickets/${ticket.id}/work`;
+  }
+  return `/technician/tickets/${ticket.id}`;
+}
+
+function formatTicketMeta(ticket) {
+  const idShort = ticket?.id ? String(ticket.id).slice(0, 10) : "";
+  const cat = [ticket?.categoryId, ticket?.subCategoryId].filter(Boolean).join(" · ");
+  const bits = [];
+  if (idShort) bits.push(idShort);
+  if (cat) bits.push(cat);
+  return bits.join(" · ") || "—";
+}
 
 function TechnicianHomePage() {
   const navigate = useNavigate();
@@ -26,13 +46,14 @@ function TechnicianHomePage() {
       setLoading(true);
       setError("");
       try {
-        const [ticketData, alertSummary] = await Promise.all([
-          listTechnicianTickets(),
+        const [ticketsRes, alertSummary] = await Promise.all([
+          getMyTickets(),
           getTechnicianNotificationSummary(),
         ]);
         if (!active) {
           return;
         }
+        const ticketData = ticketsRes?.data;
         setTickets(Array.isArray(ticketData) ? ticketData : []);
         setUnreadAlerts(typeof alertSummary?.unreadCount === "number" ? alertSummary.unreadCount : 0);
       } catch (e) {
@@ -52,15 +73,16 @@ function TechnicianHomePage() {
 
   const stats = useMemo(() => {
     const openish = tickets.filter((t) => t.status !== "RESOLVED" && t.status !== "CLOSED").length;
-    const urgent = tickets.filter((t) => t.priority === "HIGH" || t.priority === "CRITICAL").length;
+    const inProgress = tickets.filter((t) => String(t.status || "").toUpperCase() === "IN_PROGRESS").length;
     const done = tickets.filter((t) => t.status === "RESOLVED" || t.status === "CLOSED").length;
-    return { openish, urgent, done };
+    return { openish, inProgress, done };
   }, [tickets]);
 
   const resolvedPct = tickets.length ? Math.round((stats.done / tickets.length) * 100) : 0;
   const activePct = tickets.length ? Math.round((stats.openish / tickets.length) * 100) : 0;
 
-  const nextTicket = tickets[0];
+  const activeTickets = useMemo(() => tickets.filter((t) => isActiveTicketStatus(t?.status)), [tickets]);
+  const nextTicket = activeTickets[0];
 
   return (
     <>
@@ -75,7 +97,7 @@ function TechnicianHomePage() {
             </Button>
           </>
         }
-        description="Assigned maintenance and incident work across the campus. Update status, add notes, and resolve from the ticket detail view."
+        description="Assigned work: accept or decline on the ticket summary, then use the workspace to post updates and mark resolved."
         title="Technician operations desk"
       />
 
@@ -97,10 +119,10 @@ function TechnicianHomePage() {
           value={stats.openish}
         />
         <AdminStatTile
-          detail="Needs priority attention"
+          detail="Marked in progress"
           icon={AlertTriangle}
-          label="High / critical"
-          value={stats.urgent}
+          label="In progress"
+          value={stats.inProgress}
         />
         <AdminStatTile
           detail="Completed in your queue"
@@ -136,7 +158,7 @@ function TechnicianHomePage() {
                   </p>
                 </div>
                 <span className="inline-flex w-fit rounded-full border border-border bg-tint px-2.5 py-1 text-xs font-semibold text-text">
-                  {tickets.length} assigned {tickets.length === 1 ? "ticket" : "tickets"}
+                  {activeTickets.length} active {activeTickets.length === 1 ? "ticket" : "tickets"}
                 </span>
               </div>
               <div className="mt-6 grid gap-4 sm:grid-cols-3">
@@ -149,21 +171,21 @@ function TechnicianHomePage() {
                   </p>
                   <p className="mt-1 text-sm text-text/72">
                     {nextTicket
-                      ? `${nextTicket.reference ? `${nextTicket.reference} · ` : ""}${nextTicket.location || "—"} • ${nextTicket.status}`
+                      ? `${formatTicketMeta(nextTicket)} · ${nextTicket.createdByUsername || "Reporter"} · ${nextTicket.status}`
                       : "The desk will route work here when assigned."}
                   </p>
                 </article>
                 <article className="rounded-2xl border border-border bg-tint p-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.12em] text-text/60">
-                    Urgent load
+                    In progress
                   </p>
                   <p className="mt-2 font-semibold text-heading">
-                    {stats.urgent} high-priority {stats.urgent === 1 ? "item" : "items"}
+                    {stats.inProgress} in progress {stats.inProgress === 1 ? "ticket" : "tickets"}
                   </p>
                   <p className="mt-1 text-sm text-text/72">
-                    {stats.urgent
-                      ? "Review and update these tickets first when possible."
-                      : "No critical queue pressure right now."}
+                    {stats.inProgress
+                      ? "Tickets currently marked in progress."
+                      : "Nothing marked in progress yet."}
                   </p>
                 </article>
                 <article className="rounded-2xl border border-border bg-tint p-4">
@@ -180,31 +202,35 @@ function TechnicianHomePage() {
               </div>
             </section>
 
-            <Card subtitle="Everything currently routed to you" title="Assigned tickets">
+            <Card subtitle="Active work currently routed to you" title="Assigned tickets">
               <div className="space-y-3">
-                {tickets.slice(0, 5).map((ticket) => (
+                {activeTickets.slice(0, 5).map((ticket) => (
                   <Link
                     className="flex items-start justify-between gap-3 rounded-2xl border border-border bg-tint/80 px-4 py-3 transition hover:bg-tint"
                     key={ticket.id}
-                    to={`/technician/tickets/${ticket.id}`}
+                    to={ticketDetailOrWorkspace(ticket)}
                   >
                     <div className="min-w-0">
                       <p className="font-medium text-heading">{ticket.title}</p>
-                      <p className="text-sm text-text/72">
-                        {ticket.reference ? `${ticket.reference} · ` : ""}
-                        {ticket.location || "—"}
-                      </p>
+                      <p className="text-sm text-text/72">{formatTicketMeta(ticket)}</p>
                     </div>
                     <span className={`status-badge shrink-0 ${toToken(ticket.status)}`}>{ticket.status}</span>
                   </Link>
                 ))}
-                {!tickets.length ? (
-                  <p className="text-sm text-text/70">No tickets are assigned to you yet.</p>
+                {!activeTickets.length ? (
+                  <p className="text-sm text-text/70">
+                    {tickets.length
+                      ? "No active tickets — see Resolved for completed work."
+                      : "No tickets are assigned to you yet."}
+                  </p>
                 ) : null}
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
                 <Button onClick={() => navigate("/technician/tickets")} variant="secondary" type="button">
                   View full queue
+                </Button>
+                <Button onClick={() => navigate("/technician/resolved")} variant="secondary" type="button">
+                  Resolved tickets
                 </Button>
               </div>
             </Card>
@@ -221,6 +247,13 @@ function TechnicianHomePage() {
                   onClick={() => navigate("/technician/tickets")}
                 >
                   My tickets
+                </button>
+                <button
+                  className="rounded-2xl border border-border bg-card px-4 py-2.5 text-left text-sm font-medium text-heading transition-colors hover:bg-tint"
+                  type="button"
+                  onClick={() => navigate("/technician/resolved")}
+                >
+                  Resolved
                 </button>
                 <button
                   className="rounded-2xl border border-border bg-card px-4 py-2.5 text-left text-sm font-medium text-heading transition-colors hover:bg-tint"

@@ -261,7 +261,8 @@ export async function logout() {
 
 export async function fetchHealthStatus() {
   try {
-    const response = await api.get("/health");
+    // Resolve to /api/health (not /api/v1/health) so older backends that only expose /api/health still work.
+    const response = await api.get("../health");
     return response.data;
   } catch (error) {
     throw createServiceError(error, "Unable to reach the campus API.");

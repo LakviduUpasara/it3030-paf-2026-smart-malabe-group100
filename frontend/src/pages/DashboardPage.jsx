@@ -45,11 +45,12 @@ function DashboardPage() {
       setLoading(true);
       setError("");
       try {
-        const [bookings, tickets] = await Promise.all([getMyBookings(), getMyTickets()]);
+        const [bookings, ticketsRes] = await Promise.all([getMyBookings(), getMyTickets()]);
         if (active) {
+          const ticketRows = ticketsRes?.data;
           setSummary({
             bookings: Array.isArray(bookings) ? bookings : [],
-            tickets: Array.isArray(tickets) ? tickets : [],
+            tickets: Array.isArray(ticketRows) ? ticketRows : [],
           });
         }
       } catch (e) {

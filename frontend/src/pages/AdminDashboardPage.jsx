@@ -57,17 +57,18 @@ function AdminDashboardPage() {
       setError("");
 
       try {
-        const [resources, bookings, tickets] = await Promise.all([
+        const [resources, bookings, ticketsRes] = await Promise.all([
           getResources(),
           getPendingBookings(),
           getManagedTickets(),
         ]);
 
         if (active) {
+          const ticketRows = ticketsRes?.data;
           setSummary({
             resources,
             bookings,
-            tickets,
+            tickets: Array.isArray(ticketRows) ? ticketRows : [],
           });
         }
       } catch (loadError) {

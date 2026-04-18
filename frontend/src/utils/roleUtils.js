@@ -102,6 +102,9 @@ export function getNavigationItems(role) {
     return [
       { label: "Desk", path: "/technician", end: true },
       { label: "My tickets", path: "/technician/tickets" },
+      { label: "Accept", path: "/technician/accept", end: true },
+      { label: "Reject", path: "/technician/reject", end: true },
+      { label: "Resolved", path: "/technician/resolved" },
       { label: "Alerts", path: "/technician/notifications" },
     ];
   }

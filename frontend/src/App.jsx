@@ -1,5 +1,5 @@
 import { BrowserRouter, useLocation } from "react-router-dom";
-import { AuthProvider } from "./context/AuthContext";
+import { AuthProvider } from "./context/AuthProvider";
 import Navbar from "./components/Navbar";
 import GoogleTwoFactorPromptModal from "./components/GoogleTwoFactorPromptModal";
 import TwoFactorSetupReminder from "./components/TwoFactorSetupReminder";
@@ -69,7 +69,12 @@ function AppLayout() {
 
 function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter
+      future={{
+        v7_startTransition: true,
+        v7_relativeSplatPath: true,
+      }}
+    >
       <AuthProvider>
         <AppLayout />
         <GoogleTwoFactorPromptHost />

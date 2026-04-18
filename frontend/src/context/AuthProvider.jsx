@@ -1,16 +1,15 @@
-import { createContext, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import * as authService from "../services/authService";
 import * as accountService from "../services/accountService";
 import { clearStorage, STORAGE_KEYS } from "../utils/storage";
+import { useLocalStorage } from "../hooks/useLocalStorage";
+import { AuthContext } from "./authContext";
 
 /** Fallback when /health cannot be reached (offline UI). Server APP_DEVELOPER_MODE is authoritative when health loads. */
 const envDeveloperMode =
   String(import.meta.env.VITE_DEVELOPER_MODE ?? "")
     .trim()
     .toLowerCase() === "true";
-import { useLocalStorage } from "../hooks/useLocalStorage";
-
-export const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useLocalStorage(STORAGE_KEYS.USER, null);
@@ -35,8 +34,9 @@ export function AuthProvider({ children }) {
       try {
         const health = await authService.fetchHealthStatus();
         if (!cancelled) {
-          // Must match backend: VITE_DEVELOPER_MODE alone must not show quick sign-in when API has dev mode off.
-          setDeveloperMode(Boolean(health?.developerMode));
+          // Backend wraps payload in ApiResponse { data: { developerMode, ... } }.
+          const payload = health?.data ?? health;
+          setDeveloperMode(Boolean(payload?.developerMode));
         }
       } catch {
         if (!cancelled) {

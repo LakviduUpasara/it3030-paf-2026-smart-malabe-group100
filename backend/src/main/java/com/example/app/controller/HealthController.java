@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
  * Health check endpoint for the Smart Campus Backend API.
  */
 @RestController
-@RequestMapping("/api/health")
+@RequestMapping({"/api/health", "/api/v1/health"})
 @RequiredArgsConstructor
 public class HealthController {
 

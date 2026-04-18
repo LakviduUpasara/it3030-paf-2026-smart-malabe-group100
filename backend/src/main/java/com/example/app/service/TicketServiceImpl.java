@@ -1,6 +1,7 @@
 package com.example.app.service;
 
 import com.example.app.dto.AssignTicketRequest;
+import com.example.app.dto.TechnicianRejectAssignmentRequest;
 import com.example.app.dto.AttachmentResponse;
 import com.example.app.dto.TicketUpdateResponse;
 import com.example.app.dto.TicketAttachmentDownload;
@@ -58,6 +59,9 @@ public class TicketServiceImpl implements TicketService {
     private static final Set<String> ALLOWED_WITHDRAWAL_REASONS = Set.of(
             "RESOLVED_MYSELF", "NO_LONGER_NEEDED", "DUPLICATE", "ELSEWHERE", "OTHER");
     private static final int MAX_OTHER_WITHDRAWAL_REASON_LEN = 2000;
+
+    private static final Set<String> VALID_TICKET_STATUSES = Set.of(
+            "OPEN", "ASSIGNED", "IN_PROGRESS", "RESOLVED", "WITHDRAWN");
 
     @Autowired
     private TicketRepository ticketRepo;
@@ -139,11 +143,60 @@ public class TicketServiceImpl implements TicketService {
             throw new ApiException(HttpStatus.BAD_REQUEST, "This ticket can no longer be assigned.");
         }
         ticket.setAssignedTechnicianUserId(techId);
-        if ("OPEN".equals(status) || "WITHDRAWN".equals(status)) {
-            ticket.setStatus("IN_PROGRESS");
-        }
+        ticket.setTechnicianAssignmentRejectionNote(null);
+        ticket.setStatus("ASSIGNED");
         Ticket saved = ticketRepo.save(ticket);
         return mapToResponse(saved);
+    }
+
+    @Override
+    public TicketResponse acceptAssignment(String ticketId) {
+        Ticket ticket = ticketRepo.findById(ticketId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Ticket not found"));
+        AuthenticatedUser user = requireAuthenticatedUser();
+        if (user.getRole() != Role.TECHNICIAN) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only technicians can accept assignments.");
+        }
+        requireAssignedTechnician(ticket, user);
+        String from = normalizeTicketStatus(ticket.getStatus());
+        if (!"ASSIGNED".equals(from)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "This ticket is not awaiting acceptance.");
+        }
+        ticket.setStatus("IN_PROGRESS");
+        ticket.setTechnicianAssignmentRejectionNote(null);
+        ticketRepo.save(ticket);
+        Ticket reloaded = ticketRepo.findById(ticketId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Ticket not found"));
+        return mapToResponse(reloaded);
+    }
+
+    @Override
+    public TicketResponse rejectAssignment(String ticketId, TechnicianRejectAssignmentRequest request) {
+        Ticket ticket = ticketRepo.findById(ticketId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Ticket not found"));
+        AuthenticatedUser user = requireAuthenticatedUser();
+        if (user.getRole() != Role.TECHNICIAN) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only technicians can reject assignments.");
+        }
+        requireAssignedTechnician(ticket, user);
+        String from = normalizeTicketStatus(ticket.getStatus());
+        if (!"ASSIGNED".equals(from)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "This ticket is not awaiting acceptance.");
+        }
+        String note = null;
+        if (request != null && request.getReason() != null) {
+            String trimmed = request.getReason().trim();
+            if (!trimmed.isEmpty()) {
+                note = trimmed;
+            }
+        }
+        ticket.setStatus("OPEN");
+        ticket.setAssignedTechnicianUserId(null);
+        ticket.setTechnicianAssignmentRejectionNote(note);
+        ticketRepo.save(ticket);
+        Ticket reloaded = ticketRepo.findById(ticketId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Ticket not found"));
+        return mapToResponse(reloaded);
     }
 
     @Override
@@ -162,8 +215,20 @@ public class TicketServiceImpl implements TicketService {
         Ticket ticket = ticketRepo.findById(id)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Ticket not found"));
         assertCanViewTicket(ticket);
-
-        ticket.setStatus(status);
+        AuthenticatedUser user = requireAuthenticatedUser();
+        String normalized = normalizeTicketStatus(status);
+        if (normalized == null || normalized.isEmpty()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Status is required.");
+        }
+        if (user.getRole() == Role.TECHNICIAN) {
+            requireAssignedTechnician(ticket, user);
+            assertTechnicianStatusChange(ticket, normalized);
+        } else if (user.getRole() == Role.ADMIN) {
+            ensureValidStatusEnum(normalized);
+        } else {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only staff can update ticket status.");
+        }
+        ticket.setStatus(normalized);
         ticketRepo.save(ticket);
     }
 
@@ -520,6 +585,11 @@ public class TicketServiceImpl implements TicketService {
         if (assignedId == null || !assignedId.equals(user.getUserId())) {
             throw new ApiException(HttpStatus.FORBIDDEN, "Only the assigned technician can manage ticket updates.");
         }
+        String st = normalizeTicketStatus(ticket.getStatus());
+        if ("ASSIGNED".equals(st)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST,
+                    "Accept this assignment before posting updates or uploading evidence.");
+        }
     }
 
     private String displayNameForAuthenticatedUser(AuthenticatedUser user) {
@@ -624,6 +694,7 @@ public class TicketServiceImpl implements TicketService {
         res.setSuggestions(ticket.getSuggestions());
         res.setWithdrawalReasonCode(ticket.getWithdrawalReasonCode());
         res.setWithdrawalReasonNote(ticket.getWithdrawalReasonNote());
+        res.setTechnicianAssignmentRejectionNote(ticket.getTechnicianAssignmentRejectionNote());
         res.setAttachments(mapAttachments(ticket));
         res.setTechnicianAttachments(mapTechnicianAttachments(ticket));
         res.setUpdates(mapUpdates(ticket));
@@ -751,6 +822,47 @@ public class TicketServiceImpl implements TicketService {
             return;
         }
         assertTicketSubmitter(ticket);
+    }
+
+    private void requireAssignedTechnician(Ticket ticket, AuthenticatedUser user) {
+        String assignedId = ticket.getAssignedTechnicianUserId();
+        if (assignedId == null || !assignedId.equals(user.getUserId())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only the assigned technician can perform this action.");
+        }
+    }
+
+    private void assertTechnicianStatusChange(Ticket ticket, String toStatus) {
+        String from = normalizeTicketStatus(ticket.getStatus());
+        if ("ASSIGNED".equals(from)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST,
+                    "Accept or reject this assignment before changing status.");
+        }
+        if ("IN_PROGRESS".equals(from)) {
+            if (!"IN_PROGRESS".equals(toStatus) && !"RESOLVED".equals(toStatus)) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "You can only mark this ticket as resolved.");
+            }
+        } else if ("RESOLVED".equals(from)) {
+            if (!"IN_PROGRESS".equals(toStatus)) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "Reopen by setting status to In progress.");
+            }
+        } else {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Status cannot be changed from the current state.");
+        }
+        ensureValidStatusEnum(toStatus);
+    }
+
+    private void ensureValidStatusEnum(String s) {
+        if (!VALID_TICKET_STATUSES.contains(s)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid status.");
+        }
+    }
+
+    private static String normalizeTicketStatus(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        String s = raw.trim().toUpperCase().replace(' ', '_');
+        return s;
     }
 
     private void validateCategoryCombination(String categoryId, String subCategoryId) {

@@ -20,6 +20,7 @@ import { formatWithdrawalReasonForDisplay } from "../utils/withdrawalReason";
 function formatTicketStatusLabel(status) {
   const raw = String(status || "OPEN").trim().toUpperCase().replace(/\s+/g, "_");
   if (raw === "IN_PROGRESS") return "In Progress";
+  if (raw === "ASSIGNED") return "Awaiting technician";
   if (raw === "OPEN") return "Open";
   if (raw === "RESOLVED") return "Resolved";
   if (raw === "WITHDRAWN") return "Withdrawn";
@@ -183,7 +184,7 @@ function ManageTicketsPage() {
     for (const ticket of tickets) {
       const s = normalizeTicketStatus(ticket?.status);
       if (s === "OPEN") counts.open += 1;
-      else if (s === "IN_PROGRESS") counts.assigned += 1;
+      else if (s === "IN_PROGRESS" || s === "ASSIGNED") counts.assigned += 1;
       else if (s === "RESOLVED") counts.resolved += 1;
       else if (s === "WITHDRAWN") counts.withdrawn += 1;
     }
@@ -196,7 +197,13 @@ function ManageTicketsPage() {
     }
     const def = ADMIN_TICKET_SECTIONS.find((sec) => sec.id === activeSection);
     const want = def ? def.status : "OPEN";
-    return tickets.filter((t) => normalizeTicketStatus(t?.status) === want);
+    return tickets.filter((t) => {
+      const s = normalizeTicketStatus(t?.status);
+      if (activeSection === "assigned") {
+        return s === "IN_PROGRESS" || s === "ASSIGNED";
+      }
+      return s === want;
+    });
   }, [tickets, activeSection]);
 
   useEffect(() => {
@@ -613,6 +620,18 @@ function ManageTicketsPage() {
                       <p className="admin-ticket-detail-withdrawal-banner-text">
                         {formatWithdrawalReasonForDisplay(detailTicket) ||
                           "No withdrawal details recorded."}
+                      </p>
+                    </div>
+                  ) : null}
+                  {normalizeTicketStatus(detailTicket.status) === "OPEN" &&
+                  detailTicket.technicianAssignmentRejectionNote &&
+                  String(detailTicket.technicianAssignmentRejectionNote).trim() ? (
+                    <div className="admin-ticket-detail-withdrawal-banner" role="status">
+                      <span className="admin-ticket-detail-withdrawal-banner-label">
+                        Last technician declined
+                      </span>
+                      <p className="admin-ticket-detail-withdrawal-banner-text">
+                        {String(detailTicket.technicianAssignmentRejectionNote).trim()}
                       </p>
                     </div>
                   ) : null}

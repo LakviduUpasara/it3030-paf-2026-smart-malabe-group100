@@ -1,6 +1,7 @@
 package com.example.app.controller;
 
 import com.example.app.dto.AssignTicketRequest;
+import com.example.app.dto.TechnicianRejectAssignmentRequest;
 import com.example.app.dto.TicketAttachmentDownload;
 import com.example.app.dto.TicketRequest;
 import com.example.app.dto.TicketResponse;
@@ -11,6 +12,7 @@ import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -19,22 +21,17 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
-/**
- * Legacy JPA/file-backed ticket API (assignments, attachments, technician updates).
- * Campus incident reporting uses {@link CampusTicketController} at {@code POST /api/v1/tickets}.
- */
 @RestController
-@RequestMapping("/api/v1/legacy/tickets")
+@RequestMapping("/api/v1/tickets")
 @CrossOrigin
 public class TicketController {
 
     @Autowired
     private TicketService service;
 
-    // ✅ CREATE TICKET
-    @PostMapping
+    @PostMapping(value = {"", "/with-categories"})
     public ResponseEntity<TicketResponse> createTicket(@Valid @RequestBody TicketRequest request) {
-        return ResponseEntity.ok(service.createTicket(request));
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.createTicket(request));
     }
 
     // ✅ GET ALL TICKETS
@@ -53,6 +50,21 @@ public class TicketController {
     public ResponseEntity<TicketResponse> assignTechnician(@PathVariable String id,
                                                            @Valid @RequestBody AssignTicketRequest request) {
         return ResponseEntity.ok(service.assignTechnician(id, request));
+    }
+
+    /** Assigned technician accepts the job (ASSIGNED → IN_PROGRESS). */
+    @PostMapping("/{id}/assignment/accept")
+    public ResponseEntity<TicketResponse> acceptAssignment(@PathVariable String id) {
+        return ResponseEntity.ok(service.acceptAssignment(id));
+    }
+
+    /** Assigned technician declines; ticket returns to OPEN for the desk. */
+    @PostMapping("/{id}/assignment/reject")
+    public ResponseEntity<TicketResponse> rejectAssignment(
+            @PathVariable String id,
+            @Valid @RequestBody(required = false) TechnicianRejectAssignmentRequest request) {
+        TechnicianRejectAssignmentRequest body = request != null ? request : new TechnicianRejectAssignmentRequest();
+        return ResponseEntity.ok(service.rejectAssignment(id, body));
     }
 
     @PatchMapping("/{id}")
