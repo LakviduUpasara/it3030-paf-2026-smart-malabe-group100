@@ -1,6 +1,6 @@
 #FileLock
-#Sat Apr 18 00:46:31 IST 2026
-hostName=LAPTOP-KBH3ASSH
-id=19d9cdf6c71848fee390f8998f92d1ea389c5df26a4
+#Sat Apr 18 14:25:32 IST 2026
+hostName=Lakvidu
+id=19d9fcd676c44cc082e5c1cc4b4a80edabca4923842
 method=file
-server=169.254.100.69\:1892
+server=10.109.132.188\:12232
