@@ -106,6 +106,9 @@ export const bookingAPI = {
   cancelBooking: (bookingId) => api.put(`/bookings/${bookingId}/cancel`),
   checkAvailability: (resourceId, start, end) =>
     api.get(`/resources/${resourceId}/availability`, { params: { start, end } }),
+  /** Same as checkAvailability (BookingService#checkAvailability). */
+  checkAvailabilityBookingsPath: (resourceId, start, end) =>
+    api.get('/bookings/check', { params: { resourceId, start, end } }),
 };
 
 export const messageAPI = {

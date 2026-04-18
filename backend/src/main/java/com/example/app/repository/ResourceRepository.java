@@ -4,11 +4,19 @@ import com.example.app.entity.Resource;
 import com.example.app.entity.ResourceStatus;
 import com.example.app.entity.ResourceType;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface ResourceRepository extends JpaRepository<Resource, Long> {
+
+    @Query("""
+            select distinct r from Resource r
+            left join fetch r.availabilityWindows
+            where r.id = :id
+            """)
+    Optional<Resource> findByIdWithAvailabilityWindows(@Param("id") Long id);
 
     @Query("""
             select distinct r

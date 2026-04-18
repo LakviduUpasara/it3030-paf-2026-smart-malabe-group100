@@ -30,9 +30,21 @@ function mapPendingForAdminUi(booking) {
   };
 }
 
+/**
+ * Availability check (resource weekly windows + approved booking overlap).
+ * Same server logic as {@code GET /api/v1/bookings/check} via {@code BookingService#checkAvailability}.
+ */
 export async function checkResourceAvailability(resourceId, startIso, endIso) {
   const response = await api.get(`/resources/${resourceId}/availability`, {
     params: { start: startIso, end: endIso },
+  });
+  return unwrapBookingPayload(response);
+}
+
+/** Legacy URL; identical behaviour to {@link checkResourceAvailability}. */
+export async function checkResourceAvailabilityBookingsCheck(resourceId, startIso, endIso) {
+  const response = await api.get("/bookings/check", {
+    params: { resourceId, start: startIso, end: endIso },
   });
   return unwrapBookingPayload(response);
 }
