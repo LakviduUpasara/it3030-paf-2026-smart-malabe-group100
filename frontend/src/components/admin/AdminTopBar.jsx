@@ -1,14 +1,15 @@
-import { LogOut, Menu } from "lucide-react";
+import { Bell, LogOut, Menu } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
+import { useUnreadNotificationCount } from "../../hooks/useUnreadNotificationCount";
 import { useAdminShell } from "../../context/AdminShellContext";
 import { normalizeRole, resolveAdminConsoleRole } from "../../utils/roleUtils";
 import { getAdminBreadcrumb } from "../../utils/adminBreadcrumbs";
-import NotificationBell from "../notifications/NotificationBell";
 
 function AdminTopBar({ onMenuClick }) {
   const location = useLocation();
   const { user, logout } = useAuth();
+  const unreadCount = useUnreadNotificationCount();
   const { activeWindow } = useAdminShell();
   const crumb = getAdminBreadcrumb(location.pathname, { activeWindow });
   const roleLabel = resolveAdminConsoleRole(user?.role) || normalizeRole(user?.role) || "—";
@@ -73,7 +74,20 @@ function AdminTopBar({ onMenuClick }) {
         <span className="hidden max-w-[140px] truncate font-medium text-heading sm:inline md:max-w-[200px]">
           {user?.name || "Admin"}
         </span>
-        <NotificationBell />
+        <Link
+          className="relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-border bg-tint text-heading transition-colors hover:bg-slate-200/40"
+          to="/admin/notifications"
+          aria-label={
+            unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"
+          }
+        >
+          <Bell className="h-[18px] w-[18px]" strokeWidth={1.75} aria-hidden />
+          {unreadCount > 0 ? (
+            <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold leading-none text-white">
+              {unreadCount > 99 ? "99+" : unreadCount}
+            </span>
+          ) : null}
+        </Link>
         <button
           type="button"
           className="button button-secondary inline-flex items-center gap-2 px-3 py-2 sm:px-4"

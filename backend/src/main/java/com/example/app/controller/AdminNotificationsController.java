@@ -3,12 +3,13 @@ package com.example.app.controller;
 import com.example.app.dto.ApiResponse;
 import com.example.app.dto.notifications.CreateAdminNotificationRequest;
 import com.example.app.dto.notifications.NotificationResponse;
-import com.example.app.entity.UserAccount;
+import com.example.app.dto.notifications.NotificationSettingsResponse;
+import com.example.app.dto.notifications.NotificationSettingsUpdateRequest;
 import com.example.app.entity.enums.Role;
 import com.example.app.exception.ApiException;
-import com.example.app.repository.UserAccountRepository;
 import com.example.app.security.AuthenticatedUser;
 import com.example.app.service.NotificationService;
+import com.example.app.service.NotificationSettingsService;
 import jakarta.validation.Valid;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +21,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -37,7 +39,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminNotificationsController {
 
     private final NotificationService notificationService;
-    private final UserAccountRepository userAccountRepository;
+    private final NotificationSettingsService settingsService;
 
     /** Send a manual broadcast to any combination of ADMIN / USER / TECHNICIAN. */
     @PostMapping
@@ -45,8 +47,7 @@ public class AdminNotificationsController {
             @AuthenticationPrincipal AuthenticatedUser user,
             @Valid @RequestBody CreateAdminNotificationRequest request) {
         requireAdmin(user);
-        UserAccount actor = userAccountRepository.findById(user.getUserId()).orElse(null);
-        int recipients = notificationService.sendAdminBroadcast(request, actor);
+        int recipients = notificationService.sendAdminBroadcast(request, user.getUserId());
         Map<String, Object> body = Map.of("deliveredTo", recipients);
         return ResponseEntity
                 .status(HttpStatus.CREATED)

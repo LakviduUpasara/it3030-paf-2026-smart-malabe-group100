@@ -29,11 +29,7 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.mongodb.core.MongoTemplate;
-import org.springframework.data.mongodb.core.query.Criteria;
-import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
@@ -54,25 +50,48 @@ public class NotificationServiceImpl implements NotificationService {
     private final UserAccountRepository userAccountRepository;
     private final NotificationSettingsService settingsService;
     private final NotificationEmailService emailService;
-    private final MongoTemplate mongoTemplate;
 
     // --- automatic triggers ---------------------------------------------------
 
     @Override
-    public void deliver(DeliverRequest request) {
-        if (request == null || isBlank(request.getRecipientUserId())) {
+    public void deliver(
+            String recipientUserId,
+            NotificationType type,
+            NotificationCategory category,
+            String title,
+            String message,
+            NotificationRelatedEntity relatedEntityType,
+            String relatedEntityId,
+            String createdByUserId) {
+        if (recipientUserId == null || recipientUserId.isBlank()) {
             return;
         }
-        deliverMany(List.of(request.getRecipientUserId()), request);
+        deliverMany(
+                List.of(recipientUserId),
+                type,
+                category,
+                title,
+                message,
+                relatedEntityType,
+                relatedEntityId,
+                createdByUserId);
     }
 
     @Override
-    public void deliverMany(List<String> recipientUserIds, DeliverRequest request) {
-        if (request == null || recipientUserIds == null || recipientUserIds.isEmpty()) {
+    public void deliverMany(
+            List<String> recipientUserIds,
+            NotificationType type,
+            NotificationCategory category,
+            String title,
+            String message,
+            NotificationRelatedEntity relatedEntityType,
+            String relatedEntityId,
+            String createdByUserId) {
+        if (recipientUserIds == null || recipientUserIds.isEmpty()) {
             return;
         }
-        if (!settingsService.isCategoryEnabled(request.getCategory())) {
-            log.debug("Notification category {} disabled globally; skipping delivery", request.getCategory());
+        if (!settingsService.isCategoryEnabled(category)) {
+            log.debug("Notification category {} disabled globally; skipping delivery", category);
             return;
         }
 
@@ -89,7 +108,8 @@ public class NotificationServiceImpl implements NotificationService {
                 .toList();
 
         if (webEnabled) {
-            persistWeb(recipients, request);
+            persistWebForRecipients(
+                    recipients, type, category, title, message, relatedEntityType, relatedEntityId, createdByUserId);
         }
 
         if (emailEnabled) {
@@ -100,12 +120,12 @@ public class NotificationServiceImpl implements NotificationService {
                     .collect(Collectors.toList());
             if (!toEmails.isEmpty()) {
                 try {
-                    emailService.sendHtmlBroadcast(toEmails, request.getTitle(),
-                            buildEmailHtml(request.getTitle(), request.getMessage()));
+                    emailService.sendHtmlBroadcast(toEmails, title, buildEmailHtml(title, message));
                 } catch (ApiException e) {
-                    log.warn("Email delivery skipped for notification '{}': {}", request.getTitle(), e.getMessage());
+                    // email optional — log and continue so the web notification still lands
+                    log.warn("Email delivery skipped for notification '{}': {}", title, e.getMessage());
                 } catch (RuntimeException e) {
-                    log.error("Unexpected email delivery failure for notification '{}'", request.getTitle(), e);
+                    log.error("Unexpected email delivery failure for notification '{}'", title, e);
                 }
             }
         }
@@ -114,7 +134,7 @@ public class NotificationServiceImpl implements NotificationService {
     // --- admin broadcast ------------------------------------------------------
 
     @Override
-    public int sendAdminBroadcast(CreateAdminNotificationRequest request, UserAccount actor) {
+    public int sendAdminBroadcast(CreateAdminNotificationRequest request, String actorUserId) {
         if (request == null) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Request body is required.");
         }
@@ -129,6 +149,10 @@ public class NotificationServiceImpl implements NotificationService {
             throw new ApiException(HttpStatus.BAD_REQUEST,
                     "Email notifications are disabled in system settings.");
         }
+        if (channel == NotificationChannel.EMAIL && !settingsService.isChannelEnabled(NotificationChannel.WEB)
+                && !settingsService.isCategoryEnabled(NotificationCategory.SYSTEM)) {
+            // No-op: we still send email even if WEB is off.
+        }
 
         List<UserAccount> recipients = userAccountRepository.findByStatus(AccountStatus.ACTIVE).stream()
                 .filter(u -> u.getRole() != null && target.contains(u.getRole()))
@@ -137,34 +161,34 @@ public class NotificationServiceImpl implements NotificationService {
         NotificationPriority priority =
                 request.getPriority() != null ? request.getPriority() : NotificationPriority.NORMAL;
 
-        DeliverRequest req = DeliverRequest.builder()
-                .type(NotificationType.ADMIN_BROADCAST)
-                .category(NotificationCategory.SYSTEM)
-                .title(request.getTitle())
-                .message(request.getMessage())
-                .relatedEntityType(NotificationRelatedEntity.SYSTEM)
-                .actor(actor)
-                .priority(priority)
-                .build();
-
-        if ((channel == NotificationChannel.WEB || channel == NotificationChannel.BOTH)
-                && settingsService.isChannelEnabled(NotificationChannel.WEB)) {
-            persistWeb(recipients, req);
+        if (channel == NotificationChannel.WEB || channel == NotificationChannel.BOTH) {
+            if (settingsService.isChannelEnabled(NotificationChannel.WEB)) {
+                persistWeb(
+                        recipients,
+                        NotificationType.ADMIN_BROADCAST,
+                        NotificationCategory.SYSTEM,
+                        request.getTitle(),
+                        request.getMessage(),
+                        NotificationRelatedEntity.SYSTEM,
+                        null,
+                        actorUserId,
+                        priority);
+            }
         }
-
-        if ((channel == NotificationChannel.EMAIL || channel == NotificationChannel.BOTH)
-                && settingsService.isChannelEnabled(NotificationChannel.EMAIL)) {
-            List<String> toEmails = recipients.stream()
-                    .filter(UserAccount::isEmailNotificationsEnabled)
-                    .map(UserAccount::getEmail)
-                    .filter(e -> e != null && !e.isBlank())
-                    .collect(Collectors.toList());
-            if (!toEmails.isEmpty()) {
-                try {
-                    emailService.sendHtmlBroadcast(toEmails, request.getTitle(),
-                            buildEmailHtml(request.getTitle(), request.getMessage()));
-                } catch (ApiException e) {
-                    log.warn("Email delivery skipped for admin broadcast: {}", e.getMessage());
+        if (channel == NotificationChannel.EMAIL || channel == NotificationChannel.BOTH) {
+            if (settingsService.isChannelEnabled(NotificationChannel.EMAIL)) {
+                List<String> toEmails = recipients.stream()
+                        .filter(UserAccount::isEmailNotificationsEnabled)
+                        .map(UserAccount::getEmail)
+                        .filter(e -> e != null && !e.isBlank())
+                        .collect(Collectors.toList());
+                if (!toEmails.isEmpty()) {
+                    try {
+                        emailService.sendHtmlBroadcast(
+                                toEmails, request.getTitle(), buildEmailHtml(request.getTitle(), request.getMessage()));
+                    } catch (ApiException e) {
+                        log.warn("Email delivery skipped for admin broadcast: {}", e.getMessage());
+                    }
                 }
             }
         }
@@ -175,45 +199,12 @@ public class NotificationServiceImpl implements NotificationService {
     // --- reads ----------------------------------------------------------------
 
     @Override
-    public Page<NotificationResponse> listForUser(
-            String userId,
-            boolean onlyUnread,
-            Optional<NotificationCategory> category,
-            Optional<NotificationType> type,
-            Pageable pageable) {
+    public Page<NotificationResponse> listForUser(String userId, boolean onlyUnread, Pageable pageable) {
         requireUser(userId);
-
-        // Fast path: no category or type filter → use simple derived queries.
-        boolean hasFilter = category.isPresent() || type.isPresent();
-        if (!hasFilter) {
-            Page<Notification> page = onlyUnread
-                    ? notificationRepository.findByRecipientUserIdAndIsReadFalseOrderByCreatedAtDesc(userId, pageable)
-                    : notificationRepository.findByRecipientUserIdOrderByCreatedAtDesc(userId, pageable);
-            return page.map(NotificationResponse::from);
-        }
-
-        Criteria criteria = Criteria.where("recipientUserId").is(userId);
-        if (onlyUnread) {
-            criteria = criteria.and("isRead").is(false);
-        }
-        category.ifPresent(c -> criteria.and("category").is(c));
-        type.ifPresent(t -> criteria.and("type").is(t));
-        Query query = new Query(criteria).with(pageable.getSort().isSorted()
-                ? pageable.getSort()
-                : org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt"));
-        long total = mongoTemplate.count(Query.of(query).limit(-1).skip(-1), Notification.class);
-        query.skip(pageable.getOffset()).limit(pageable.getPageSize());
-        List<Notification> rows = mongoTemplate.find(query, Notification.class);
-        List<NotificationResponse> mapped = rows.stream().map(NotificationResponse::from).toList();
-        return new PageImpl<>(mapped, pageable, total);
-    }
-
-    @Override
-    public List<NotificationResponse> recentForUser(String userId, int limit) {
-        requireUser(userId);
-        List<Notification> rows = notificationRepository.findTop10ByRecipientUserIdOrderByCreatedAtDesc(userId);
-        int cap = limit > 0 && limit < rows.size() ? limit : rows.size();
-        return rows.subList(0, cap).stream().map(NotificationResponse::from).toList();
+        Page<Notification> page = onlyUnread
+                ? notificationRepository.findByRecipientUserIdAndIsReadFalseOrderByCreatedAtDesc(userId, pageable)
+                : notificationRepository.findByRecipientUserIdOrderByCreatedAtDesc(userId, pageable);
+        return page.map(NotificationResponse::from);
     }
 
     @Override
@@ -271,19 +262,42 @@ public class NotificationServiceImpl implements NotificationService {
 
     // --- helpers --------------------------------------------------------------
 
-    private void persistWeb(List<UserAccount> recipients, DeliverRequest req) {
+    private void persistWebForRecipients(
+            List<UserAccount> recipients,
+            NotificationType type,
+            NotificationCategory category,
+            String title,
+            String message,
+            NotificationRelatedEntity relatedEntityType,
+            String relatedEntityId,
+            String createdByUserId) {
+        persistWeb(
+                recipients,
+                type,
+                category,
+                title,
+                message,
+                relatedEntityType,
+                relatedEntityId,
+                createdByUserId,
+                NotificationPriority.NORMAL);
+    }
+
+    private void persistWeb(
+            List<UserAccount> recipients,
+            NotificationType type,
+            NotificationCategory category,
+            String title,
+            String message,
+            NotificationRelatedEntity relatedEntityType,
+            String relatedEntityId,
+            String createdByUserId,
+            NotificationPriority priority) {
         if (recipients == null || recipients.isEmpty()) {
             return;
         }
         LocalDateTime now = LocalDateTime.now();
         List<Notification> batch = new ArrayList<>(recipients.size());
-        UserAccount actor = req.getActor();
-        String actorId = actor != null ? actor.getId() : null;
-        String actorName = actor != null
-                ? (notBlank(actor.getFullName()) ? actor.getFullName() : actor.getEmail())
-                : null;
-        String actorRole = actor != null && actor.getRole() != null ? actor.getRole().name() : null;
-
         for (UserAccount user : recipients) {
             if (!user.isAppNotificationsEnabled()) {
                 continue;
@@ -291,23 +305,17 @@ public class NotificationServiceImpl implements NotificationService {
             batch.add(Notification.builder()
                     .recipientUserId(user.getId())
                     .recipientRole(user.getRole())
-                    .title(safeTrim(req.getTitle(), 150))
-                    .message(safeTrim(req.getMessage(), 4000))
-                    .type(req.getType())
-                    .category(req.getCategory())
+                    .title(safeTrim(title, 150))
+                    .message(safeTrim(message, 4000))
+                    .type(type)
+                    .category(category)
                     .channel(NotificationChannel.WEB)
-                    .priority(req.getPriority() != null ? req.getPriority() : NotificationPriority.NORMAL)
-                    .relatedEntityType(req.getRelatedEntityType() != null
-                            ? req.getRelatedEntityType()
-                            : NotificationRelatedEntity.NONE)
-                    .relatedEntityId(req.getRelatedEntityId())
+                    .priority(priority)
+                    .relatedEntityType(relatedEntityType != null ? relatedEntityType : NotificationRelatedEntity.NONE)
+                    .relatedEntityId(relatedEntityId)
                     .isRead(false)
                     .createdAt(now)
-                    .createdBy(actorId != null ? actorId : "SYSTEM")
-                    .actorUserId(actorId)
-                    .actorNameSnapshot(actorName)
-                    .actorRoleSnapshot(actorRole)
-                    .metadataJson(req.getMetadataJson())
+                    .createdBy(createdByUserId != null ? createdByUserId : "SYSTEM")
                     .build());
         }
         if (!batch.isEmpty()) {
@@ -342,15 +350,15 @@ public class NotificationServiceImpl implements NotificationService {
         }
     }
 
-    private static boolean isBlank(String v) { return v == null || v.isBlank(); }
-    private static boolean notBlank(String v) { return v != null && !v.isBlank(); }
-
     private static String safeTrim(String value, int max) {
         if (value == null) {
             return "";
         }
         String v = value.trim();
-        return v.length() <= max ? v : v.substring(0, max);
+        if (v.length() <= max) {
+            return v;
+        }
+        return v.substring(0, max);
     }
 
     private static String buildEmailHtml(String title, String message) {
