@@ -45,22 +45,6 @@ const PROVIDER_ACCOUNT_CHOICES = {
       description: "Maintenance and incident support onboarding",
     },
   ],
-  APPLE: [
-    {
-      id: "apple-student-applicant",
-      fullName: "Campus iCloud Student",
-      email: "icloud.student@smartcampus.edu",
-      avatarLabel: "S",
-      description: "Apple ID based student onboarding",
-    },
-    {
-      id: "apple-staff-applicant",
-      fullName: "Campus iCloud Staff",
-      email: "icloud.staff@smartcampus.edu",
-      avatarLabel: "A",
-      description: "Apple ID based staff onboarding",
-    },
-  ],
 };
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /** Roles applicants may request (platform roles are assigned only after review). */
@@ -790,17 +774,10 @@ function SignupPage() {
                   onError={(message) => setLocalError(message)}
                   size="medium"
                 />
-                <button className="social-button social-button-apple" disabled={isLoading} onClick={() => openSocialChooser(AUTH_PROVIDERS.APPLE)} type="button">
-                  <span className="social-button-icon-shell" aria-hidden="true">
-                    <FaApple />
-                  </span>
-                  <span className="social-button-copy">
-                    <span className="social-button-label">Sign up with Apple</span>
-                    <small className="social-button-caption">Use your Apple ID</small>
-                  </span>
-                </button>
               </div>
-              <p className="login-demo-note">Your Google / Apple email becomes the primary email for this request.</p>
+              <p className="login-demo-note">
+                Your Google email becomes the primary email for this request.
+              </p>
             </div>
           ) : null}
 
