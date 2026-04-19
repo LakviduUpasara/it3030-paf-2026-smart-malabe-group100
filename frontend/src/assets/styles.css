@@ -3137,6 +3137,17 @@ a {
   }
 }
 
+/* Admin manage tickets: search + priority + assignment filters */
+.admin-ticket-list-filters {
+  margin-bottom: 0.15rem;
+}
+
+.admin-ticket-list-count {
+  margin: 0 0 0.85rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
 .admin-ticket-card .admin-ticket-meta-line {
   margin: 0 0 0.35rem;
   font-size: 0.875rem;
@@ -4904,6 +4915,66 @@ a {
 /* Shared with My Tickets filter styles (my-tickets-filters) */
 .technician-page-card .technician-filters {
   margin-bottom: 0;
+}
+
+.technician-workflow-segment {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  width: 100%;
+  align-items: center;
+}
+
+.technician-workflow-segment-label {
+  width: 100%;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin: 0 0 0.15rem;
+}
+
+.technician-segment-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.45rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 40, 67, 0.14);
+  background: #fff;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.technician-segment-btn:hover:not(:disabled) {
+  border-color: rgba(15, 124, 130, 0.35);
+  background: rgba(15, 124, 130, 0.06);
+}
+
+.technician-segment-btn.is-active {
+  border-color: rgba(15, 124, 130, 0.55);
+  background: rgba(15, 124, 130, 0.12);
+  color: var(--brand-strong, #0c6b66);
+}
+
+.technician-segment-btn:focus-visible {
+  outline: 2px solid rgba(15, 124, 130, 0.45);
+  outline-offset: 2px;
+}
+
+.technician-segment-count {
+  font-weight: 600;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.technician-segment-btn.is-active .technician-segment-count {
+  color: var(--text);
+  opacity: 0.85;
 }
 
 .technician-filter-empty {

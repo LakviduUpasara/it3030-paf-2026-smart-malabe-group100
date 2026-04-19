@@ -6,6 +6,7 @@ import LoadingSpinner from "../../components/LoadingSpinner";
 import TechnicianTicketModalWorkPanel, {
   focusTechnicianModalWorkNotes,
 } from "../../components/technician/TechnicianTicketModalWorkPanel";
+import TechnicianRejectAssignmentModal from "../../components/technician/TechnicianRejectAssignmentModal";
 import TechnicianTicketReadonlySummary from "../../components/technician/TechnicianTicketReadonlySummary";
 import {
   acceptTicketAssignment,
@@ -23,6 +24,32 @@ import { isActiveTicketStatus } from "../../utils/technicianTicketStatus";
 import { toToken } from "../../utils/formatters";
 import { parseTicketDescription } from "../../utils/ticketDescription";
 import { normalizeTicketFromApi } from "../../utils/ticketNormalize";
+
+const WORKFLOW_FILTERS = [
+  { id: "all", label: "All active" },
+  { id: "awaiting", label: "Awaiting response" },
+  { id: "working", label: "Accepted / in progress" },
+  { id: "other", label: "Other" },
+];
+
+function technicianTicketWorkflowBucket(ticket) {
+  if (isAwaitingTechnicianDecision(ticket)) return "awaiting";
+  if (isAcceptedTechnicianWork(ticket)) return "working";
+  return "other";
+}
+
+function ticketMatchesSearch(ticket, query) {
+  const q = String(query || "").trim().toLowerCase();
+  if (!q) return true;
+  const id = String(ticket?.id ?? "").toLowerCase();
+  const title = String(ticket?.title ?? "").toLowerCase();
+  const desc = String(ticket?.description ?? "").toLowerCase();
+  const updates = Array.isArray(ticket?.updates)
+    ? ticket.updates.map((u) => String(u?.message ?? "")).join(" ")
+    : "";
+  const blob = `${id} ${title} ${desc} ${updates}`.toLowerCase();
+  return blob.includes(q);
+}
 
 function formatInlineStatus(ticket) {
   if (!ticket) return "—";
@@ -55,8 +82,13 @@ function TechnicianTicketsPage() {
   const [detailError, setDetailError] = useState("");
   const [modalActionBusy, setModalActionBusy] = useState(false);
   const [modalActionError, setModalActionError] = useState("");
+  const [rejectModalOpen, setRejectModalOpen] = useState(false);
+  const [filterQuery, setFilterQuery] = useState("");
+  const [filterWorkflow, setFilterWorkflow] = useState("all");
+  const [filterPriority, setFilterPriority] = useState("");
 
   const closeDetailModal = useCallback(() => {
+    setRejectModalOpen(false);
     setActiveDetailTicketId(null);
     setDetailTicket(null);
     setDetailError("");
@@ -145,6 +177,43 @@ function TechnicianTicketsPage() {
     [tickets],
   );
 
+  const workflowCounts = useMemo(() => {
+    const counts = { all: 0, awaiting: 0, working: 0, other: 0 };
+    for (const t of activeTickets) {
+      counts.all += 1;
+      const b = technicianTicketWorkflowBucket(t);
+      if (b === "awaiting") counts.awaiting += 1;
+      else if (b === "working") counts.working += 1;
+      else counts.other += 1;
+    }
+    return counts;
+  }, [activeTickets]);
+
+  const filteredTickets = useMemo(() => {
+    return activeTickets.filter((ticket) => {
+      if (filterWorkflow !== "all") {
+        const b = technicianTicketWorkflowBucket(ticket);
+        if (b !== filterWorkflow) return false;
+      }
+      if (filterPriority) {
+        const parsed = parseTicketDescription(ticket.description);
+        const p = String(parsed.priority || "Normal").trim();
+        if (p !== filterPriority) return false;
+      }
+      if (!ticketMatchesSearch(ticket, filterQuery)) return false;
+      return true;
+    });
+  }, [activeTickets, filterWorkflow, filterPriority, filterQuery]);
+
+  const hasActiveFilters =
+    Boolean(filterQuery.trim()) || Boolean(filterPriority) || filterWorkflow !== "all";
+
+  const clearFilters = useCallback(() => {
+    setFilterQuery("");
+    setFilterPriority("");
+    setFilterWorkflow("all");
+  }, []);
+
   const handleModalAccept = useCallback(async () => {
     if (!detailTicket?.id) return;
     const id = String(detailTicket.id);
@@ -166,26 +235,30 @@ function TechnicianTicketsPage() {
     }
   }, [detailTicket?.id, closeDetailModal, navigate]);
 
-  const handleModalReject = useCallback(async () => {
-    if (!detailTicket?.id) return;
-    const id = String(detailTicket.id);
-    setModalActionError("");
-    setModalActionBusy(true);
-    try {
-      const res = await rejectTicketAssignment(id, {});
-      const updated = normalizeTicketFromApi(res?.data);
-      if (updated) {
-        setDetailTicket(updated);
-        setTickets((prev) => prev.map((t) => (String(t.id) === id ? updated : t)));
+  const handleRejectModalComplete = useCallback(
+    async (reasonText) => {
+      if (!detailTicket?.id) return;
+      const id = String(detailTicket.id);
+      setModalActionError("");
+      setModalActionBusy(true);
+      try {
+        const res = await rejectTicketAssignment(id, { reason: reasonText });
+        const updated = normalizeTicketFromApi(res?.data);
+        if (updated) {
+          setDetailTicket(updated);
+          setTickets((prev) => prev.map((t) => (String(t.id) === id ? updated : t)));
+        }
+        setRejectModalOpen(false);
+        closeDetailModal();
+        navigate("/technician/reject");
+      } catch (e) {
+        throw e;
+      } finally {
+        setModalActionBusy(false);
       }
-      closeDetailModal();
-      navigate("/technician/reject");
-    } catch (e) {
-      setModalActionError(e.message || "Could not decline assignment.");
-    } finally {
-      setModalActionBusy(false);
-    }
-  }, [detailTicket?.id, closeDetailModal, navigate]);
+    },
+    [detailTicket?.id, closeDetailModal, navigate],
+  );
 
   const showModalAccept = Boolean(detailTicket && canOpenAcceptPage(detailTicket));
   const showModalReject = Boolean(detailTicket && canUseRejectFlow(detailTicket));
@@ -205,8 +278,8 @@ function TechnicianTicketsPage() {
     <div className="technician-page">
       <Card
         className="technician-page-card"
-        subtitle="Open a ticket for details. Accept opens the Accept flow; Reject opens the Reject flow."
-        title="Technician Dashboard"
+        subtitle="Filter by assignment state and priority, or search. Open a row for details, accept, or reject."
+        title="Assigned tickets"
       >
         {error ? <p className="alert alert-error">{error}</p> : null}
         {!activeTickets.length ? (
@@ -216,6 +289,77 @@ function TechnicianTicketsPage() {
               : "You have no assigned tickets. Check back after the desk assigns work."}
           </p>
         ) : (
+          <>
+            <div className="technician-filters my-tickets-filters" aria-label="Search and filter tickets">
+              <div className="my-tickets-filters-search-row">
+                <label className="my-tickets-filters-search">
+                  <span>Search</span>
+                  <input
+                    autoComplete="off"
+                    type="search"
+                    placeholder="Title, description, ticket ID, or update text"
+                    value={filterQuery}
+                    onChange={(e) => setFilterQuery(e.target.value)}
+                  />
+                </label>
+              </div>
+              <div
+                className="technician-workflow-segment"
+                role="group"
+                aria-labelledby="technician-tickets-workflow-label"
+              >
+                <p className="technician-workflow-segment-label" id="technician-tickets-workflow-label">
+                  Assignment state
+                </p>
+                {WORKFLOW_FILTERS.map((opt) => {
+                  const fid = opt.id;
+                  const count = workflowCounts[fid] ?? 0;
+                  const isActive = filterWorkflow === fid;
+                  return (
+                    <button
+                      key={opt.id}
+                      aria-pressed={isActive}
+                      className={`technician-segment-btn${isActive ? " is-active" : ""}`}
+                      type="button"
+                      onClick={() => setFilterWorkflow(fid)}
+                    >
+                      {opt.label}
+                      <span className="technician-segment-count">({count})</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="my-tickets-filters-controls">
+                <label className="my-tickets-filter-field">
+                  <span>Priority</span>
+                  <select
+                    value={filterPriority}
+                    onChange={(e) => setFilterPriority(e.target.value)}
+                  >
+                    <option value="">All priorities</option>
+                    <option value="Low">Low</option>
+                    <option value="Normal">Normal</option>
+                    <option value="High">High</option>
+                    <option value="Critical">Critical</option>
+                  </select>
+                </label>
+                {hasActiveFilters ? (
+                  <Button type="button" variant="ghost" onClick={clearFilters}>
+                    Clear filters
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+
+            {filteredTickets.length === 0 ? (
+              <p className="supporting-text technician-filter-empty" role="status">
+                No tickets match your search or filters. Try adjusting or{" "}
+                <button className="link-button" type="button" onClick={clearFilters}>
+                  clear filters
+                </button>
+                .
+              </p>
+            ) : (
           <div
             className="technician-table-wrapper"
             role="region"
@@ -233,7 +377,7 @@ function TechnicianTicketsPage() {
                 </tr>
               </thead>
               <tbody>
-                {activeTickets.map((ticket) => {
+                {filteredTickets.map((ticket) => {
                   const parsed = parseTicketDescription(ticket.description);
                   const statusToken = toToken(ticket.status || "unknown");
                   return (
@@ -277,6 +421,8 @@ function TechnicianTicketsPage() {
               </tbody>
             </table>
           </div>
+            )}
+          </>
         )}
       </Card>
 
@@ -328,7 +474,7 @@ function TechnicianTicketsPage() {
                     type="button"
                     variant="secondary"
                     disabled={modalActionBusy}
-                    onClick={handleModalReject}
+                    onClick={() => setRejectModalOpen(true)}
                   >
                     Reject
                   </Button>
@@ -346,6 +492,17 @@ function TechnicianTicketsPage() {
           </div>
         </div>
       ) : null}
+
+      <TechnicianRejectAssignmentModal
+        busy={modalActionBusy}
+        inProgressPhase={Boolean(detailTicket && isAcceptedTechnicianWork(detailTicket))}
+        onClose={() => {
+          if (!modalActionBusy) setRejectModalOpen(false);
+        }}
+        onComplete={handleRejectModalComplete}
+        open={rejectModalOpen}
+        ticketTitle={detailTicket?.title}
+      />
     </div>
   );
 }
