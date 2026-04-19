@@ -603,11 +603,6 @@ function ManageResourcesPage() {
   const availableResources = resources.filter((resource) => resource.status === "ACTIVE").length;
   const maintenanceResources = resources.filter((resource) => resource.status === "OUT_OF_SERVICE")
     .length;
-  const resourceTypesCount = new Set(resources.map((resource) => resource.type)).size;
-  const capacityTotal = resources.reduce(
-    (total, resource) => total + Number(resource.capacity || 0),
-    0,
-  );
 
   return (
     <>
@@ -626,29 +621,43 @@ function ManageResourcesPage() {
         title="Resource portfolio"
       />
 
-      <AdminKpiGrid>
+      <AdminKpiGrid className="resource-portfolio-kpi-grid xl:grid-cols-3 2xl:grid-cols-3">
         <AdminStatTile
+          className="min-h-[182px] rounded-[28px] border-border/80 bg-white/92 px-7 py-6 shadow-[0_18px_38px_rgba(15,23,42,0.08)]"
           detail={`${availableResources} available now`}
+          detailClassName="mt-3 text-base leading-7 text-text/72"
           icon={Boxes}
+          iconShellClassName="h-12 w-12 rounded-[18px] bg-[#024A70]/[0.08] text-[#024A70]"
           label="Total resources"
+          labelClassName="text-[0.78rem] tracking-[0.18em] text-text/55"
           value={resources.length}
+          valueClassName="mt-4 text-[3.15rem] leading-none"
         />
         <AdminStatTile
+          className="min-h-[182px] rounded-[28px] border-border/80 bg-white/92 px-7 py-6 shadow-[0_18px_38px_rgba(15,23,42,0.08)]"
           detail="Ready for scheduling"
+          detailClassName="mt-3 text-base leading-7 text-text/72"
           icon={Wrench}
+          iconShellClassName="h-12 w-12 rounded-[18px] bg-[#2AA63E]/[0.1] text-[#2AA63E]"
           label="Active"
+          labelClassName="text-[0.78rem] tracking-[0.18em] text-text/55"
           value={availableResources}
+          valueClassName="mt-4 text-[3.15rem] leading-none"
         />
         <AdminStatTile
+          className="min-h-[182px] rounded-[28px] border-border/80 bg-white/92 px-7 py-6 shadow-[0_18px_38px_rgba(15,23,42,0.08)]"
           detail="Out of service"
+          detailClassName="mt-3 text-base leading-7 text-text/72"
           icon={ShieldAlert}
+          iconShellClassName="h-12 w-12 rounded-[18px] bg-[#f59e0b]/[0.12] text-[#f59e0b]"
           label="Maintenance"
+          labelClassName="text-[0.78rem] tracking-[0.18em] text-text/55"
           value={maintenanceResources}
+          valueClassName="mt-4 text-[3.15rem] leading-none"
         />
       </AdminKpiGrid>
 
-      <div className="grid gap-6 xl:grid-cols-[1.35fr_0.95fr]">
-        <div className="page-stack resource-management-page min-w-0">
+      <div className="page-stack resource-management-page min-w-0">
         <Card
           className="resource-management-card admin-panel-card"
           title="Manage Resources"
@@ -754,13 +763,20 @@ function ManageResourcesPage() {
                     title={resource.name}
                   >
                     <div className="resource-card-content">
-                      <div className="resource-card-meta">
-                        <p className="supporting-text">Capacity: {resource.capacity}</p>
+                      <div className="resource-card-metrics">
+                        <div className="resource-card-metric">
+                          <span className="resource-card-metric-label">Capacity</span>
+                          <strong className="resource-card-metric-value">{resource.capacity}</strong>
+                        </div>
                         {resource.availabilityWindows?.length ? (
-                          <p className="supporting-text resource-availability">
-                            Availability:{" "}
-                            {resource.availabilityWindows.map(formatAvailabilityWindow).join(" | ")}
-                          </p>
+                          <div className="resource-card-metric resource-card-metric-wide">
+                            <span className="resource-card-metric-label">Availability</span>
+                            <p className="supporting-text resource-availability">
+                              {resource.availabilityWindows
+                                .map(formatAvailabilityWindow)
+                                .join(" | ")}
+                            </p>
+                          </div>
                         ) : null}
                       </div>
                       <div className="resource-card-footer">
@@ -775,26 +791,6 @@ function ManageResourcesPage() {
             ) : null}
           </section>
         </Card>
-        </div>
-
-        <aside className="h-fit rounded-3xl border border-border bg-tint p-5">
-          <p className="text-base font-semibold text-heading">Portfolio mix</p>
-          <p className="text-sm text-text/72">Inventory snapshot</p>
-          <div className="mt-4 space-y-3 border-t border-border/60 pt-4 text-sm">
-            <div className="flex justify-between gap-2">
-              <span className="text-text/72">Resource types</span>
-              <span className="font-semibold text-heading">{resourceTypesCount}</span>
-            </div>
-            <div className="flex justify-between gap-2">
-              <span className="text-text/72">Bookable capacity</span>
-              <span className="font-semibold text-heading">{capacityTotal}</span>
-            </div>
-            <div className="flex justify-between gap-2">
-              <span className="text-text/72">Maintenance blocked</span>
-              <span className="font-semibold text-heading">{maintenanceResources}</span>
-            </div>
-          </div>
-        </aside>
       </div>
 
       <Modal
