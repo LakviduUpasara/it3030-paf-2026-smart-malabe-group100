@@ -20,7 +20,7 @@ export function isTechnicianAcceptanceRejected(ticket) {
 
 /**
  * Desk assigned the ticket but the technician has not accepted yet:
- * legacy {@code ASSIGNED}, or {@code IN_PROGRESS} with {@code technicianAcceptance === "PENDING"}.
+ * {@code ASSIGNED}, or {@code IN_PROGRESS} with {@code PENDING} or missing acceptance (legacy rows).
  */
 export function isAwaitingTechnicianDecision(ticket) {
   if (!ticket) return false;
@@ -28,12 +28,12 @@ export function isAwaitingTechnicianDecision(ticket) {
   if (k === "ASSIGNED") return true;
   if (k !== "IN_PROGRESS") return false;
   const acc = normalizeTechnicianAcceptance(ticket.technicianAcceptance);
-  return acc === "PENDING";
+  return acc === "PENDING" || acc === "";
 }
 
 /**
- * Technician may work and resolve: status {@code ACCEPTED}, or legacy {@code IN_PROGRESS}
- * with ({@code ACCEPTED} or no acceptance field).
+ * Technician may work and resolve only after explicit acceptance: {@code ACCEPTED}, or {@code IN_PROGRESS}
+ * with {@code technicianAcceptance === "ACCEPTED"}.
  */
 export function isAcceptedTechnicianWork(ticket) {
   if (!ticket) return false;
@@ -41,7 +41,6 @@ export function isAcceptedTechnicianWork(ticket) {
   if (k === "ACCEPTED") return true;
   if (k !== "IN_PROGRESS") return false;
   const acc = normalizeTechnicianAcceptance(ticket.technicianAcceptance);
-  if (!acc) return true;
   return acc === "ACCEPTED";
 }
 

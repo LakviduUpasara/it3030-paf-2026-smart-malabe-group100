@@ -72,7 +72,7 @@ export default function TechnicianTicketReadonlySummary({ ticket }) {
       for (const att of normalizedAttachments) {
         if (!att?.id) continue;
         try {
-          const preview = await fetchAttachmentPreview(ticket.id, att.id);
+          const preview = await fetchAttachmentPreview(ticket.id, att.id, { fileNameHint: att.fileName });
           if (!cancelled) {
             next[att.id] = { ...preview, fileName: att.fileName || "" };
           }

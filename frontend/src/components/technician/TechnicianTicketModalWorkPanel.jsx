@@ -86,7 +86,7 @@ export default function TechnicianTicketModalWorkPanel({ ticket, onTicketUpdated
       for (const att of techAttachments) {
         if (!att?.id) continue;
         try {
-          const preview = await fetchAttachmentPreview(ticketId, att.id);
+          const preview = await fetchAttachmentPreview(ticketId, att.id, { fileNameHint: att.fileName });
           if (!cancelled) {
             next[att.id] = { ...preview, fileName: att.fileName || "" };
           }

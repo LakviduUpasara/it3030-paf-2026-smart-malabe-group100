@@ -125,7 +125,9 @@ function TechnicianTicketRejectPage() {
         </div>
 
         <label className="field mb-4">
-          <span>Note for the desk (optional, max {REASON_MAX} characters)</span>
+          <span>
+            Reason for rejection <span className="text-text/70">(required — visible to administrators, max {REASON_MAX} characters)</span>
+          </span>
           <textarea
             className="min-h-[100px] w-full rounded-xl border border-border bg-surface p-3 text-sm"
             maxLength={REASON_MAX}
@@ -137,13 +139,13 @@ function TechnicianTicketRejectPage() {
 
         <div className="flex flex-wrap gap-2">
           <Button
-            disabled={busy}
+            disabled={busy || !reason.trim()}
             onClick={async () => {
               setBusy(true);
               setError("");
               try {
                 const trimmed = reason.trim();
-                await rejectTicketAssignment(ticketId, trimmed ? { reason: trimmed } : {});
+                await rejectTicketAssignment(ticketId, { reason: trimmed });
                 navigate("/technician/reject");
               } catch (e) {
                 setError(e.message || "Could not return ticket.");

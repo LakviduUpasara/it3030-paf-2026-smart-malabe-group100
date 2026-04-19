@@ -70,6 +70,39 @@ function normalizeTicketStatus(status) {
     .replace(/\s+/g, "_");
 }
 
+function buildAdminTicketSearchBlob(ticket) {
+  const updates = Array.isArray(ticket?.updates) ? ticket.updates : [];
+  const updateText = updates.map((u) => String(u?.message ?? "")).join(" ");
+  return [
+    ticket?.id,
+    ticket?.title,
+    ticket?.description,
+    ticket?.createdByUsername,
+    ticket?.createdByUserId,
+    ticket?.assignedTechnicianUsername,
+    ticket?.assignedTechnicianUserId,
+    ticket?.categoryId,
+    ticket?.subCategoryId,
+    ticket?.technicianAssignmentRejectionNote,
+    updateText,
+  ]
+    .map((s) => String(s ?? "").toLowerCase())
+    .join(" \n ");
+}
+
+function adminTicketMatchesSearch(ticket, query) {
+  const q = String(query || "").trim().toLowerCase();
+  if (!q) return true;
+  return buildAdminTicketSearchBlob(ticket).includes(q);
+}
+
+function ticketHasAssignee(ticket) {
+  return Boolean(
+    (ticket?.assignedTechnicianUserId && String(ticket.assignedTechnicianUserId).trim()) ||
+      (ticket?.assignedTechnicianUsername && String(ticket.assignedTechnicianUsername).trim()),
+  );
+}
+
 const ADMIN_TICKET_SECTIONS = [
   { id: "open", label: "Open tickets", status: "OPEN" },
   { id: "assigned", label: "Assigned tickets", status: "IN_PROGRESS" },
@@ -123,6 +156,10 @@ function ManageTicketsPage() {
 
   const [requesterPreviewById, setRequesterPreviewById] = useState({});
   const [technicianPreviewById, setTechnicianPreviewById] = useState({});
+
+  const [filterQuery, setFilterQuery] = useState("");
+  const [filterPriority, setFilterPriority] = useState("");
+  const [filterAssignee, setFilterAssignee] = useState("all");
 
   const requesterAttachmentKey = useMemo(() => {
     const list = Array.isArray(detailTicket?.attachments) ? detailTicket.attachments : [];
@@ -181,7 +218,7 @@ function ManageTicketsPage() {
     };
   }, []);
 
-  const filteredTickets = useMemo(() => {
+  const sectionTickets = useMemo(() => {
     if (activeSection === "categories" || activeSection === "technicians") {
       return [];
     }
@@ -198,6 +235,29 @@ function ManageTicketsPage() {
       return s === want;
     });
   }, [tickets, activeSection]);
+
+  const displayTickets = useMemo(() => {
+    return sectionTickets.filter((t) => {
+      if (filterPriority) {
+        const parsed = parseTicketDescription(t.description);
+        const p = String(parsed.priority || "Normal").trim();
+        if (p !== filterPriority) return false;
+      }
+      if (filterAssignee === "assigned" && !ticketHasAssignee(t)) return false;
+      if (filterAssignee === "unassigned" && ticketHasAssignee(t)) return false;
+      if (!adminTicketMatchesSearch(t, filterQuery)) return false;
+      return true;
+    });
+  }, [sectionTickets, filterPriority, filterAssignee, filterQuery]);
+
+  const hasListFilters =
+    Boolean(filterQuery.trim()) || Boolean(filterPriority) || filterAssignee !== "all";
+
+  const clearListFilters = () => {
+    setFilterQuery("");
+    setFilterPriority("");
+    setFilterAssignee("all");
+  };
 
   useEffect(() => {
     let active = true;
@@ -258,7 +318,9 @@ function ManageTicketsPage() {
       for (const att of atts) {
         if (!att?.id) continue;
         try {
-          const preview = await fetchAttachmentPreview(detailTicket.id, att.id);
+          const preview = await fetchAttachmentPreview(detailTicket.id, att.id, {
+            fileNameHint: att.fileName,
+          });
           if (!cancelled) {
             next[att.id] = { ...preview, fileName: att.fileName || "" };
           }
@@ -310,7 +372,9 @@ function ManageTicketsPage() {
       for (const att of atts) {
         if (!att?.id) continue;
         try {
-          const preview = await fetchAttachmentPreview(detailTicket.id, att.id);
+          const preview = await fetchAttachmentPreview(detailTicket.id, att.id, {
+            fileNameHint: att.fileName,
+          });
           if (!cancelled) {
             next[att.id] = { ...preview, fileName: att.fileName || "" };
           }
@@ -480,19 +544,88 @@ function ManageTicketsPage() {
       <div className="admin-tickets-layout admin-tickets-layout--no-rail">
         <div className="admin-tickets-main admin-tickets-main--standalone">
           {showTicketList ? (
-            <Card title="Manage Tickets" subtitle="View all incident tickets">
+            <Card
+              title="Manage Tickets"
+              subtitle="Search by ticket ID, requester, technician, title, description, or updates. Filter by priority and assignment."
+            >
               {error && <p className="alert alert-error">{error}</p>}
 
               {!error && tickets.length === 0 && (
                 <p className="supporting-text">No tickets yet.</p>
               )}
 
-              {!error && tickets.length > 0 && filteredTickets.length === 0 && (
+              {!error && tickets.length > 0 && sectionTickets.length === 0 && (
                 <p className="supporting-text">{emptySectionMessage}</p>
               )}
 
+              {!error && tickets.length > 0 && sectionTickets.length > 0 ? (
+                <>
+                  <div
+                    className="my-tickets-filters admin-ticket-list-filters"
+                    aria-label="Search and filter tickets"
+                  >
+                    <div className="my-tickets-filters-search-row">
+                      <label className="my-tickets-filters-search">
+                        <span>Search</span>
+                        <input
+                          autoComplete="off"
+                          type="search"
+                          placeholder="Ticket ID, title, requester, technician, description, updates…"
+                          value={filterQuery}
+                          onChange={(e) => setFilterQuery(e.target.value)}
+                        />
+                      </label>
+                    </div>
+                    <div className="my-tickets-filters-controls">
+                      <label className="my-tickets-filter-field">
+                        <span>Priority</span>
+                        <select
+                          value={filterPriority}
+                          onChange={(e) => setFilterPriority(e.target.value)}
+                        >
+                          <option value="">All priorities</option>
+                          <option value="Low">Low</option>
+                          <option value="Normal">Normal</option>
+                          <option value="High">High</option>
+                          <option value="Critical">Critical</option>
+                        </select>
+                      </label>
+                      <label className="my-tickets-filter-field">
+                        <span>Assignment</span>
+                        <select
+                          value={filterAssignee}
+                          onChange={(e) => setFilterAssignee(e.target.value)}
+                        >
+                          <option value="all">All</option>
+                          <option value="assigned">Assigned to a technician</option>
+                          <option value="unassigned">Not assigned</option>
+                        </select>
+                      </label>
+                      {hasListFilters ? (
+                        <Button type="button" variant="ghost" onClick={clearListFilters}>
+                          Clear filters
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  {displayTickets.length === 0 ? (
+                    <p className="supporting-text my-tickets-filter-empty" role="status">
+                      No tickets match your search or filters.{" "}
+                      <button className="link-button" type="button" onClick={clearListFilters}>
+                        Clear filters
+                      </button>
+                    </p>
+                  ) : hasListFilters ? (
+                    <p className="supporting-text admin-ticket-list-count" role="status">
+                      Showing {displayTickets.length} of {sectionTickets.length} tickets in this queue.
+                    </p>
+                  ) : null}
+                </>
+              ) : null}
+
               <div className="list-stack">
-                {filteredTickets.map((ticket, index) => (
+                {displayTickets.map((ticket, index) => (
                   <TicketCard
                     key={ticket.id != null ? ticket.id : `ticket-${index}`}
                     ticket={ticket}
