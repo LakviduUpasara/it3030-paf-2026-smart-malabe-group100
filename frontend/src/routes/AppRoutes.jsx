@@ -40,6 +40,7 @@ import TechnicianTicketRejectPage from "../pages/technician/TechnicianTicketReje
 import TechnicianResolvedTicketsPage from "../pages/technician/TechnicianResolvedTicketsPage";
 import TechnicianTicketsPage from "../pages/technician/TechnicianTicketsPage";
 import AdminConsoleLayout from "../components/admin/AdminConsoleLayout";
+import UserConsoleLayout from "../components/user/UserConsoleLayout";
 import AdminRoute from "./AdminRoute";
 import RequireSuperAdmin from "./RequireSuperAdmin";
 import RequireAdminBooking from "./RequireAdminBooking";
@@ -71,62 +72,52 @@ function AppRoutes() {
       <Route path="/approval-pending" element={<ApprovalPendingPage />} />
       <Route path="/access-denied" element={<AccessDeniedPage />} />
 
+      {/* End-user console (sidebar + topbar shell). Role-specific gating stays on each leaf. */}
       <Route
-        path="/dashboard"
         element={
           <ProtectedRoute>
-            <DashboardPage />
+            <UserConsoleLayout />
           </ProtectedRoute>
         }
-      />
-      <Route
-        path="/bookings"
-        element={
-          <ProtectedRoute allowedRoles={[ROLES.USER]}>
-            <MyBookingsPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/bookings/new"
-        element={
-          <ProtectedRoute allowedRoles={[ROLES.USER]}>
-            <CreateBookingPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/bookings/availability"
-        element={
-          <ProtectedRoute allowedRoles={[ROLES.USER, ROLES.ADMIN, ROLES.MANAGER, ROLES.LECTURER]}>
-            <ResourceAvailabilityPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/tickets"
-        element={
-          <ProtectedRoute allowedRoles={[ROLES.USER]}>
-            <MyTicketsPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/notifications"
-        element={
-          <ProtectedRoute>
-            <NotificationsPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/settings/security"
-        element={
-          <ProtectedRoute>
-            <SystemSettingsPage />
-          </ProtectedRoute>
-        }
-      />
+      >
+        <Route path="/dashboard" element={<DashboardPage />} />
+        <Route
+          path="/bookings"
+          element={
+            <ProtectedRoute allowedRoles={[ROLES.USER]}>
+              <MyBookingsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/bookings/new"
+          element={
+            <ProtectedRoute allowedRoles={[ROLES.USER]}>
+              <CreateBookingPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/bookings/availability"
+          element={
+            <ProtectedRoute
+              allowedRoles={[ROLES.USER, ROLES.ADMIN, ROLES.MANAGER, ROLES.LECTURER]}
+            >
+              <ResourceAvailabilityPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/tickets"
+          element={
+            <ProtectedRoute allowedRoles={[ROLES.USER]}>
+              <MyTicketsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="/notifications" element={<NotificationsPage />} />
+        <Route path="/settings/security" element={<SystemSettingsPage />} />
+      </Route>
       <Route
         path="/technician"
         element={
