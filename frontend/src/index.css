@@ -3,7 +3,14 @@
 @tailwind utilities;
 
 @layer base {
+  /*
+   * Design tokens consumed by Tailwind (see tailwind.config.js) and by
+   * component-level `.button` / `.card` styles in assets/styles.css.
+   * Light values are the baseline; [data-theme="dark"] flips them to a
+   * premium navy/slate palette inspired by the landing page hero.
+   */
   :root {
+    color-scheme: light;
     --bg: #f6f7fb;
     --card: #ffffff;
     --tint: rgba(15, 23, 42, 0.04);
@@ -15,6 +22,34 @@
     --shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 10px 40px rgba(15, 23, 42, 0.04);
     --shadowHover: 0 4px 12px rgba(15, 23, 42, 0.12), 0 20px 48px rgba(15, 23, 42, 0.08);
     --focus: rgba(3, 74, 166, 0.22);
+  }
+
+  [data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0b1220;
+    --card: #111a2e;
+    --tint: rgba(148, 163, 184, 0.08);
+    --text: #cbd5e1;
+    --heading: #f1f5f9;
+    --primary: #3b82f6;
+    --primaryHover: #60a5fa;
+    --border: rgba(148, 163, 184, 0.18);
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.35), 0 10px 40px rgba(0, 0, 0, 0.25);
+    --shadowHover: 0 4px 12px rgba(0, 0, 0, 0.45), 0 20px 48px rgba(0, 0, 0, 0.3);
+    --focus: rgba(59, 130, 246, 0.4);
+  }
+
+  /* Smooth theme transitions — kept short so interactive feedback stays snappy. */
+  html,
+  body,
+  #root,
+  #admin-root,
+  #user-root,
+  #technician-root {
+    transition:
+      background-color 180ms ease,
+      color 180ms ease,
+      border-color 180ms ease;
   }
 
   #admin-root {

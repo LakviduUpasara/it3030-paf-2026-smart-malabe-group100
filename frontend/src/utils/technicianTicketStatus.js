@@ -7,5 +7,11 @@ export function isResolvedTicketStatus(status) {
 }
 
 export function isActiveTicketStatus(status) {
+  const s = String(status || "")
+    .trim()
+    .toUpperCase();
+  if (s === "WITHDRAWN") {
+    return false;
+  }
   return !isResolvedTicketStatus(status);
 }

@@ -50,7 +50,7 @@ export async function updateMyTicket(id, payload) {
 
 export async function withdrawMyTicket(id, payload) {
   try {
-    return await api.post(`/tickets/${id}/withdraw`, payload);
+    return await api.patch(`/tickets/${id}/withdraw`, payload);
   } catch (error) {
     throw createServiceError(error, "Unable to withdraw ticket.");
   }
@@ -97,7 +97,7 @@ export async function fetchAttachmentPreview(ticketId, attachmentId) {
 
 export async function assignTicketToTechnician(ticketId, technicianUserId) {
   try {
-    return await api.post(`/tickets/${ticketId}/assign`, { technicianUserId });
+    return await api.patch(`/tickets/${ticketId}/assign-technician`, { technicianUserId });
   } catch (error) {
     throw createServiceError(error, "Unable to assign ticket.");
   }
@@ -106,7 +106,7 @@ export async function assignTicketToTechnician(ticketId, technicianUserId) {
 /** Sets acceptance to accepted (IN_PROGRESS + PENDING → ACCEPTED; legacy ASSIGNED → IN_PROGRESS + ACCEPTED). */
 export async function acceptTicketAssignment(ticketId) {
   try {
-    return await api.post(`/tickets/${ticketId}/assignment/accept`);
+    return await api.patch(`/tickets/${ticketId}/assignment/accept`);
   } catch (error) {
     throw createServiceError(error, "Unable to accept assignment.");
   }
@@ -115,7 +115,7 @@ export async function acceptTicketAssignment(ticketId) {
 /** Returns ticket to OPEN for the desk queue; clears assignee (assigned technician only). */
 export async function rejectTicketAssignment(ticketId, payload) {
   try {
-    return await api.post(`/tickets/${ticketId}/assignment/reject`, payload ?? {});
+    return await api.patch(`/tickets/${ticketId}/assignment/reject`, payload ?? {});
   } catch (error) {
     throw createServiceError(error, "Unable to decline assignment.");
   }

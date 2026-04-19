@@ -3,7 +3,7 @@ import { useAuth } from "../../hooks/useAuth";
 import NotificationBell from "../notifications/NotificationBell";
 import ThemeToggle from "../ThemeToggle";
 
-function UserTopBar({ onMenuClick }) {
+function TechnicianTopBar({ onMenuClick }) {
   const { user, logout } = useAuth();
 
   return (
@@ -19,7 +19,7 @@ function UserTopBar({ onMenuClick }) {
 
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold text-heading">
-          {user?.name ? `Welcome, ${user.name}` : "Workspace"}
+          {user?.name ? `Technician · ${user.name}` : "Technician workspace"}
         </p>
         <p className="truncate text-xs text-text/60">Smart Campus Operations Hub</p>
       </div>
@@ -40,4 +40,4 @@ function UserTopBar({ onMenuClick }) {
   );
 }
 
-export default UserTopBar;
+export default TechnicianTopBar;

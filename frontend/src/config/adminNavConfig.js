@@ -128,6 +128,13 @@ export const ADMIN_NAV_SECTIONS = [
         allowedRoles: [LMS_ROLES.SUPER_ADMIN, LMS_ROLES.MANAGER],
       },
       {
+        id: "tickets-rejected-assignments",
+        label: "Rejected assignments",
+        href: "/admin/tickets?section=rejected-assignments",
+        section: "rejected-assignments",
+        allowedRoles: [LMS_ROLES.SUPER_ADMIN, LMS_ROLES.MANAGER],
+      },
+      {
         id: "tickets-assigned",
         label: "Assigned tickets",
         href: "/admin/tickets?section=assigned",

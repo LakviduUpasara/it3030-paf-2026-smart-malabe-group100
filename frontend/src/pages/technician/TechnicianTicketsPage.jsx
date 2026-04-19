@@ -6,20 +6,15 @@ import LoadingSpinner from "../../components/LoadingSpinner";
 import TechnicianTicketModalWorkPanel, {
   focusTechnicianModalWorkNotes,
 } from "../../components/technician/TechnicianTicketModalWorkPanel";
-import TechnicianRejectAssignmentModal from "../../components/technician/TechnicianRejectAssignmentModal";
 import TechnicianTicketReadonlySummary from "../../components/technician/TechnicianTicketReadonlySummary";
-import {
-  acceptTicketAssignment,
-  getMyTickets,
-  getTicketById,
-  rejectTicketAssignment,
-} from "../../services/ticketService";
+import { acceptTicketAssignment, getMyTickets, getTicketById } from "../../services/ticketService";
 import {
   canOpenAcceptPage,
   canUseRejectFlow,
   isAcceptedTechnicianWork,
   isAwaitingTechnicianDecision,
 } from "../../utils/technicianTicketFlow";
+import { isActiveTicketStatus } from "../../utils/technicianTicketStatus";
 import { toToken } from "../../utils/formatters";
 import { parseTicketDescription } from "../../utils/ticketDescription";
 import { normalizeTicketFromApi } from "../../utils/ticketNormalize";
@@ -55,8 +50,6 @@ function TechnicianTicketsPage() {
   const [detailError, setDetailError] = useState("");
   const [modalActionBusy, setModalActionBusy] = useState(false);
   const [modalActionError, setModalActionError] = useState("");
-  const [rejectFlowOpen, setRejectFlowOpen] = useState(false);
-  const [acceptConfirmOpen, setAcceptConfirmOpen] = useState(false);
 
   const closeDetailModal = useCallback(() => {
     setActiveDetailTicketId(null);
@@ -65,8 +58,6 @@ function TechnicianTicketsPage() {
     setDetailLoading(false);
     setModalActionBusy(false);
     setModalActionError("");
-    setRejectFlowOpen(false);
-    setAcceptConfirmOpen(false);
   }, []);
 
   useEffect(() => {
@@ -134,15 +125,7 @@ function TechnicianTicketsPage() {
     document.body.style.overflow = "hidden";
     const onKeyDown = (event) => {
       if (event.key === "Escape") {
-        if (acceptConfirmOpen) {
-          event.stopPropagation();
-          if (!modalActionBusy) setAcceptConfirmOpen(false);
-        } else if (rejectFlowOpen) {
-          event.stopPropagation();
-          if (!modalActionBusy) setRejectFlowOpen(false);
-        } else {
-          closeDetailModal();
-        }
+        closeDetailModal();
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -150,11 +133,16 @@ function TechnicianTicketsPage() {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [activeDetailTicketId, closeDetailModal, acceptConfirmOpen, rejectFlowOpen, modalActionBusy]);
+  }, [activeDetailTicketId, closeDetailModal]);
 
-  /** Only assignments you still need to accept or reject — not already-accepted work (see Accept page). */
-  const pendingDecisionTickets = useMemo(
-    () => tickets.filter((t) => t && isAwaitingTechnicianDecision(t)),
+  const activeTickets = useMemo(
+    () =>
+      tickets.filter(
+        (t) =>
+          isActiveTicketStatus(t?.status) &&
+          isAcceptedTechnicianWork(t) &&
+          !isAwaitingTechnicianDecision(t),
+      ),
     [tickets],
   );
 
@@ -170,9 +158,8 @@ function TechnicianTicketsPage() {
         setDetailTicket(updated);
         setTickets((prev) => prev.map((t) => (String(t.id) === id ? updated : t)));
       }
-      setAcceptConfirmOpen(false);
       closeDetailModal();
-      navigate("/technician/accept");
+      navigate(`/technician/tickets/${id}/work`);
     } catch (e) {
       setModalActionError(e.message || "Could not accept assignment.");
     } finally {
@@ -180,31 +167,12 @@ function TechnicianTicketsPage() {
     }
   }, [detailTicket?.id, closeDetailModal, navigate]);
 
-  const handleRejectComplete = useCallback(
-    async (reasonText) => {
-      if (!detailTicket?.id) return;
-      const id = String(detailTicket.id);
-      setModalActionError("");
-      setModalActionBusy(true);
-      try {
-        const res = await rejectTicketAssignment(id, { reason: reasonText });
-        const updated = normalizeTicketFromApi(res?.data);
-        if (updated) {
-          setDetailTicket(updated);
-          setTickets((prev) => prev.map((t) => (String(t.id) === id ? updated : t)));
-        }
-        setRejectFlowOpen(false);
-        closeDetailModal();
-        navigate("/technician/tickets");
-      } catch (e) {
-        setModalActionError(e.message || "Could not decline assignment.");
-        throw e;
-      } finally {
-        setModalActionBusy(false);
-      }
-    },
-    [detailTicket?.id, closeDetailModal, navigate],
-  );
+  const handleModalReject = useCallback(() => {
+    if (!detailTicket?.id) return;
+    const id = String(detailTicket.id);
+    closeDetailModal();
+    navigate(`/technician/tickets/${id}/reject`);
+  }, [detailTicket?.id, closeDetailModal, navigate]);
 
   const showModalAccept = Boolean(detailTicket && canOpenAcceptPage(detailTicket));
   const showModalReject = Boolean(detailTicket && canUseRejectFlow(detailTicket));
@@ -224,21 +192,21 @@ function TechnicianTicketsPage() {
     <div className="technician-page">
       <Card
         className="technician-page-card"
-        subtitle="Assignments waiting for you to accept or reject. After you accept, the ticket moves to the Accept page."
-        title="My tickets"
+        subtitle="Tickets you have accepted — open a row for details, comments, evidence, and resolution."
+        title="Assigned tickets"
       >
         {error ? <p className="alert alert-error">{error}</p> : null}
-        {!pendingDecisionTickets.length ? (
+        {!activeTickets.length ? (
           <p className="supporting-text">
             {tickets.length
-              ? "Nothing waiting for a decision right now. Tickets you've accepted are on the Accept page; resolved work is under Resolved."
+              ? "No active assigned work — new assignments awaiting your decision are under Open tickets."
               : "You have no assigned tickets. Check back after the desk assigns work."}
           </p>
         ) : (
           <div
             className="technician-table-wrapper"
             role="region"
-            aria-label="Assignments awaiting your response"
+            aria-label="Active assigned tickets"
           >
             <table className="technician-table">
               <thead>
@@ -252,7 +220,7 @@ function TechnicianTicketsPage() {
                 </tr>
               </thead>
               <tbody>
-                {pendingDecisionTickets.map((ticket) => {
+                {activeTickets.map((ticket) => {
                   const parsed = parseTicketDescription(ticket.description);
                   const statusToken = toToken(ticket.status || "unknown");
                   return (
@@ -338,14 +306,7 @@ function TechnicianTicketsPage() {
             {!detailLoading && detailTicket && !detailError ? (
               <div className="modal-footer">
                 {showModalAccept ? (
-                  <Button
-                    type="button"
-                    disabled={modalActionBusy}
-                    onClick={() => {
-                      setModalActionError("");
-                      setAcceptConfirmOpen(true);
-                    }}
-                  >
+                  <Button type="button" disabled={modalActionBusy} onClick={handleModalAccept}>
                     Accept
                   </Button>
                 ) : null}
@@ -354,7 +315,7 @@ function TechnicianTicketsPage() {
                     type="button"
                     variant="secondary"
                     disabled={modalActionBusy}
-                    onClick={() => setRejectFlowOpen(true)}
+                    onClick={handleModalReject}
                   >
                     Reject
                   </Button>
@@ -369,70 +330,6 @@ function TechnicianTicketsPage() {
                 </Button>
               </div>
             ) : null}
-          </div>
-        </div>
-      ) : null}
-
-      <TechnicianRejectAssignmentModal
-        busy={modalActionBusy}
-        inProgressPhase={Boolean(detailTicket && isAcceptedTechnicianWork(detailTicket))}
-        onClose={() => {
-          if (!modalActionBusy) setRejectFlowOpen(false);
-        }}
-        onComplete={handleRejectComplete}
-        open={Boolean(rejectFlowOpen && detailTicket && activeDetailTicketId)}
-        ticketTitle={detailTicket?.title}
-      />
-
-      {acceptConfirmOpen && detailTicket && activeDetailTicketId ? (
-        <div
-          className="modal-backdrop modal-backdrop--stack"
-          onClick={modalActionBusy ? undefined : () => setAcceptConfirmOpen(false)}
-          role="presentation"
-        >
-          <div
-            className="modal-panel"
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="technician-accept-confirm-title"
-          >
-            <div className="modal-header">
-              <h3 id="technician-accept-confirm-title">Accept this assignment?</h3>
-              <button
-                type="button"
-                className="modal-close"
-                onClick={() => {
-                  if (!modalActionBusy) setAcceptConfirmOpen(false);
-                }}
-                aria-label="Close"
-              >
-                ×
-              </button>
-            </div>
-            <div className="modal-content">
-              {modalActionError ? <p className="alert alert-error mb-3">{modalActionError}</p> : null}
-              {detailTicket.title ? (
-                <p className="mb-3 font-medium text-heading">{String(detailTicket.title).trim()}</p>
-              ) : null}
-              <p className="supporting-text">
-                You are about to accept this ticket. After confirming, you will be taken to the{" "}
-                <strong>Accept</strong> page to continue from your accepted queue.
-              </p>
-            </div>
-            <div className="modal-footer">
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={modalActionBusy}
-                onClick={() => setAcceptConfirmOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button type="button" disabled={modalActionBusy} onClick={handleModalAccept}>
-                {modalActionBusy ? "Accepting…" : "Yes — accept"}
-              </Button>
-            </div>
           </div>
         </div>
       ) : null}

@@ -1,5 +1,6 @@
 import { BrowserRouter, useLocation } from "react-router-dom";
 import { AuthProvider } from "./context/AuthProvider";
+import { ThemeProvider } from "./context/ThemeContext";
 import Navbar from "./components/Navbar";
 import GoogleTwoFactorPromptModal from "./components/GoogleTwoFactorPromptModal";
 import TwoFactorSetupReminder from "./components/TwoFactorSetupReminder";
@@ -22,6 +23,8 @@ function AppLayout() {
   const { isAuthenticated } = useAuth();
   const location = useLocation();
   const isAdminWorkspace = isAuthenticated && location.pathname.startsWith("/admin");
+  const isTechnicianWorkspace =
+    isAuthenticated && location.pathname.startsWith("/technician");
   const isUserWorkspace =
     isAuthenticated &&
     (location.pathname === "/dashboard" ||
@@ -44,7 +47,7 @@ function AppLayout() {
     .filter(Boolean)
     .join(" ");
 
-  if (isAdminWorkspace || isUserWorkspace) {
+  if (isAdminWorkspace || isUserWorkspace || isTechnicianWorkspace) {
     return (
       <div className={shellClass}>
         <AppRoutes />
@@ -82,10 +85,12 @@ function App() {
         v7_relativeSplatPath: true,
       }}
     >
-      <AuthProvider>
-        <AppLayout />
-        <GoogleTwoFactorPromptHost />
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <AppLayout />
+          <GoogleTwoFactorPromptHost />
+        </AuthProvider>
+      </ThemeProvider>
     </BrowserRouter>
   );
 }
