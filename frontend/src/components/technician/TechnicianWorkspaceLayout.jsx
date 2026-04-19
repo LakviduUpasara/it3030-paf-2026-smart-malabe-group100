@@ -1,53 +1,38 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { useState } from "react";
+import { Outlet } from "react-router-dom";
+import TwoFactorSetupReminder from "../TwoFactorSetupReminder";
+import TechnicianSidebar from "./TechnicianSidebar";
+import TechnicianTopBar from "./TechnicianTopBar";
 
+/**
+ * TechnicianWorkspaceLayout — admin-style shell (sidebar + top bar + main area)
+ * for the technician console. All existing technician routes (accept / reject /
+ * tickets / resolved / notifications) render inside the {@link Outlet}.
+ */
 function TechnicianWorkspaceLayout() {
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
   return (
-    <div className="page-stack">
-      <nav
-        className="flex flex-wrap gap-2 rounded-3xl border border-border bg-tint/80 p-3 shadow-shadow"
-        aria-label="Technician workspace"
-      >
-        <NavLink
-          end
-          className={({ isActive }) => `nav-link rounded-2xl px-3 py-2 ${isActive ? "active" : ""}`.trim()}
-          to="/technician"
-        >
-          Desk
-        </NavLink>
-        <NavLink
-          className={({ isActive }) => `nav-link rounded-2xl px-3 py-2 ${isActive ? "active" : ""}`.trim()}
-          to="/technician/tickets"
-        >
-          My tickets
-        </NavLink>
-        <NavLink
-          end
-          className={({ isActive }) => `nav-link rounded-2xl px-3 py-2 ${isActive ? "active" : ""}`.trim()}
-          to="/technician/accept"
-        >
-          Accept
-        </NavLink>
-        <NavLink
-          end
-          className={({ isActive }) => `nav-link rounded-2xl px-3 py-2 ${isActive ? "active" : ""}`.trim()}
-          to="/technician/reject"
-        >
-          Reject
-        </NavLink>
-        <NavLink
-          className={({ isActive }) => `nav-link rounded-2xl px-3 py-2 ${isActive ? "active" : ""}`.trim()}
-          to="/technician/resolved"
-        >
-          Resolved
-        </NavLink>
-        <NavLink
-          className={({ isActive }) => `nav-link rounded-2xl px-3 py-2 ${isActive ? "active" : ""}`.trim()}
-          to="/technician/notifications"
-        >
-          Alerts
-        </NavLink>
-      </nav>
-      <Outlet />
+    <div id="technician-root" className="min-h-screen">
+      <div className="flex h-screen w-full min-h-0 flex-row overflow-hidden bg-bg font-sans text-text antialiased">
+        <TechnicianSidebar
+          mobileOpen={mobileNavOpen}
+          onMobileClose={() => setMobileNavOpen(false)}
+        />
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <TechnicianTopBar onMenuClick={() => setMobileNavOpen(true)} />
+          <main className="min-h-0 flex-1 overflow-y-auto bg-bg pt-5 pb-10">
+            <div className="mx-auto w-full max-w-6xl px-5 sm:px-8 lg:px-10">
+              <div className="mb-4 w-full">
+                <TwoFactorSetupReminder />
+              </div>
+              <div className="space-y-6 lg:space-y-8">
+                <Outlet />
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
     </div>
   );
 }

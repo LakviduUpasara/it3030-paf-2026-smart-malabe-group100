@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
-import { FaApple } from "react-icons/fa6";
 import { FcGoogle } from "react-icons/fc";
 import { HiOutlineCheckBadge, HiOutlineEnvelope } from "react-icons/hi2";
 import Button from "../components/Button";
@@ -18,10 +17,9 @@ import {
 import { getPasswordStrength } from "../utils/passwordStrength";
 import { getDefaultRouteForRole } from "../utils/roleUtils";
 
-const AUTH_PROVIDERS = { LOCAL: "LOCAL", GOOGLE: "GOOGLE", APPLE: "APPLE" };
+const AUTH_PROVIDERS = { LOCAL: "LOCAL", GOOGLE: "GOOGLE" };
 const SOCIAL_COPY = {
   GOOGLE: { label: "Google", icon: FcGoogle },
-  APPLE: { label: "Apple", icon: FaApple },
 };
 const PROVIDER_ACCOUNT_CHOICES = {
   GOOGLE: [

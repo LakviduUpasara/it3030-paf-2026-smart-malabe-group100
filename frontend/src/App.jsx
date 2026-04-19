@@ -22,6 +22,8 @@ function AppLayout() {
   const { isAuthenticated } = useAuth();
   const location = useLocation();
   const isAdminWorkspace = isAuthenticated && location.pathname.startsWith("/admin");
+  const isTechnicianWorkspace =
+    isAuthenticated && location.pathname.startsWith("/technician");
   const isUserWorkspace =
     isAuthenticated &&
     (location.pathname === "/dashboard" ||
@@ -45,7 +47,7 @@ function AppLayout() {
     .filter(Boolean)
     .join(" ");
 
-  if (isAdminWorkspace || isUserWorkspace) {
+  if (isAdminWorkspace || isUserWorkspace || isTechnicianWorkspace) {
     return (
       <div className={shellClass}>
         <AppRoutes />
