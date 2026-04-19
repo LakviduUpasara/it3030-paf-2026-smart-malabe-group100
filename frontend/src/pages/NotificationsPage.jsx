@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import Card from "../components/Card";
 import NotificationCenter from "../components/notifications/NotificationCenter";
 import LoadingSpinner from "../components/LoadingSpinner";
@@ -8,13 +9,36 @@ import { resolveNotificationsForUser } from "../models/notification-center";
 import { getNotifications } from "../services/notificationService";
 import * as portalDataService from "../services/portalDataService";
 
+const VALID_TABS = new Set(["all", "announcements", "system"]);
+
 function NotificationsPage() {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [feedItems, setFeedItems] = useState([]);
   const [legacy, setLegacy] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [tab, setTab] = useState("all");
+  const initialTab = VALID_TABS.has(searchParams.get("tab")) ? searchParams.get("tab") : "all";
+  const [tab, setTab] = useState(initialTab);
+
+  useEffect(() => {
+    const urlTab = searchParams.get("tab");
+    if (VALID_TABS.has(urlTab) && urlTab !== tab) {
+      setTab(urlTab);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  const selectTab = (next) => {
+    setTab(next);
+    const nextParams = new URLSearchParams(searchParams);
+    if (next === "all") {
+      nextParams.delete("tab");
+    } else {
+      nextParams.set("tab", next);
+    }
+    setSearchParams(nextParams, { replace: true });
+  };
 
   useEffect(() => {
     let active = true;
@@ -85,7 +109,7 @@ function NotificationsPage() {
             className={`rounded-full px-3 py-1 text-sm capitalize ${
               tab === t ? "bg-tint font-medium" : "text-text/70"
             }`}
-            onClick={() => setTab(t)}
+            onClick={() => selectTab(t)}
           >
             {t}
           </button>

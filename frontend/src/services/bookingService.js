@@ -82,9 +82,56 @@ export async function approveBooking(bookingId) {
   }
 }
 
-export async function rejectBooking(bookingId, reason = "Rejected by administrator.") {
+export async function rejectBooking(bookingId, reason) {
+  if (!reason?.trim()) {
+    throw new Error("A rejection reason is required.");
+  }
   try {
-    const response = await api.put(`/bookings/${bookingId}/reject`, { reason });
+    const response = await api.put(`/bookings/${bookingId}/reject`, { reason: reason.trim() });
+    return unwrapBookingPayload(response);
+  } catch (error) {
+    throw createServiceError(error, "Unable to reject booking.");
+  }
+}
+
+/** Platform admin only — Mongo-backed counts. */
+export async function getAdminBookingSummary() {
+  try {
+    const response = await api.get("/admin/bookings/summary");
+    return unwrapBookingPayload(response);
+  } catch (error) {
+    throw createServiceError(error, "Unable to load booking summary.");
+  }
+}
+
+/**
+ * @param {{ page?: number, size?: number, status?: string }} params
+ * @returns {Promise<{ content: unknown[], totalElements: number, totalPages: number, number: number }>}
+ */
+export async function getAdminBookings(params = {}) {
+  try {
+    const response = await api.get("/admin/bookings", { params });
+    return unwrapBookingPayload(response);
+  } catch (error) {
+    throw createServiceError(error, "Unable to load bookings.");
+  }
+}
+
+export async function adminApproveBooking(bookingId) {
+  try {
+    const response = await api.patch(`/admin/bookings/${bookingId}/approve`);
+    return unwrapBookingPayload(response);
+  } catch (error) {
+    throw createServiceError(error, "Unable to approve booking.");
+  }
+}
+
+export async function adminRejectBooking(bookingId, reason) {
+  if (!reason?.trim()) {
+    throw new Error("A rejection reason is required.");
+  }
+  try {
+    const response = await api.patch(`/admin/bookings/${bookingId}/reject`, { reason: reason.trim() });
     return unwrapBookingPayload(response);
   } catch (error) {
     throw createServiceError(error, "Unable to reject booking.");

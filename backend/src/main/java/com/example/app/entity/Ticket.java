@@ -56,6 +56,12 @@ public class Ticket {
      */
     private String lastRejectedByTechnicianUserId;
 
+    /**
+     * When the requester withdraws, stores the technician who was assigned so they can still open the ticket under
+     * Withdrawn (assignee is cleared so it leaves the active queue).
+     */
+    private String withdrawalPriorTechnicianUserId;
+
     public String getId() {
         return id;
     }
@@ -198,5 +204,13 @@ public class Ticket {
 
     public void setLastRejectedByTechnicianUserId(String lastRejectedByTechnicianUserId) {
         this.lastRejectedByTechnicianUserId = lastRejectedByTechnicianUserId;
+    }
+
+    public String getWithdrawalPriorTechnicianUserId() {
+        return withdrawalPriorTechnicianUserId;
+    }
+
+    public void setWithdrawalPriorTechnicianUserId(String withdrawalPriorTechnicianUserId) {
+        this.withdrawalPriorTechnicianUserId = withdrawalPriorTechnicianUserId;
     }
 }

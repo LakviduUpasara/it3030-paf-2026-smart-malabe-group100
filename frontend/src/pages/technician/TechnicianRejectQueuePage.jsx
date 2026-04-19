@@ -68,7 +68,7 @@ function TechnicianRejectQueuePage() {
         {!rejectedByYouOnly.length ? (
           <p className="supporting-text">
             No declined assignments yet. When you confirm a return on the Reject page, the ticket goes <strong>Open</strong>{" "}
-            for the desk and shows here in your history. New assignments are under <strong>My tickets</strong>.
+            for the desk and shows here in your history. New assignments appear under <strong>Open tickets</strong>.
           </p>
         ) : (
           <div className="list-stack">

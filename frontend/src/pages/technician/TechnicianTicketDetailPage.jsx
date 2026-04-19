@@ -11,6 +11,7 @@ import {
   normalizeTicketStatusKey,
 } from "../../utils/technicianTicketFlow";
 import { isResolvedTicketStatus } from "../../utils/technicianTicketStatus";
+import { formatWithdrawalReasonForDisplay } from "../../utils/withdrawalReason";
 
 function formatTechnicianDetailStatusLabel(ticket) {
   if (ticket && isAwaitingTechnicianDecision(ticket)) {
@@ -53,7 +54,7 @@ function TechnicianTicketDetailPage() {
 
   const workspacePath = ticketId ? `/technician/tickets/${ticketId}/work` : "/technician/tickets";
   const acceptPath = ticketId ? `/technician/tickets/${ticketId}/accept` : "/technician/accept";
-  const rejectPath = ticketId ? `/technician/tickets/${ticketId}/reject` : "/technician/reject";
+  const rejectPath = ticketId ? `/technician/tickets/${ticketId}/reject` : "/technician/tickets";
 
   const load = async () => {
     if (!ticketId) {
@@ -118,8 +119,27 @@ function TechnicianTicketDetailPage() {
         title={ticket.title}
       >
         {error ? <p className="alert alert-error">{error}</p> : null}
-        {isClosed ? (
+
+        {/* Withdrawal banner mirrors the admin ticket-detail layout so the technician sees the same detail view. */}
+        {normalizeTicketStatusKey(ticket.status) === "WITHDRAWN" ? (
+          <div
+            className={`admin-ticket-detail-withdrawal-banner${formatWithdrawalReasonForDisplay(ticket) ? "" : " admin-ticket-detail-withdrawal-banner--muted"}`}
+            role="status"
+          >
+            <span className="admin-ticket-detail-withdrawal-banner-label">Withdrawal reason</span>
+            <p className="admin-ticket-detail-withdrawal-banner-text">
+              {formatWithdrawalReasonForDisplay(ticket) || "No withdrawal details recorded."}
+            </p>
+          </div>
+        ) : null}
+
+        {isClosed && normalizeTicketStatusKey(ticket.status) !== "WITHDRAWN" ? (
           <p className="alert alert-success">This ticket is closed. Details remain visible below.</p>
+        ) : null}
+        {normalizeTicketStatusKey(ticket.status) === "WITHDRAWN" ? (
+          <p className="alert alert-error">
+            The requester withdrew this ticket. It has been removed from the active assigned queue.
+          </p>
         ) : null}
 
         <div className="form-grid">
@@ -171,8 +191,8 @@ function TechnicianTicketDetailPage() {
                   Accept queue
                 </Link>
                 <span className="text-text/40">·</span>
-                <Link className="text-sm font-semibold text-heading underline underline-offset-2" to="/technician/reject">
-                  Reject queue
+                <Link className="text-sm font-semibold text-heading underline underline-offset-2" to="/technician/tickets">
+                  My tickets
                 </Link>
               </div>
             </>

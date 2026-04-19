@@ -5,32 +5,22 @@ import Card from "../../components/Card";
 import LoadingSpinner from "../../components/LoadingSpinner";
 import TechnicianTicketModalWorkPanel from "../../components/technician/TechnicianTicketModalWorkPanel";
 import TechnicianTicketReadonlySummary from "../../components/technician/TechnicianTicketReadonlySummary";
-import {
-  acceptTicketAssignment,
-  getMyTickets,
-  getTicketById,
-  rejectTicketAssignment,
-  updateStatus,
-} from "../../services/ticketService";
+import { acceptTicketAssignment, getMyTickets, getTicketById } from "../../services/ticketService";
 import {
   canOpenAcceptPage,
   canUseRejectFlow,
-  isAcceptedTechnicianWork,
   isAwaitingTechnicianDecision,
-  labelForAcceptedTechnicianWork,
+  labelForAwaitingTechnicianDecision,
 } from "../../utils/technicianTicketFlow";
 import { formatDateTime, toToken } from "../../utils/formatters";
 import { normalizeTicketFromApi } from "../../utils/ticketNormalize";
-import { isResolvedTicketStatus } from "../../utils/technicianTicketStatus";
+import { isActiveTicketStatus } from "../../utils/technicianTicketStatus";
 
 function TechnicianAcceptQueuePage() {
   const navigate = useNavigate();
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [pendingResolveId, setPendingResolveId] = useState(null);
-  const [feedback, setFeedback] = useState({ type: "", text: "" });
-
   const [activeDetailTicketId, setActiveDetailTicketId] = useState(null);
   const [detailTicket, setDetailTicket] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -120,25 +110,12 @@ function TechnicianAcceptQueuePage() {
     };
   }, [activeDetailTicketId, closeDetailModal]);
 
-  /** Assignments you have already accepted (excludes “decision pending” — use My tickets to accept or decline). */
-  const acceptedOnly = useMemo(
-    () => tickets.filter((t) => t && isAcceptedTechnicianWork(t)),
+  /** Assignments awaiting accept or decline (not yet accepted for work). */
+  const pendingDecision = useMemo(
+    () =>
+      tickets.filter((t) => t && isAwaitingTechnicianDecision(t) && isActiveTicketStatus(t.status)),
     [tickets],
   );
-
-  const handleMarkResolved = async (ticketId) => {
-    setPendingResolveId(ticketId);
-    setFeedback({ type: "", text: "" });
-    try {
-      await updateStatus(ticketId, "RESOLVED");
-      await loadTickets();
-      setFeedback({ type: "success", text: "Ticket marked as resolved." });
-    } catch (e) {
-      setFeedback({ type: "error", text: e.message || "Could not mark as resolved." });
-    } finally {
-      setPendingResolveId(null);
-    }
-  };
 
   const handleModalAccept = useCallback(async () => {
     if (!detailTicket?.id) return;
@@ -154,7 +131,7 @@ function TechnicianAcceptQueuePage() {
       }
       await loadTickets();
       closeDetailModal();
-      navigate("/technician/accept");
+      navigate("/technician/tickets");
     } catch (e) {
       setModalActionError(e.message || "Could not accept assignment.");
     } finally {
@@ -162,54 +139,16 @@ function TechnicianAcceptQueuePage() {
     }
   }, [detailTicket?.id, closeDetailModal, navigate, loadTickets]);
 
-  const handleModalReject = useCallback(async () => {
+  const handleModalReject = useCallback(() => {
     if (!detailTicket?.id) return;
     const id = String(detailTicket.id);
-    setModalActionError("");
-    setModalActionBusy(true);
-    try {
-      const res = await rejectTicketAssignment(id, {});
-      const updated = normalizeTicketFromApi(res?.data);
-      if (updated) {
-        setDetailTicket(updated);
-        setTickets((prev) => prev.map((t) => (String(t.id) === id ? updated : t)));
-      }
-      await loadTickets();
-      closeDetailModal();
-      navigate("/technician/reject");
-    } catch (e) {
-      setModalActionError(e.message || "Could not decline assignment.");
-    } finally {
-      setModalActionBusy(false);
-    }
-  }, [detailTicket?.id, closeDetailModal, navigate, loadTickets]);
+    closeDetailModal();
+    navigate(`/technician/tickets/${id}/reject`);
+  }, [detailTicket?.id, closeDetailModal, navigate]);
 
-  const handleModalMarkResolved = useCallback(async () => {
-    if (!detailTicket?.id) return;
-    const id = String(detailTicket.id);
-    setModalActionError("");
-    setModalActionBusy(true);
-    setFeedback({ type: "", text: "" });
-    try {
-      await updateStatus(id, "RESOLVED");
-      await loadTickets();
-      closeDetailModal();
-      setFeedback({ type: "success", text: "Ticket marked as resolved." });
-    } catch (e) {
-      setModalActionError(e.message || "Could not mark as resolved.");
-    } finally {
-      setModalActionBusy(false);
-    }
-  }, [detailTicket?.id, closeDetailModal, loadTickets]);
-
-  /** Accept only while assignment is still pending; accepted/in-progress tickets use Mark as resolved instead. */
+  /** Accept only while assignment is still pending. */
   const showModalAccept = Boolean(
     detailTicket && canOpenAcceptPage(detailTicket) && isAwaitingTechnicianDecision(detailTicket),
-  );
-  const showModalMarkResolved = Boolean(
-    detailTicket &&
-      isAcceptedTechnicianWork(detailTicket) &&
-      !isResolvedTicketStatus(detailTicket.status),
   );
   const showModalReject = Boolean(detailTicket && canUseRejectFlow(detailTicket));
 
@@ -228,66 +167,52 @@ function TechnicianAcceptQueuePage() {
     <div className="technician-page">
       <Card
         className="technician-page-card"
-        subtitle="Tickets you have accepted — use See details for updates, evidence, and mark resolved."
-        title="Accept"
+        subtitle="The desk has assigned these tickets to you — accept to move them to Assigned tickets, or reject with a required reason."
+        title="Open tickets"
       >
         {error ? <p className="alert alert-error">{error}</p> : null}
-        {feedback.text ? (
-          <p
-            className={`alert ${feedback.type === "success" ? "alert-success" : "alert-error"}`}
-            role="status"
-          >
-            {feedback.text}
-          </p>
-        ) : null}
-        {!acceptedOnly.length ? (
+        {!pendingDecision.length ? (
           <p className="supporting-text">
-            No accepted tickets yet. New assignments appear under <strong>My tickets</strong> until you accept them;
-            after you accept, they show here.
+            No assignments awaiting your decision. When the desk assigns work to you, it appears here until you accept
+            or reject.
           </p>
         ) : (
           <div className="list-stack">
-            {acceptedOnly.map((ticket) => {
-              const busy = pendingResolveId === ticket.id;
-              return (
-                <div
-                  className="list-row flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-border bg-tint/60 p-4"
-                  key={ticket.id}
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="text-heading font-semibold">{ticket.title?.trim() || "Untitled"}</p>
-                    <p className="supporting-text">
-                      {ticket.createdByUsername ? `Requester: ${ticket.createdByUsername}` : "Requester: —"}
-                      {ticket.createdAt ? ` · ${formatDateTime(ticket.createdAt)}` : null}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-                    <span
-                      className={`status-badge shrink-0 ${toToken(ticket.status)}`}
-                      title={labelForAcceptedTechnicianWork(ticket)}
-                    >
-                      {labelForAcceptedTechnicianWork(ticket)}
-                    </span>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={() => setActiveDetailTicketId(String(ticket.id))}
-                    >
-                      See details
-                    </Button>
-                    <Link
-                      className="button button-secondary inline-flex min-h-[44px] items-center justify-center px-4"
-                      to={`/technician/tickets/${ticket.id}/reject`}
-                    >
-                      Reject
-                    </Link>
-                    <Button type="button" disabled={busy} onClick={() => handleMarkResolved(ticket.id)}>
-                      {busy ? "Saving…" : "Mark as resolved"}
-                    </Button>
-                  </div>
+            {pendingDecision.map((ticket) => (
+              <div
+                className="list-row flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-border bg-tint/60 p-4"
+                key={ticket.id}
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="text-heading font-semibold">{ticket.title?.trim() || "Untitled"}</p>
+                  <p className="supporting-text">
+                    {ticket.createdByUsername ? `Requester: ${ticket.createdByUsername}` : "Requester: —"}
+                    {ticket.createdAt ? ` · ${formatDateTime(ticket.createdAt)}` : null}
+                  </p>
                 </div>
-              );
-            })}
+                <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                  <span
+                    className={`status-badge shrink-0 ${toToken(ticket.status)}`}
+                    title={labelForAwaitingTechnicianDecision(ticket)}
+                  >
+                    {labelForAwaitingTechnicianDecision(ticket)}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setActiveDetailTicketId(String(ticket.id))}
+                  >
+                    See details
+                  </Button>
+                  <Link
+                    className="button button-secondary inline-flex min-h-[44px] items-center justify-center px-4"
+                    to={`/technician/tickets/${ticket.id}/reject`}
+                  >
+                    Reject
+                  </Link>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </Card>
@@ -319,20 +244,21 @@ function TechnicianAcceptQueuePage() {
               {!detailLoading && detailTicket ? (
                 <>
                   <TechnicianTicketReadonlySummary ticket={detailTicket} />
-                  <TechnicianTicketModalWorkPanel
-                    onTicketUpdated={handleDetailTicketUpdated}
-                    ticket={detailTicket}
-                  />
+                  {!isAwaitingTechnicianDecision(detailTicket) ? (
+                    <TechnicianTicketModalWorkPanel
+                      onTicketUpdated={handleDetailTicketUpdated}
+                      ticket={detailTicket}
+                    />
+                  ) : (
+                    <p className="supporting-text mt-3">
+                      Accept this assignment to add comments, evidence, and progress updates.
+                    </p>
+                  )}
                 </>
               ) : null}
             </div>
             {!detailLoading && detailTicket && !detailError ? (
               <div className="modal-footer">
-                {showModalMarkResolved ? (
-                  <Button type="button" disabled={modalActionBusy} onClick={handleModalMarkResolved}>
-                    {modalActionBusy ? "Saving…" : "Mark as resolved"}
-                  </Button>
-                ) : null}
                 {showModalAccept ? (
                   <Button type="button" disabled={modalActionBusy} onClick={handleModalAccept}>
                     Accept

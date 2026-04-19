@@ -61,10 +61,10 @@ export function canOpenAcceptPage(ticket) {
   return isAwaitingTechnicianDecision(ticket) || isAcceptedTechnicianWork(ticket);
 }
 
-/** Reject / return-to-desk: decline while pending, or hand back after accepting. */
+/** Reject assignment: only while the desk is waiting for accept/decline (API enforces the same). */
 export function canUseRejectFlow(ticket) {
   if (!ticket) return false;
-  return isAwaitingTechnicianDecision(ticket) || isAcceptedTechnicianWork(ticket);
+  return isAwaitingTechnicianDecision(ticket);
 }
 
 /**
@@ -94,14 +94,3 @@ export function labelForAwaitingTechnicianDecision(ticket) {
   return k === "IN_PROGRESS" ? "In progress — decision pending" : "Awaiting your response";
 }
 
-/** Reject queue: short hint on the row (decline vs return accepted work). */
-export function labelForRejectQueueRow(ticket) {
-  if (!ticket) return "—";
-  if (isAwaitingTechnicianDecision(ticket)) return "Decline assignment";
-  if (isAcceptedTechnicianWork(ticket)) {
-    return normalizeTicketStatusKey(ticket.status) === "ACCEPTED"
-      ? "Accepted — return if needed"
-      : "In progress — return if needed";
-  }
-  return "—";
-}

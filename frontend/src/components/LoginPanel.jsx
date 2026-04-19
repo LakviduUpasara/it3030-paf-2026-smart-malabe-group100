@@ -1,7 +1,6 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import QRCode from "qrcode";
-import { FaApple } from "react-icons/fa6";
 import { HiOutlineEye, HiOutlineEyeSlash } from "react-icons/hi2";
 import Button from "./Button";
 import GoogleIdentityButton from "./GoogleIdentityButton";
@@ -45,7 +44,6 @@ function LoginPanel({ showHeading = true }) {
     devLogin,
     developerMode,
     loginWithGoogle,
-    loginWithApple,
     verifyTwoFactor,
     resendEmailOtp,
     changeFirstLoginPassword,
@@ -275,10 +273,6 @@ function LoginPanel({ showHeading = true }) {
     } catch (loginError) {
       return loginError;
     }
-  };
-
-  const handleAppleLogin = async () => {
-    return handleProviderLogin("Apple", loginWithApple);
   };
 
   const handleProviderLogin = async (providerLabel, loginAction) => {
@@ -841,24 +835,10 @@ function LoginPanel({ showHeading = true }) {
               onError={(message) => setLocalError(message)}
               size="medium"
             />
-            <button
-              className="social-button"
-              disabled={isLoading}
-              onClick={handleAppleLogin}
-              type="button"
-            >
-              <span className="social-icon" aria-hidden="true">
-                <FaApple />
-              </span>
-              <span className="social-button-label">Continue with Apple</span>
-            </button>
           </div>
 
           <p className="login-demo-note">
-            Need access? Contact Campus IT Services. Demo accounts:{" "}
-            <strong>user@smartcampus.edu</strong> (student),{" "}
-            <strong>admin@smartcampus.edu</strong>, and{" "}
-            <strong>technician@smartcampus.edu</strong>.
+            Need access? Contact Campus IT Services to request an account.
           </p>
 
           <p className="auth-switch-copy">

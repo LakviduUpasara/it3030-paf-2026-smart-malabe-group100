@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
-import { FaApple } from "react-icons/fa6";
 import { FcGoogle } from "react-icons/fc";
 import { HiOutlineCheckBadge, HiOutlineEnvelope } from "react-icons/hi2";
 import Button from "../components/Button";
@@ -18,10 +17,9 @@ import {
 import { getPasswordStrength } from "../utils/passwordStrength";
 import { getDefaultRouteForRole } from "../utils/roleUtils";
 
-const AUTH_PROVIDERS = { LOCAL: "LOCAL", GOOGLE: "GOOGLE", APPLE: "APPLE" };
+const AUTH_PROVIDERS = { LOCAL: "LOCAL", GOOGLE: "GOOGLE" };
 const SOCIAL_COPY = {
   GOOGLE: { label: "Google", icon: FcGoogle },
-  APPLE: { label: "Apple", icon: FaApple },
 };
 const PROVIDER_ACCOUNT_CHOICES = {
   GOOGLE: [
@@ -45,22 +43,6 @@ const PROVIDER_ACCOUNT_CHOICES = {
       email: "technician.applicant@smartcampus.edu",
       avatarLabel: "T",
       description: "Maintenance and incident support onboarding",
-    },
-  ],
-  APPLE: [
-    {
-      id: "apple-student-applicant",
-      fullName: "Campus iCloud Student",
-      email: "icloud.student@smartcampus.edu",
-      avatarLabel: "S",
-      description: "Apple ID based student onboarding",
-    },
-    {
-      id: "apple-staff-applicant",
-      fullName: "Campus iCloud Staff",
-      email: "icloud.staff@smartcampus.edu",
-      avatarLabel: "A",
-      description: "Apple ID based staff onboarding",
     },
   ],
 };
@@ -792,17 +774,10 @@ function SignupPage() {
                   onError={(message) => setLocalError(message)}
                   size="medium"
                 />
-                <button className="social-button social-button-apple" disabled={isLoading} onClick={() => openSocialChooser(AUTH_PROVIDERS.APPLE)} type="button">
-                  <span className="social-button-icon-shell" aria-hidden="true">
-                    <FaApple />
-                  </span>
-                  <span className="social-button-copy">
-                    <span className="social-button-label">Sign up with Apple</span>
-                    <small className="social-button-caption">Use your Apple ID</small>
-                  </span>
-                </button>
               </div>
-              <p className="login-demo-note">Your Google / Apple email becomes the primary email for this request.</p>
+              <p className="login-demo-note">
+                Your Google email becomes the primary email for this request.
+              </p>
             </div>
           ) : null}
 

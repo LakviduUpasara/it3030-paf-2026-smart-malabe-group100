@@ -3,21 +3,34 @@ package com.example.app.service;
 import com.example.app.dto.BookingAvailabilityResponse;
 import com.example.app.dto.BookingRequest;
 import com.example.app.dto.BookingResponse;
+import com.example.app.dto.admin.AdminBookingRowResponse;
+import com.example.app.dto.admin.AdminBookingSummaryResponse;
 import com.example.app.entity.AvailabilityWindow;
 import com.example.app.entity.Booking;
 import com.example.app.entity.BookingStatus;
 import com.example.app.entity.Resource;
 import com.example.app.entity.ResourceStatus;
+import com.example.app.entity.UserAccount;
+import com.example.app.entity.enums.AccountStatus;
+import com.example.app.entity.enums.NotificationCategory;
+import com.example.app.entity.enums.NotificationRelatedEntity;
+import com.example.app.entity.enums.NotificationType;
+import com.example.app.entity.enums.Role;
+import com.example.app.exception.ApiException;
 import com.example.app.exception.BookingConflictException;
 import com.example.app.exception.NotFoundException;
 import com.example.app.repository.BookingRepository;
 import com.example.app.repository.ResourceRepository;
+import com.example.app.repository.UserAccountRepository;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -28,6 +41,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,7 +53,9 @@ public class BookingServiceImpl implements BookingService {
 
     private final BookingRepository bookingRepository;
     private final ResourceRepository resourceRepository;
+    private final UserAccountRepository userAccountRepository;
     private final MongoTemplate mongoTemplate;
+    private final NotificationService notificationService;
 
     @Override
     @Transactional
@@ -54,6 +70,7 @@ public class BookingServiceImpl implements BookingService {
 
         rejectConflict(request.getResourceId(), request.getStartTime(), request.getEndTime());
 
+        LocalDateTime created = LocalDateTime.now();
         Booking booking = Booking.builder()
                 .resourceId(request.getResourceId())
                 .userId(request.getUserId())
@@ -61,11 +78,15 @@ public class BookingServiceImpl implements BookingService {
                 .endTime(request.getEndTime())
                 .purpose(request.getPurpose())
                 .status(BookingStatus.PENDING)
-                .createdAt(LocalDateTime.now())
+                .createdAt(created)
+                .updatedAt(created)
                 .build();
 
         Booking saved = bookingRepository.save(booking);
         logger.info("Booking created with ID: {}", saved.getId());
+
+        notifyAdminsBookingCreated(saved);
+
         return mapToResponse(saved);
     }
 
@@ -99,20 +120,62 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public AdminBookingSummaryResponse getAdminBookingSummary() {
+        return AdminBookingSummaryResponse.builder()
+                .totalBookings(bookingRepository.count())
+                .approved(bookingRepository.countByStatus(BookingStatus.APPROVED))
+                .pending(bookingRepository.countByStatus(BookingStatus.PENDING))
+                .rejected(bookingRepository.countByStatus(BookingStatus.REJECTED))
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<AdminBookingRowResponse> getAdminBookings(Optional<BookingStatus> status, Pageable pageable) {
+        Query query = new Query();
+        status.ifPresent(s -> query.addCriteria(Criteria.where("status").is(s)));
+        long total = mongoTemplate.count(query, Booking.class);
+        query.with(pageable);
+        List<Booking> list = mongoTemplate.find(query, Booking.class);
+        Map<String, Resource> resourcesById = loadResourcesForBookings(list);
+        Map<String, UserAccount> usersById = loadUsersForBookings(list);
+        List<AdminBookingRowResponse> rows =
+                list.stream().map(b -> mapToAdminRow(b, resourcesById, usersById)).toList();
+        return new PageImpl<>(rows, pageable, total);
+    }
+
+    @Override
     @Transactional
     public BookingResponse approveBooking(String bookingId) {
         logger.info("Approving booking ID: {}", bookingId);
         Booking booking = findBookingOrThrow(bookingId);
         if (booking.getStatus() != BookingStatus.PENDING) {
             logger.warn("Cannot approve booking {} - status is {}", bookingId, booking.getStatus());
-            throw new IllegalArgumentException("Only pending bookings can be approved.");
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "Only PENDING bookings can be approved. Current status: " + booking.getStatus()
+            );
         }
         Resource resource = findResourceOrThrow(booking.getResourceId());
         ensureResourceAcceptsBooking(resource, booking.getStartTime(), booking.getEndTime());
         rejectConflict(booking.getResourceId(), booking.getStartTime(), booking.getEndTime());
         booking.setStatus(BookingStatus.APPROVED);
+        booking.setUpdatedAt(LocalDateTime.now());
         bookingRepository.save(booking);
         logger.info("Booking {} approved successfully", bookingId);
+
+        String resourceName = resource != null ? resource.getName() : booking.getResourceId();
+        notificationService.deliver(
+                booking.getUserId(),
+                NotificationType.BOOKING_APPROVED,
+                NotificationCategory.BOOKING,
+                "Booking approved",
+                "Your booking for " + safe(resourceName) + " has been approved.",
+                NotificationRelatedEntity.BOOKING,
+                booking.getId(),
+                null);
+
         return mapToResponse(booking);
     }
 
@@ -123,19 +186,62 @@ public class BookingServiceImpl implements BookingService {
 
         if (reason == null || reason.trim().isEmpty()) {
             logger.warn("Rejection failed: reason is null or empty for booking {}", bookingId);
-            throw new IllegalArgumentException("Rejection reason is required.");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Rejection reason is required.");
         }
 
         Booking booking = findBookingOrThrow(bookingId);
         if (booking.getStatus() != BookingStatus.PENDING) {
             logger.warn("Cannot reject booking {} - status is {}", bookingId, booking.getStatus());
-            throw new IllegalArgumentException("Only pending bookings can be rejected.");
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "Only PENDING bookings can be rejected. Current status: " + booking.getStatus()
+            );
         }
         booking.setStatus(BookingStatus.REJECTED);
         booking.setRejectionReason(reason.trim());
+        booking.setUpdatedAt(LocalDateTime.now());
         bookingRepository.save(booking);
         logger.info("Booking {} rejected successfully with reason: {}", bookingId, reason);
+
+        Resource bookingResource = resourceRepository.findById(booking.getResourceId()).orElse(null);
+        String resourceName = bookingResource != null ? bookingResource.getName() : booking.getResourceId();
+        notificationService.deliver(
+                booking.getUserId(),
+                NotificationType.BOOKING_REJECTED,
+                NotificationCategory.BOOKING,
+                "Booking rejected",
+                "Your booking for " + safe(resourceName) + " was rejected. Reason: " + reason.trim(),
+                NotificationRelatedEntity.BOOKING,
+                booking.getId(),
+                null);
+
         return mapToResponse(booking);
+    }
+
+    private void notifyAdminsBookingCreated(Booking booking) {
+        try {
+            Resource resource = resourceRepository.findById(booking.getResourceId()).orElse(null);
+            String resourceName = resource != null ? resource.getName() : booking.getResourceId();
+            List<String> admins = userAccountRepository.findByRoleOrderByFullNameAsc(Role.ADMIN).stream()
+                    .filter(u -> u.getStatus() == AccountStatus.ACTIVE)
+                    .map(UserAccount::getId)
+                    .toList();
+            notificationService.deliverMany(
+                    admins,
+                    NotificationType.BOOKING_CREATED,
+                    NotificationCategory.BOOKING,
+                    "New booking request",
+                    "A new booking request for " + safe(resourceName) + " is awaiting approval.",
+                    NotificationRelatedEntity.BOOKING,
+                    booking.getId(),
+                    booking.getUserId());
+        } catch (RuntimeException e) {
+            logger.warn("Failed to notify admins about new booking {}: {}", booking.getId(), e.getMessage());
+        }
+    }
+
+    private static String safe(String v) {
+        return v == null ? "" : v;
     }
 
     @Override
@@ -145,9 +251,13 @@ public class BookingServiceImpl implements BookingService {
         Booking booking = findBookingOrThrow(bookingId);
         if (booking.getStatus() != BookingStatus.APPROVED) {
             logger.warn("Cannot cancel booking {} - status is {}", bookingId, booking.getStatus());
-            throw new IllegalArgumentException("Only approved bookings can be cancelled.");
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "Only APPROVED bookings can be cancelled. Current status: " + booking.getStatus()
+            );
         }
         booking.setStatus(BookingStatus.CANCELLED);
+        booking.setUpdatedAt(LocalDateTime.now());
         bookingRepository.save(booking);
         logger.info("Booking {} cancelled successfully", bookingId);
         return mapToResponse(booking);
@@ -224,8 +334,56 @@ public class BookingServiceImpl implements BookingService {
         response.setPurpose(booking.getPurpose());
         response.setStatus(booking.getStatus());
         response.setCreatedAt(booking.getCreatedAt());
+        response.setUpdatedAt(booking.getUpdatedAt());
         response.setRejectionReason(booking.getRejectionReason());
         return response;
+    }
+
+    private Map<String, Resource> loadResourcesForBookings(List<Booking> bookings) {
+        Set<String> ids = bookings.stream().map(Booking::getResourceId).collect(Collectors.toSet());
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, Resource> map = new HashMap<>();
+        resourceRepository.findAllById(ids).forEach(r -> map.put(r.getId(), r));
+        return map;
+    }
+
+    private Map<String, UserAccount> loadUsersForBookings(List<Booking> bookings) {
+        Set<String> ids = bookings.stream().map(Booking::getUserId).collect(Collectors.toSet());
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, UserAccount> map = new HashMap<>();
+        userAccountRepository.findAllById(ids).forEach(u -> map.put(u.getId(), u));
+        return map;
+    }
+
+    private AdminBookingRowResponse mapToAdminRow(
+            Booking booking,
+            Map<String, Resource> resourcesById,
+            Map<String, UserAccount> usersById
+    ) {
+        Resource resource = resourcesById.get(booking.getResourceId());
+        UserAccount user = usersById.get(booking.getUserId());
+        String resourceName = resource != null && resource.getName() != null ? resource.getName() : "—";
+        String userEmail = user != null && user.getEmail() != null ? user.getEmail() : "—";
+        String userFullName = user != null && user.getFullName() != null ? user.getFullName() : "—";
+        return AdminBookingRowResponse.builder()
+                .id(booking.getId())
+                .resourceId(booking.getResourceId())
+                .resourceName(resourceName)
+                .userId(booking.getUserId())
+                .userEmail(userEmail)
+                .userFullName(userFullName)
+                .startTime(booking.getStartTime())
+                .endTime(booking.getEndTime())
+                .purpose(booking.getPurpose())
+                .status(booking.getStatus())
+                .rejectionReason(booking.getRejectionReason())
+                .createdAt(booking.getCreatedAt())
+                .updatedAt(booking.getUpdatedAt())
+                .build();
     }
 
     private Booking findBookingOrThrow(String bookingId) {
@@ -283,11 +441,13 @@ public class BookingServiceImpl implements BookingService {
 
     private void ensureResourceAcceptsBooking(Resource resource, LocalDateTime start, LocalDateTime end) {
         if (resource.getStatus() != ResourceStatus.ACTIVE) {
-            throw new IllegalArgumentException("This resource is not available for booking.");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "This resource is not available for booking.");
         }
         if (!isIntervalWithinAnyWindow(resource, start, end)) {
-            throw new IllegalArgumentException(
-                    "Booking time must fall entirely within one of this resource's availability windows.");
+            throw new ApiException(
+                    HttpStatus.BAD_REQUEST,
+                    "Booking time must fall entirely within one of this resource's availability windows."
+            );
         }
     }
 

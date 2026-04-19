@@ -33,4 +33,5 @@ public class Booking {
     private BookingStatus status;
     private String rejectionReason;
     private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
 }

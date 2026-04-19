@@ -3837,6 +3837,11 @@ a {
   box-sizing: border-box;
 }
 
+.admin-tickets-main.admin-tickets-main--standalone {
+  margin-left: 0;
+  padding: 0;
+}
+
 @media (max-width: 720px) {
   .admin-tickets-layout {
     flex-direction: column;
@@ -5251,6 +5256,11 @@ a {
   z-index: 40;
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+/** Stacked above a modal that is already open (e.g. technician detail + return flow). */
+.modal-backdrop--stack {
+  z-index: 50;
 }
 
 .modal-panel {

@@ -13,12 +13,16 @@ import com.example.app.entity.TicketProgressNote;
 import com.example.app.entity.UserAccount;
 import com.example.app.entity.enums.AccountStatus;
 import com.example.app.entity.enums.IncidentTicketStatus;
+import com.example.app.entity.enums.NotificationCategory;
+import com.example.app.entity.enums.NotificationRelatedEntity;
+import com.example.app.entity.enums.NotificationType;
 import com.example.app.entity.enums.Role;
 import com.example.app.entity.enums.TicketPriority;
 import com.example.app.exception.ApiException;
 import com.example.app.repository.IncidentTicketRepository;
 import com.example.app.repository.UserAccountRepository;
 import com.example.app.security.AuthenticatedUser;
+import com.example.app.service.NotificationService;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -39,6 +43,7 @@ public class IncidentTicketServiceImpl implements IncidentTicketService {
 
     private final IncidentTicketRepository incidentTicketRepository;
     private final UserAccountRepository userAccountRepository;
+    private final NotificationService notificationService;
 
     @Override
     public IncidentTicketResponse createTicket(AuthenticatedUser reporter, CreateTicketRequest request) {
@@ -56,7 +61,27 @@ public class IncidentTicketServiceImpl implements IncidentTicketService {
                 .progressNotes(new ArrayList<>())
                 .build();
 
-        return withNames(incidentTicketRepository.save(ticket));
+        IncidentTicket saved = incidentTicketRepository.save(ticket);
+
+        try {
+            List<String> adminIds = userAccountRepository.findByRoleOrderByFullNameAsc(Role.ADMIN).stream()
+                    .filter(u -> u.getStatus() == AccountStatus.ACTIVE)
+                    .map(UserAccount::getId)
+                    .toList();
+            notificationService.deliverMany(
+                    adminIds,
+                    NotificationType.TICKET_CREATED,
+                    NotificationCategory.TICKET,
+                    "New incident ticket",
+                    "Ticket " + saved.getReference() + ": " + saved.getTitle(),
+                    NotificationRelatedEntity.TICKET,
+                    saved.getId(),
+                    reporter.getUserId());
+        } catch (RuntimeException ignored) {
+            // notification failures must not break ticket creation
+        }
+
+        return withNames(saved);
     }
 
     @Override
@@ -94,7 +119,32 @@ public class IncidentTicketServiceImpl implements IncidentTicketService {
         if (ticket.getStatus() == IncidentTicketStatus.OPEN) {
             ticket.setStatus(IncidentTicketStatus.ASSIGNED);
         }
-        return withNames(incidentTicketRepository.save(ticket));
+        IncidentTicket saved = incidentTicketRepository.save(ticket);
+
+        try {
+            notificationService.deliver(
+                    assignee.getId(),
+                    NotificationType.TICKET_ASSIGNED,
+                    NotificationCategory.TICKET,
+                    "Ticket assigned to you",
+                    "Ticket " + saved.getReference() + ": " + saved.getTitle(),
+                    NotificationRelatedEntity.TICKET,
+                    saved.getId(),
+                    admin.getUserId());
+            notificationService.deliver(
+                    saved.getReporterUserId(),
+                    NotificationType.TICKET_STATUS_CHANGED,
+                    NotificationCategory.TICKET,
+                    "Your ticket is now " + saved.getStatus(),
+                    "Ticket " + saved.getReference() + " has been assigned to a technician.",
+                    NotificationRelatedEntity.TICKET,
+                    saved.getId(),
+                    admin.getUserId());
+        } catch (RuntimeException ignored) {
+            // best-effort
+        }
+
+        return withNames(saved);
     }
 
     @Override
@@ -130,7 +180,9 @@ public class IncidentTicketServiceImpl implements IncidentTicketService {
             );
         }
         ticket.setStatus(next);
-        return withNames(incidentTicketRepository.save(ticket));
+        IncidentTicket saved = incidentTicketRepository.save(ticket);
+        notifyStatusChange(saved, technician.getUserId());
+        return withNames(saved);
     }
 
     @Override
@@ -158,7 +210,20 @@ public class IncidentTicketServiceImpl implements IncidentTicketService {
         if (ticket.getStatus() == IncidentTicketStatus.OPEN || ticket.getStatus() == IncidentTicketStatus.ASSIGNED) {
             ticket.setStatus(IncidentTicketStatus.IN_PROGRESS);
         }
-        return withNames(incidentTicketRepository.save(ticket));
+        IncidentTicket saved = incidentTicketRepository.save(ticket);
+        try {
+            notificationService.deliver(
+                    saved.getReporterUserId(),
+                    NotificationType.TICKET_COMMENTED,
+                    NotificationCategory.TICKET,
+                    "New update on your ticket",
+                    "Ticket " + saved.getReference() + ": " + note.getContent(),
+                    NotificationRelatedEntity.COMMENT,
+                    saved.getId(),
+                    technician.getUserId());
+        } catch (RuntimeException ignored) {
+        }
+        return withNames(saved);
     }
 
     @Override
@@ -191,7 +256,24 @@ public class IncidentTicketServiceImpl implements IncidentTicketService {
         if (request != null && StringUtils.hasText(request.getResolutionNotes())) {
             ticket.setResolutionNotes(request.getResolutionNotes().trim());
         }
-        return withNames(incidentTicketRepository.save(ticket));
+        IncidentTicket saved = incidentTicketRepository.save(ticket);
+        notifyStatusChange(saved, technician.getUserId());
+        return withNames(saved);
+    }
+
+    private void notifyStatusChange(IncidentTicket saved, String actorUserId) {
+        try {
+            notificationService.deliver(
+                    saved.getReporterUserId(),
+                    NotificationType.TICKET_STATUS_CHANGED,
+                    NotificationCategory.TICKET,
+                    "Ticket status: " + saved.getStatus(),
+                    "Your ticket " + saved.getReference() + " is now " + saved.getStatus() + ".",
+                    NotificationRelatedEntity.TICKET,
+                    saved.getId(),
+                    actorUserId);
+        } catch (RuntimeException ignored) {
+        }
     }
 
     private IncidentTicketResponse withNames(IncidentTicket ticket) {

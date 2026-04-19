@@ -5,17 +5,12 @@ import Card from "../../components/Card";
 import LoadingSpinner from "../../components/LoadingSpinner";
 import { getMyTickets, updateStatus } from "../../services/ticketService";
 import { isResolvedTicketStatus } from "../../utils/technicianTicketStatus";
-import { toToken } from "../../utils/formatters";
+import { formatDateTime, toToken } from "../../utils/formatters";
 import { normalizeTicketFromApi } from "../../utils/ticketNormalize";
 
-function formatTicketMeta(ticket) {
-  const idShort = ticket?.id ? String(ticket.id).slice(0, 10) : "";
+function formatCategoryCell(ticket) {
   const cat = [ticket?.categoryId, ticket?.subCategoryId].filter(Boolean).join(" · ");
-  const reporter = ticket?.createdByUsername?.trim();
-  const bits = [];
-  if (idShort) bits.push(idShort);
-  if (cat) bits.push(cat);
-  return { line1: bits.join(" · ") || "—", reporter };
+  return cat || "—";
 }
 
 function formatStatusLabel(status) {
@@ -115,46 +110,70 @@ function TechnicianResolvedTicketsPage() {
             No resolved tickets yet. When you mark work complete from a ticket, it appears here.
           </p>
         ) : (
-          <div className="list-stack">
-            {resolvedTickets.map((ticket) => {
-              const meta = formatTicketMeta(ticket);
-              const busy = pendingId === ticket.id;
-              return (
-                <div
-                  className="list-row flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-border bg-tint/60 p-4"
-                  key={ticket.id}
-                >
-                  <div className="min-w-0 flex-1">
-                    <Link
-                      className="text-heading font-semibold hover:underline"
-                      to={`/technician/tickets/${ticket.id}`}
-                    >
-                      {ticket.title}
-                    </Link>
-                    <p className="supporting-text">{meta.line1}</p>
-                    <p className="supporting-text">
-                      {meta.reporter ? `Reporter: ${meta.reporter}` : "Reporter: —"}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-                    <span
-                      className={`status-badge shrink-0 ${toToken(ticket.status)}`}
-                      title={formatStatusLabel(ticket.status)}
-                    >
-                      {formatStatusLabel(ticket.status)}
-                    </span>
-                    <Button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => handleMarkInProgress(ticket.id)}
-                      variant="secondary"
-                    >
-                      {busy ? "Updating…" : "Mark in progress"}
-                    </Button>
-                  </div>
-                </div>
-              );
-            })}
+          <div
+            className="technician-table-wrapper"
+            role="region"
+            aria-label="Resolved tickets"
+          >
+            <table className="technician-table">
+              <thead>
+                <tr>
+                  <th scope="col">Ticket</th>
+                  <th scope="col">Category</th>
+                  <th scope="col">Requester</th>
+                  <th scope="col">Last updated</th>
+                  <th scope="col">Status</th>
+                  <th scope="col" className="technician-table-actions-header">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {resolvedTickets.map((ticket) => {
+                  const busy = pendingId === ticket.id;
+                  const statusToken = toToken(ticket.status);
+                  const updated = ticket.updatedAt ?? ticket.createdAt;
+                  return (
+                    <tr key={ticket.id}>
+                      <td>
+                        <div className="technician-table-title">
+                          <Link
+                            className="technician-table-ticket-title hover:underline"
+                            to={`/technician/tickets/${ticket.id}`}
+                          >
+                            {ticket.title?.trim() || "Untitled"}
+                          </Link>
+                          <span className="technician-table-ticket-id">ID: {ticket.id ?? "—"}</span>
+                        </div>
+                      </td>
+                      <td>{formatCategoryCell(ticket)}</td>
+                      <td>{ticket.createdByUsername?.trim() || "—"}</td>
+                      <td>{updated ? formatDateTime(updated) : "—"}</td>
+                      <td>
+                        <span
+                          className={`status-badge ${statusToken}`}
+                          title={formatStatusLabel(ticket.status)}
+                        >
+                          {formatStatusLabel(ticket.status)}
+                        </span>
+                      </td>
+                      <td className="technician-table-actions-cell">
+                        <div className="technician-table-actions">
+                          <Button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => handleMarkInProgress(ticket.id)}
+                            variant="secondary"
+                          >
+                            {busy ? "Updating…" : "Mark in progress"}
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </Card>

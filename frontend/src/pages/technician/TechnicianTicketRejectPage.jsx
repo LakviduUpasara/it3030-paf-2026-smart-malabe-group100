@@ -4,19 +4,18 @@ import Button from "../../components/Button";
 import Card from "../../components/Card";
 import LoadingSpinner from "../../components/LoadingSpinner";
 import { getTicketById, rejectTicketAssignment } from "../../services/ticketService";
-import { formatDateTime, toToken } from "../../utils/formatters";
+import { toToken } from "../../utils/formatters";
 import {
   canUseRejectFlow,
-  isAcceptedTechnicianWork,
   isAwaitingTechnicianDecision,
-  labelForAcceptedTechnicianWork,
   labelForAwaitingTechnicianDecision,
 } from "../../utils/technicianTicketFlow";
 
 const REASON_MAX = 500;
+const REASON_MIN = 3;
 
 /**
- * Return ticket to the desk — status becomes {@code OPEN} for reassignment — while assignment is pending or after acceptance.
+ * Decline an assignment before accepting it — ticket returns {@code OPEN} for admin reassignment (reason required).
  */
 function TechnicianTicketRejectPage() {
   const { ticketId } = useParams();
@@ -70,12 +69,10 @@ function TechnicianTicketRejectPage() {
 
   const summaryPath = `/technician/tickets/${ticketId}`;
   const assignedPhase = isAwaitingTechnicianDecision(ticket);
-  const inProgressPhase = isAcceptedTechnicianWork(ticket);
 
-  const pageTitle = inProgressPhase ? "Return ticket to desk" : "Reject this ticket";
-  const pageSubtitle = inProgressPhase
-    ? "You already accepted, but you can still hand it back if you can’t complete the work — the desk can reassign it."
-    : "Use this only if you cannot take this assignment before you start";
+  const pageTitle = "Reject this assignment";
+  const pageSubtitle =
+    "The admin and requester are notified with your reason. The ticket returns to Open so the desk can reassign it.";
 
   return (
     <div className="page-stack">
@@ -96,7 +93,7 @@ function TechnicianTicketRejectPage() {
           </Link>
         </div>
         <span className={`status-badge ${toToken(ticket.status)}`}>
-          {assignedPhase ? labelForAwaitingTechnicianDecision(ticket) : labelForAcceptedTechnicianWork(ticket)}
+          {labelForAwaitingTechnicianDecision(ticket)}
         </span>
       </div>
 
@@ -112,38 +109,45 @@ function TechnicianTicketRejectPage() {
             <span>Description</span>
             <p className="supporting-text whitespace-pre-wrap">{ticket.description || "—"}</p>
           </div>
-          {inProgressPhase ? (
-            <p className="supporting-text text-sm text-amber-800/90 dark:text-amber-200/90">
-              This removes your assignment and puts the ticket back to <strong>Open</strong> so the desk can assign someone
-              else. Confirm only when you&apos;re sure.
-            </p>
-          ) : (
-            <p className="supporting-text text-sm text-amber-800/90 dark:text-amber-200/90">
-              The desk will see the ticket as <strong>Open</strong> again and can assign another technician.
-            </p>
-          )}
+          <p className="supporting-text text-sm text-amber-800/90 dark:text-amber-200/90">
+            The desk will see the ticket as <strong>Open</strong> under <strong>Rejected assignments</strong> with your
+            note, then can assign another technician.
+          </p>
         </div>
 
         <label className="field mb-4">
-          <span>Note for the desk (optional, max {REASON_MAX} characters)</span>
+          <span>
+            Reason for rejecting this assignment <span className="required-mark">*</span>
+          </span>
           <textarea
+            aria-invalid={reason.trim().length > 0 && reason.trim().length < REASON_MIN ? "true" : "false"}
+            aria-required="true"
             className="min-h-[100px] w-full rounded-xl border border-border bg-surface p-3 text-sm"
             maxLength={REASON_MAX}
+            minLength={REASON_MIN}
             onChange={(e) => setReason(e.target.value)}
             placeholder="e.g. Outside my area / need specialist / cannot complete"
+            required
             value={reason}
           />
+          <small className="supporting-text">
+            A short note helps the admin reassign quickly. Minimum {REASON_MIN} characters, max {REASON_MAX}.
+          </small>
         </label>
 
         <div className="flex flex-wrap gap-2">
           <Button
-            disabled={busy}
+            disabled={busy || reason.trim().length < REASON_MIN}
             onClick={async () => {
+              const trimmed = reason.trim();
+              if (trimmed.length < REASON_MIN) {
+                setError(`A reason is required (at least ${REASON_MIN} characters).`);
+                return;
+              }
               setBusy(true);
               setError("");
               try {
-                const trimmed = reason.trim();
-                await rejectTicketAssignment(ticketId, trimmed ? { reason: trimmed } : {});
+                await rejectTicketAssignment(ticketId, { reason: trimmed });
                 navigate("/technician/reject");
               } catch (e) {
                 setError(e.message || "Could not return ticket.");
@@ -154,10 +158,10 @@ function TechnicianTicketRejectPage() {
             type="button"
             variant="primary"
           >
-            {inProgressPhase ? "Confirm — return to desk" : "Confirm — return to queue"}
+            Confirm — reject assignment
           </Button>
           <Link className="button button-secondary inline-flex items-center justify-center" to={summaryPath}>
-            Back without returning
+            Back without rejecting
           </Link>
           {assignedPhase ? (
             <Link
@@ -166,14 +170,7 @@ function TechnicianTicketRejectPage() {
             >
               Go to Accept page instead
             </Link>
-          ) : (
-            <Link
-              className="button button-secondary inline-flex items-center justify-center"
-              to={`/technician/tickets/${ticketId}/work`}
-            >
-              Back to workspace
-            </Link>
-          )}
+          ) : null}
         </div>
       </Card>
     </div>

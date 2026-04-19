@@ -35,14 +35,18 @@ import TechnicianNotificationsPage from "../pages/technician/TechnicianNotificat
 import TechnicianTicketDetailPage from "../pages/technician/TechnicianTicketDetailPage";
 import TechnicianTicketWorkspacePage from "../pages/technician/TechnicianTicketWorkspacePage";
 import TechnicianAcceptQueuePage from "../pages/technician/TechnicianAcceptQueuePage";
-import TechnicianRejectQueuePage from "../pages/technician/TechnicianRejectQueuePage";
 import TechnicianTicketAcceptPage from "../pages/technician/TechnicianTicketAcceptPage";
 import TechnicianTicketRejectPage from "../pages/technician/TechnicianTicketRejectPage";
 import TechnicianResolvedTicketsPage from "../pages/technician/TechnicianResolvedTicketsPage";
 import TechnicianTicketsPage from "../pages/technician/TechnicianTicketsPage";
+import TechnicianCategorySetupPage from "../pages/technician/TechnicianCategorySetupPage";
+import TechnicianTeamPage from "../pages/technician/TechnicianTeamPage";
+import TechnicianWithdrawnTicketsPage from "../pages/technician/TechnicianWithdrawnTicketsPage";
 import AdminConsoleLayout from "../components/admin/AdminConsoleLayout";
+import UserConsoleLayout from "../components/user/UserConsoleLayout";
 import AdminRoute from "./AdminRoute";
 import RequireSuperAdmin from "./RequireSuperAdmin";
+import RequireAdminBooking from "./RequireAdminBooking";
 import RequireCampusOperator from "./RequireCampusOperator";
 import RequireUserRegistrar from "./RequireUserRegistrar";
 import ProtectedRoute from "./ProtectedRoute";
@@ -71,62 +75,52 @@ function AppRoutes() {
       <Route path="/approval-pending" element={<ApprovalPendingPage />} />
       <Route path="/access-denied" element={<AccessDeniedPage />} />
 
+      {/* End-user console (sidebar + topbar shell). Role-specific gating stays on each leaf. */}
       <Route
-        path="/dashboard"
         element={
           <ProtectedRoute>
-            <DashboardPage />
+            <UserConsoleLayout />
           </ProtectedRoute>
         }
-      />
-      <Route
-        path="/bookings"
-        element={
-          <ProtectedRoute allowedRoles={[ROLES.USER]}>
-            <MyBookingsPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/bookings/new"
-        element={
-          <ProtectedRoute allowedRoles={[ROLES.USER]}>
-            <CreateBookingPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/bookings/availability"
-        element={
-          <ProtectedRoute allowedRoles={[ROLES.USER, ROLES.ADMIN, ROLES.MANAGER, ROLES.LECTURER]}>
-            <ResourceAvailabilityPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/tickets"
-        element={
-          <ProtectedRoute allowedRoles={[ROLES.USER]}>
-            <MyTicketsPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/notifications"
-        element={
-          <ProtectedRoute>
-            <NotificationsPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/settings/security"
-        element={
-          <ProtectedRoute>
-            <SystemSettingsPage />
-          </ProtectedRoute>
-        }
-      />
+      >
+        <Route path="/dashboard" element={<DashboardPage />} />
+        <Route
+          path="/bookings"
+          element={
+            <ProtectedRoute allowedRoles={[ROLES.USER]}>
+              <MyBookingsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/bookings/new"
+          element={
+            <ProtectedRoute allowedRoles={[ROLES.USER]}>
+              <CreateBookingPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/bookings/availability"
+          element={
+            <ProtectedRoute
+              allowedRoles={[ROLES.USER, ROLES.ADMIN, ROLES.MANAGER, ROLES.LECTURER]}
+            >
+              <ResourceAvailabilityPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/tickets"
+          element={
+            <ProtectedRoute allowedRoles={[ROLES.USER]}>
+              <MyTicketsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="/notifications" element={<NotificationsPage />} />
+        <Route path="/settings/security" element={<SystemSettingsPage />} />
+      </Route>
       <Route
         path="/technician"
         element={
@@ -138,12 +132,14 @@ function AppRoutes() {
         <Route index element={<TechnicianHomePage />} />
         <Route path="tickets" element={<TechnicianTicketsPage />} />
         <Route path="accept" element={<TechnicianAcceptQueuePage />} />
-        <Route path="reject" element={<TechnicianRejectQueuePage />} />
         <Route path="resolved" element={<TechnicianResolvedTicketsPage />} />
         <Route path="tickets/:ticketId/accept" element={<TechnicianTicketAcceptPage />} />
         <Route path="tickets/:ticketId/reject" element={<TechnicianTicketRejectPage />} />
         <Route path="tickets/:ticketId/work" element={<TechnicianTicketWorkspacePage />} />
         <Route path="tickets/:ticketId" element={<TechnicianTicketDetailPage />} />
+        <Route path="categories" element={<TechnicianCategorySetupPage />} />
+        <Route path="team" element={<TechnicianTeamPage />} />
+        <Route path="withdrawn" element={<TechnicianWithdrawnTicketsPage />} />
         <Route path="notifications" element={<TechnicianNotificationsPage />} />
       </Route>
 
@@ -249,7 +245,9 @@ function AppRoutes() {
           <Route path="resources/facilities" element={<ManageResourcesPage />} />
           <Route path="campus/resources" element={<Navigate to="/admin/resources/facilities" replace />} />
           <Route path="campus/availability" element={<ResourceAvailabilityPage />} />
-          <Route path="bookings" element={<ApproveBookingsPage />} />
+          <Route element={<RequireAdminBooking />}>
+            <Route path="bookings" element={<ApproveBookingsPage />} />
+          </Route>
           <Route path="tickets" element={<ManageTicketsPage />} />
         </Route>
       </Route>

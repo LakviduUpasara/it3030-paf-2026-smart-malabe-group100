@@ -23,6 +23,7 @@ public class BookingResponse {
     private String purpose;
     private BookingStatus status;
     private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
     private String rejectionReason;
 
     public String getId() { return id; }
@@ -41,6 +42,8 @@ public class BookingResponse {
     public void setStatus(BookingStatus status) { this.status = status; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
     public String getRejectionReason() { return rejectionReason; }
     public void setRejectionReason(String rejectionReason) { this.rejectionReason = rejectionReason; }
 }

@@ -7,17 +7,26 @@ import {
   isNavItemActive,
 } from "../../config/adminNavConfig";
 import { useAuth } from "../../hooks/useAuth";
-import { resolveAdminConsoleRole } from "../../utils/roleUtils";
+import { normalizeRole, resolveAdminConsoleRole, ROLES } from "../../utils/roleUtils";
 
 function AdminSidebar({ mobileOpen, onMobileClose }) {
   const location = useLocation();
   const { user } = useAuth();
   const consoleRole = resolveAdminConsoleRole(user?.role);
 
-  const sections = useMemo(
-    () => filterNavSectionsForRole(consoleRole, ADMIN_NAV_SECTIONS),
-    [consoleRole],
-  );
+  const sections = useMemo(() => {
+    const base = filterNavSectionsForRole(consoleRole, ADMIN_NAV_SECTIONS);
+    const apiRole = normalizeRole(user?.role);
+    if (apiRole === ROLES.ADMIN) {
+      return base;
+    }
+    return base
+      .map((section) => ({
+        ...section,
+        items: section.items.filter((item) => item.id !== "booking-management"),
+      }))
+      .filter((section) => section.items.length > 0);
+  }, [consoleRole, user?.role]);
 
   const [collapsed, setCollapsed] = useState(false);
   const [openSections, setOpenSections] = useState(() =>
@@ -113,7 +122,9 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
               {sections.map((section) => {
                 const SectionIcon = section.icon;
                 const isOpen = openSections[section.id] !== false;
-                const sectionActive = section.items.some((item) => isNavItemActive(location.pathname, item));
+                const sectionActive = section.items.some((item) =>
+                  isNavItemActive(location.pathname, item, location.search),
+                );
 
                 if (collapsed) {
                   return (
@@ -161,7 +172,7 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
                     {isOpen ? (
                       <div className="mt-1 flex flex-col gap-0.5 pl-2">
                         {section.items.map((item) => {
-                          const active = isNavItemActive(location.pathname, item);
+                          const active = isNavItemActive(location.pathname, item, location.search);
                           return (
                             <NavLink
                               key={item.id}
@@ -204,7 +215,7 @@ function AdminSidebar({ mobileOpen, onMobileClose }) {
                 </p>
                 <div className="flex flex-col gap-0.5 px-2">
                   {activeFlyoutSection.items.map((item) => {
-                    const active = isNavItemActive(location.pathname, item);
+                    const active = isNavItemActive(location.pathname, item, location.search);
                     return (
                       <NavLink
                         key={item.id}
