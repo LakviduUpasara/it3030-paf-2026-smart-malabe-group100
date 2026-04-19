@@ -26,6 +26,10 @@ function TicketCard({ ticket, variant = "list", className = "", onViewDetails, o
       normStatus === "WITHDRAWN"
         ? withdrawalSummary || "No withdrawal details recorded."
         : "";
+    const technicianDeclineNote =
+      normStatus === "OPEN" && ticket.technicianAssignmentRejectionNote
+        ? String(ticket.technicianAssignmentRejectionNote).trim()
+        : "";
     const assignmentLocked = normStatus === "RESOLVED" || normStatus === "WITHDRAWN";
     const assignmentLockedTitle =
       normStatus === "RESOLVED"
@@ -57,6 +61,12 @@ function TicketCard({ ticket, variant = "list", className = "", onViewDetails, o
             >
               <span className="admin-ticket-withdrawal-callout-label">Withdrawal reason</span>
               <span className="admin-ticket-withdrawal-callout-text">{withdrawalCalloutText}</span>
+            </div>
+          ) : null}
+          {technicianDeclineNote ? (
+            <div className="admin-ticket-withdrawal-callout" role="status">
+              <span className="admin-ticket-withdrawal-callout-label">Technician declined (last note)</span>
+              <span className="admin-ticket-withdrawal-callout-text">{technicianDeclineNote}</span>
             </div>
           ) : null}
           {ticket.assignedTechnicianUsername || ticket.assignedTechnicianUserId ? (

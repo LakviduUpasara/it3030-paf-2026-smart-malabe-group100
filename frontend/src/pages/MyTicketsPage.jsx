@@ -127,7 +127,7 @@ async function buildEvidenceImagesForPdf(ticketId, attachments, previewById) {
     let fetchedFresh = false;
     if (!preview?.url) {
       try {
-        preview = await fetchAttachmentPreview(ticketId, att.id);
+        preview = await fetchAttachmentPreview(ticketId, att.id, { fileNameHint: att.fileName });
         fetchedFresh = true;
       } catch {
         preview = null;
@@ -807,7 +807,9 @@ function MyTicketsPage() {
       for (const att of atts) {
         if (!att?.id) continue;
         try {
-          const preview = await fetchAttachmentPreview(detailTicket.id, att.id);
+          const preview = await fetchAttachmentPreview(detailTicket.id, att.id, {
+            fileNameHint: att.fileName,
+          });
           if (!cancelled) {
             next[att.id] = { ...preview, fileName: att.fileName || "" };
           }
@@ -855,7 +857,9 @@ function MyTicketsPage() {
       for (const att of atts) {
         if (!att?.id) continue;
         try {
-          const preview = await fetchAttachmentPreview(detailTicket.id, att.id);
+          const preview = await fetchAttachmentPreview(detailTicket.id, att.id, {
+            fileNameHint: att.fileName,
+          });
           if (!cancelled) {
             next[att.id] = { ...preview, fileName: att.fileName || "" };
           }

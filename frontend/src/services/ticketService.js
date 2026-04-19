@@ -82,12 +82,53 @@ export async function getTicketSuggestion(description) {
   }
 }
 
-export async function fetchAttachmentPreview(ticketId, attachmentId) {
+/** Axios 1.x may return AxiosHeaders; bracket access to "content-type" is unreliable. */
+function readResponseContentType(headers) {
+  if (!headers) return "";
+  let raw = "";
+  if (typeof headers.get === "function") {
+    raw = headers.get("content-type") || headers.get("Content-Type") || "";
+  } else {
+    raw = headers["content-type"] || headers["Content-Type"] || "";
+  }
+  if (!raw || typeof raw !== "string") return "";
+  return raw.split(";")[0].trim();
+}
+
+function inferImageMimeFromFileName(fileName) {
+  const n = String(fileName || "").toLowerCase();
+  if (n.endsWith(".png")) return "image/png";
+  if (n.endsWith(".jpg") || n.endsWith(".jpeg")) return "image/jpeg";
+  if (n.endsWith(".gif")) return "image/gif";
+  if (n.endsWith(".webp")) return "image/webp";
+  if (n.endsWith(".bmp")) return "image/bmp";
+  if (n.endsWith(".svg")) return "image/svg+xml";
+  return "";
+}
+
+/**
+ * Loads ticket attachment bytes (requester or technician evidence) as a blob URL for previews.
+ * @param {string} ticketId
+ * @param {string} attachmentId
+ * @param {{ fileNameHint?: string }} [options] — helps when the server sends application/octet-stream or omits Content-Type (common on Windows/Java).
+ */
+export async function fetchAttachmentPreview(ticketId, attachmentId, options = {}) {
+  const { fileNameHint = "" } = options;
   try {
-    const { data, headers } = await api.get(`/tickets/${ticketId}/attachments/${attachmentId}`, {
+    const id = encodeURIComponent(String(attachmentId));
+    const response = await api.get(`/tickets/${ticketId}/attachments/${id}`, {
       responseType: "blob",
     });
-    const mime = headers["content-type"] || headers["Content-Type"] || "";
+    const { data } = response;
+    let mime = readResponseContentType(response.headers);
+    if ((!mime || mime === "application/octet-stream") && data instanceof Blob && data.type) {
+      const fromBlob = String(data.type).split(";")[0].trim();
+      if (fromBlob) mime = fromBlob;
+    }
+    if (!mime || mime === "application/octet-stream") {
+      const inferred = inferImageMimeFromFileName(fileNameHint);
+      if (inferred) mime = inferred;
+    }
     const url = URL.createObjectURL(data);
     return { url, mime };
   } catch (error) {

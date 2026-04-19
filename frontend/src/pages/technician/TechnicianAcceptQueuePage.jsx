@@ -4,6 +4,7 @@ import Button from "../../components/Button";
 import Card from "../../components/Card";
 import LoadingSpinner from "../../components/LoadingSpinner";
 import TechnicianTicketModalWorkPanel from "../../components/technician/TechnicianTicketModalWorkPanel";
+import TechnicianRejectAssignmentModal from "../../components/technician/TechnicianRejectAssignmentModal";
 import TechnicianTicketReadonlySummary from "../../components/technician/TechnicianTicketReadonlySummary";
 import { acceptTicketAssignment, getMyTickets, getTicketById } from "../../services/ticketService";
 import {
@@ -27,6 +28,7 @@ function TechnicianAcceptQueuePage() {
   const [detailError, setDetailError] = useState("");
   const [modalActionBusy, setModalActionBusy] = useState(false);
   const [modalActionError, setModalActionError] = useState("");
+  const [rejectModalOpen, setRejectModalOpen] = useState(false);
 
   const loadTickets = useCallback(async () => {
     const res = await getMyTickets();
@@ -36,6 +38,7 @@ function TechnicianAcceptQueuePage() {
   }, []);
 
   const closeDetailModal = useCallback(() => {
+    setRejectModalOpen(false);
     setActiveDetailTicketId(null);
     setDetailTicket(null);
     setDetailError("");
@@ -139,12 +142,38 @@ function TechnicianAcceptQueuePage() {
     }
   }, [detailTicket?.id, closeDetailModal, navigate, loadTickets]);
 
+<<<<<<< HEAD
   const handleModalReject = useCallback(() => {
     if (!detailTicket?.id) return;
     const id = String(detailTicket.id);
     closeDetailModal();
     navigate(`/technician/tickets/${id}/reject`);
   }, [detailTicket?.id, closeDetailModal, navigate]);
+=======
+  const handleRejectModalComplete = useCallback(
+    async (reasonText) => {
+      if (!detailTicket?.id) return;
+      const id = String(detailTicket.id);
+      setModalActionError("");
+      setModalActionBusy(true);
+      try {
+        const res = await rejectTicketAssignment(id, { reason: reasonText });
+        const updated = normalizeTicketFromApi(res?.data);
+        if (updated) {
+          setDetailTicket(updated);
+          setTickets((prev) => prev.map((t) => (String(t.id) === id ? updated : t)));
+        }
+        await loadTickets();
+        setRejectModalOpen(false);
+        closeDetailModal();
+        navigate("/technician/reject");
+      } finally {
+        setModalActionBusy(false);
+      }
+    },
+    [detailTicket?.id, closeDetailModal, navigate, loadTickets],
+  );
+>>>>>>> 03770c00c6f3d09d95419accb856f2e5a348ee34
 
   /** Accept only while assignment is still pending. */
   const showModalAccept = Boolean(
@@ -269,7 +298,7 @@ function TechnicianAcceptQueuePage() {
                     type="button"
                     variant="secondary"
                     disabled={modalActionBusy}
-                    onClick={handleModalReject}
+                    onClick={() => setRejectModalOpen(true)}
                   >
                     Reject
                   </Button>
@@ -279,6 +308,17 @@ function TechnicianAcceptQueuePage() {
           </div>
         </div>
       ) : null}
+
+      <TechnicianRejectAssignmentModal
+        busy={modalActionBusy}
+        inProgressPhase={Boolean(detailTicket && isAcceptedTechnicianWork(detailTicket))}
+        onClose={() => {
+          if (!modalActionBusy) setRejectModalOpen(false);
+        }}
+        onComplete={handleRejectModalComplete}
+        open={rejectModalOpen}
+        ticketTitle={detailTicket?.title}
+      />
     </div>
   );
 }

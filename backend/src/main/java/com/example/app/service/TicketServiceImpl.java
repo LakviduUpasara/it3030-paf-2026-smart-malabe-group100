@@ -237,11 +237,30 @@ public class TicketServiceImpl implements TicketService {
             throw new ApiException(HttpStatus.FORBIDDEN, "Only technicians can reject assignments.");
         }
         requireAssignedTechnician(ticket, user);
+<<<<<<< HEAD
         if (!technicianAwaitingAcceptance(ticket)) {
             throw new ApiException(HttpStatus.CONFLICT,
                     "This ticket is not awaiting acceptance. Contact the desk if you need to hand off work.");
         }
         String note = request.getReason().trim();
+=======
+        String from = normalizeTicketStatus(ticket.getStatus());
+        if (!"ASSIGNED".equals(from) && !"IN_PROGRESS".equals(from) && !"ACCEPTED".equals(from)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST,
+                    "Only tickets awaiting acceptance, in progress, or accepted can be returned to the queue.");
+        }
+        if (request == null || request.getReason() == null) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "A reason is required when declining an assignment.");
+        }
+        String trimmed = request.getReason().trim();
+        if (trimmed.isEmpty()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "A reason is required when declining an assignment.");
+        }
+        if (trimmed.length() > 500) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Reason is too long (max 500 characters).");
+        }
+        String note = trimmed;
+>>>>>>> 03770c00c6f3d09d95419accb856f2e5a348ee34
         // Back to desk queue as OPEN so managers can reassign; history kept via technicianAcceptance + lastRejectedByTechnicianUserId.
         ticket.setStatus("OPEN");
         ticket.setAssignedTechnicianUserId(null);
@@ -965,7 +984,10 @@ public class TicketServiceImpl implements TicketService {
         };
     }
 
-    /** Legacy {@code ASSIGNED}, or {@code IN_PROGRESS} with explicit {@code PENDING} acceptance. */
+    /**
+     * Legacy {@code ASSIGNED}, or {@code IN_PROGRESS} with {@code PENDING} acceptance, or legacy rows with no
+     * acceptance field yet (treated as pending until the technician explicitly accepts).
+     */
     private boolean technicianAwaitingAcceptance(Ticket ticket) {
         String from = normalizeTicketStatus(ticket.getStatus());
         if ("ASSIGNED".equals(from)) {
@@ -975,12 +997,12 @@ public class TicketServiceImpl implements TicketService {
             return false;
         }
         String acc = normalizeTechnicianAcceptance(ticket.getTechnicianAcceptance());
-        return TECH_ACCEPT_PENDING.equals(acc);
+        return acc.isEmpty() || TECH_ACCEPT_PENDING.equals(acc);
     }
 
     /**
-     * Technician may post updates / resolve: {@code IN_PROGRESS} and accepted, or legacy {@code IN_PROGRESS} rows
-     * with no acceptance field set.
+     * Technician may post updates / resolve only after explicit acceptance: status {@code ACCEPTED}, or
+     * {@code IN_PROGRESS} with {@code technicianAcceptance === ACCEPTED}.
      */
     private boolean technicianHasAccepted(Ticket ticket) {
         String from = normalizeTicketStatus(ticket.getStatus());
@@ -991,9 +1013,6 @@ public class TicketServiceImpl implements TicketService {
             return false;
         }
         String acc = normalizeTechnicianAcceptance(ticket.getTechnicianAcceptance());
-        if (acc.isEmpty()) {
-            return true;
-        }
         return TECH_ACCEPT_ACCEPTED.equals(acc);
     }
 
