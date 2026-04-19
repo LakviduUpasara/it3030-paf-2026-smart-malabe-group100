@@ -5,6 +5,7 @@ import { useAdminShell } from "../../context/AdminShellContext";
 import { normalizeRole, resolveAdminConsoleRole } from "../../utils/roleUtils";
 import { getAdminBreadcrumb } from "../../utils/adminBreadcrumbs";
 import NotificationBell from "../notifications/NotificationBell";
+import ThemeToggle from "../ThemeToggle";
 
 function AdminTopBar({ onMenuClick }) {
   const location = useLocation();
@@ -73,6 +74,7 @@ function AdminTopBar({ onMenuClick }) {
         <span className="hidden max-w-[140px] truncate font-medium text-heading sm:inline md:max-w-[200px]">
           {user?.name || "Admin"}
         </span>
+        <ThemeToggle />
         <NotificationBell />
         <button
           type="button"

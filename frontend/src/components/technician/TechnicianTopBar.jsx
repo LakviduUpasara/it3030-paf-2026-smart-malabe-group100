@@ -1,6 +1,7 @@
 import { LogOut, Menu } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
 import NotificationBell from "../notifications/NotificationBell";
+import ThemeToggle from "../ThemeToggle";
 
 function TechnicianTopBar({ onMenuClick }) {
   const { user, logout } = useAuth();
@@ -24,6 +25,7 @@ function TechnicianTopBar({ onMenuClick }) {
       </div>
 
       <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+        <ThemeToggle />
         <NotificationBell />
         <button
           type="button"

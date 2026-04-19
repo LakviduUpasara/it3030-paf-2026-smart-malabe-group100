@@ -72,6 +72,7 @@ function normalizeTicketStatus(status) {
 
 const ADMIN_TICKET_SECTIONS = [
   { id: "open", label: "Open tickets", status: "OPEN" },
+  { id: "rejected-assignments", label: "Rejected assignments", status: "REJECTED_ASSIGNMENT" },
   { id: "assigned", label: "Assigned tickets", status: "IN_PROGRESS" },
   { id: "resolved", label: "Resolved tickets", status: "RESOLVED" },
   { id: "withdrawn", label: "Withdrawn tickets", status: "WITHDRAWN" },
@@ -79,6 +80,7 @@ const ADMIN_TICKET_SECTIONS = [
 
 const VALID_ADMIN_SECTIONS = new Set([
   "open",
+  "rejected-assignments",
   "assigned",
   "resolved",
   "withdrawn",
@@ -189,10 +191,21 @@ function ManageTicketsPage() {
     const want = def ? def.status : "OPEN";
     return tickets.filter((t) => {
       const s = normalizeTicketStatus(t?.status);
+      const acc = String(t?.technicianAcceptance || "")
+        .trim()
+        .toUpperCase();
+      const rejectNote = String(t?.technicianAssignmentRejectionNote || "").trim();
+      const isDeskRejectionQueue = s === "OPEN" && acc === "REJECTED" && rejectNote.length > 0;
+      if (activeSection === "rejected-assignments") {
+        return isDeskRejectionQueue;
+      }
       if (activeSection === "assigned") {
         return s === "IN_PROGRESS" || s === "ASSIGNED" || s === "ACCEPTED";
       }
       if (activeSection === "open") {
+        if (isDeskRejectionQueue) {
+          return false;
+        }
         return s === "OPEN" || s === "REJECTED";
       }
       return s === want;

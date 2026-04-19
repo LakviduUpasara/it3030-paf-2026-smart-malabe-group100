@@ -5,19 +5,17 @@ import {
   Inbox,
   LifeBuoy,
   Settings,
-  Tag,
-  Users,
   XCircle,
 } from "lucide-react";
 
 /**
  * Sidebar IA for the technician console.
  *
- * Tickets      -> queue pages already implemented.
+ * Tickets        -> queue pages (open / assigned / resolved / withdrawn).
  * Administration -> system settings + notifications inbox.
  *
- * Category Setup and Technicians are lightweight scaffold pages under the technician
- * workspace so the requested IA shows up without touching admin-only backends.
+ * 'Category setup' and 'Technicians' have been removed from the technician
+ * navigation — those configuration surfaces are managed from the admin console.
  */
 export const TECHNICIAN_NAV_SECTIONS = [
   {
@@ -50,22 +48,8 @@ export const TECHNICIAN_NAV_SECTIONS = [
       {
         id: "tickets-withdrawn",
         label: "Withdrawn tickets",
-        href: "/technician/reject",
+        href: "/technician/withdrawn",
         icon: XCircle,
-        end: true,
-      },
-      {
-        id: "tickets-categories",
-        label: "Category setup",
-        href: "/technician/categories",
-        icon: Tag,
-        end: true,
-      },
-      {
-        id: "tickets-team",
-        label: "Technicians",
-        href: "/technician/team",
-        icon: Users,
         end: true,
       },
     ],

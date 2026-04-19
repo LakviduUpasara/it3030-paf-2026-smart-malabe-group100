@@ -61,10 +61,10 @@ export function canOpenAcceptPage(ticket) {
   return isAwaitingTechnicianDecision(ticket) || isAcceptedTechnicianWork(ticket);
 }
 
-/** Reject / return-to-desk: decline while pending, or hand back after accepting. */
+/** Reject assignment: only while the desk is waiting for accept/decline (API enforces the same). */
 export function canUseRejectFlow(ticket) {
   if (!ticket) return false;
-  return isAwaitingTechnicianDecision(ticket) || isAcceptedTechnicianWork(ticket);
+  return isAwaitingTechnicianDecision(ticket);
 }
 
 /**

@@ -7,12 +7,7 @@ import TechnicianTicketModalWorkPanel, {
   focusTechnicianModalWorkNotes,
 } from "../../components/technician/TechnicianTicketModalWorkPanel";
 import TechnicianTicketReadonlySummary from "../../components/technician/TechnicianTicketReadonlySummary";
-import {
-  acceptTicketAssignment,
-  getMyTickets,
-  getTicketById,
-  rejectTicketAssignment,
-} from "../../services/ticketService";
+import { acceptTicketAssignment, getMyTickets, getTicketById } from "../../services/ticketService";
 import {
   canOpenAcceptPage,
   canUseRejectFlow,
@@ -141,7 +136,13 @@ function TechnicianTicketsPage() {
   }, [activeDetailTicketId, closeDetailModal]);
 
   const activeTickets = useMemo(
-    () => tickets.filter((t) => isActiveTicketStatus(t?.status)),
+    () =>
+      tickets.filter(
+        (t) =>
+          isActiveTicketStatus(t?.status) &&
+          isAcceptedTechnicianWork(t) &&
+          !isAwaitingTechnicianDecision(t),
+      ),
     [tickets],
   );
 
@@ -166,25 +167,11 @@ function TechnicianTicketsPage() {
     }
   }, [detailTicket?.id, closeDetailModal, navigate]);
 
-  const handleModalReject = useCallback(async () => {
+  const handleModalReject = useCallback(() => {
     if (!detailTicket?.id) return;
     const id = String(detailTicket.id);
-    setModalActionError("");
-    setModalActionBusy(true);
-    try {
-      const res = await rejectTicketAssignment(id, {});
-      const updated = normalizeTicketFromApi(res?.data);
-      if (updated) {
-        setDetailTicket(updated);
-        setTickets((prev) => prev.map((t) => (String(t.id) === id ? updated : t)));
-      }
-      closeDetailModal();
-      navigate("/technician/reject");
-    } catch (e) {
-      setModalActionError(e.message || "Could not decline assignment.");
-    } finally {
-      setModalActionBusy(false);
-    }
+    closeDetailModal();
+    navigate(`/technician/tickets/${id}/reject`);
   }, [detailTicket?.id, closeDetailModal, navigate]);
 
   const showModalAccept = Boolean(detailTicket && canOpenAcceptPage(detailTicket));
@@ -205,14 +192,14 @@ function TechnicianTicketsPage() {
     <div className="technician-page">
       <Card
         className="technician-page-card"
-        subtitle="Open a ticket for details. Accept opens the Accept flow; Reject opens the Reject flow."
-        title="Technician Dashboard"
+        subtitle="Tickets you have accepted — open a row for details, comments, evidence, and resolution."
+        title="Assigned tickets"
       >
         {error ? <p className="alert alert-error">{error}</p> : null}
         {!activeTickets.length ? (
           <p className="supporting-text">
             {tickets.length
-              ? "No active tickets — resolved items are under the Resolved tab."
+              ? "No active assigned work — new assignments awaiting your decision are under Open tickets."
               : "You have no assigned tickets. Check back after the desk assigns work."}
           </p>
         ) : (
