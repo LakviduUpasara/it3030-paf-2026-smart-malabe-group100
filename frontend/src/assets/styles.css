@@ -7253,7 +7253,6 @@ a {
 .landing-page {
   position: relative;
   isolation: isolate;
-  overflow-x: clip;
   width: min(1400px, 100%);
   display: grid;
   gap: 1.6rem;
