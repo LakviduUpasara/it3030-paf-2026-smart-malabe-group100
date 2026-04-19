@@ -1170,90 +1170,105 @@ function MyTicketsPage() {
       <div
         className={`my-tickets-page${showScrollableTicketList ? " my-tickets-page--fill-viewport" : ""}`}
       >
-        <div className="my-tickets-sticky-toolbar">
-          <section className="my-tickets-header-section" aria-label="My Tickets overview">
-            <div className="my-tickets-header-inner">
-              <div className="my-tickets-toolbar-panel">
-                <div className="my-tickets-hero-main">
-                  <div className="my-tickets-hero-illustration" aria-hidden="true">
-                    <img alt="" src={maintenanceIllustration} />
-                  </div>
-                  <div className="my-tickets-hero-copy">
-                    <h2>My Tickets</h2>
-                    <p>Track maintenance and incident requests</p>
-                  </div>
-                  <div className="my-tickets-hero-action">
-                    <Button
-                      className="my-tickets-create-top-button"
-                      onClick={() => setIsFormOpen((previous) => !previous)}
-                      variant={isFormOpen ? "ghost" : "primary"}
-                    >
-                      {isFormOpen ? "Cancel" : "Create Ticket"}
-                    </Button>
-                  </div>
-                </div>
+        {/* Compact header — title + subtitle on the left, single primary action on the right. */}
+        <header className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-lg font-semibold leading-tight text-heading sm:text-xl">
+              My tickets
+            </h1>
+            <p className="mt-0.5 text-xs text-text/60 sm:text-sm">
+              Track your maintenance and incident requests
+            </p>
+          </div>
+          <Button
+            onClick={() => setIsFormOpen((previous) => !previous)}
+            variant={isFormOpen ? "ghost" : "primary"}
+          >
+            {isFormOpen ? "Cancel" : "Create ticket"}
+          </Button>
+        </header>
 
-                {tickets.length > 0 ? (
-                  <div className="my-tickets-filters" aria-label="Search and filter tickets">
-                    <div className="my-tickets-filters-search-row">
-                      <label className="my-tickets-filters-search">
-                        <span>Search</span>
-                        <input
-                          autoComplete="off"
-                          onChange={(event) => setTicketListQuery(event.target.value)}
-                          placeholder="Title, description, location, category, or ticket ID"
-                          type="search"
-                          value={ticketListQuery}
-                        />
-                      </label>
-                    </div>
-                    <div className="my-tickets-filters-controls">
-                      <label className="my-tickets-filter-field">
-                        <span>Status</span>
-                        <select onChange={(event) => setFilterStatus(event.target.value)} value={filterStatus}>
-                          <option value="">All statuses</option>
-                          <option value="OPEN">Open</option>
-                          <option value="ASSIGNED">Awaiting technician</option>
-                          <option value="IN_PROGRESS">In progress</option>
-                          <option value="RESOLVED">Resolved</option>
-                        </select>
-                      </label>
-                      <label className="my-tickets-filter-field">
-                        <span>Category</span>
-                        <select
-                          onChange={(event) => setFilterCategoryId(event.target.value)}
-                          value={filterCategoryId}
-                        >
-                          <option value="">All categories</option>
-                          {categories.map((category) => (
-                            <option key={category.id} value={category.id}>
-                              {category.name}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="my-tickets-filter-field">
-                        <span>Priority</span>
-                        <select onChange={(event) => setFilterPriority(event.target.value)} value={filterPriority}>
-                          <option value="">All priorities</option>
-                          <option value="Low">Low</option>
-                          <option value="Normal">Normal</option>
-                          <option value="High">High</option>
-                          <option value="Critical">Critical</option>
-                        </select>
-                      </label>
-                      {hasActiveTicketFilters ? (
-                        <Button onClick={clearTicketFilters} type="button" variant="ghost">
-                          Clear filters
-                        </Button>
-                      ) : null}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
+        {/* Compact filter card — full-width search, three selects in one responsive row. */}
+        {tickets.length > 0 ? (
+          <section
+            aria-label="Search and filter tickets"
+            className="mb-4 rounded-2xl border border-border bg-card p-3 shadow-sm sm:p-4"
+          >
+            <label className="block">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-text/60">
+                Search
+              </span>
+              <input
+                autoComplete="off"
+                className="mt-1 w-full rounded-xl border border-border bg-bg px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                onChange={(event) => setTicketListQuery(event.target.value)}
+                placeholder="Title, description, location, category, or ticket ID"
+                type="search"
+                value={ticketListQuery}
+              />
+            </label>
+
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:items-end">
+              <label className="block">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-text/60">
+                  Status
+                </span>
+                <select
+                  className="mt-1 w-full rounded-xl border border-border bg-bg px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  onChange={(event) => setFilterStatus(event.target.value)}
+                  value={filterStatus}
+                >
+                  <option value="">All statuses</option>
+                  <option value="OPEN">Open</option>
+                  <option value="ASSIGNED">Awaiting technician</option>
+                  <option value="IN_PROGRESS">In progress</option>
+                  <option value="RESOLVED">Resolved</option>
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-text/60">
+                  Category
+                </span>
+                <select
+                  className="mt-1 w-full rounded-xl border border-border bg-bg px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  onChange={(event) => setFilterCategoryId(event.target.value)}
+                  value={filterCategoryId}
+                >
+                  <option value="">All categories</option>
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-text/60">
+                  Priority
+                </span>
+                <select
+                  className="mt-1 w-full rounded-xl border border-border bg-bg px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  onChange={(event) => setFilterPriority(event.target.value)}
+                  value={filterPriority}
+                >
+                  <option value="">All priorities</option>
+                  <option value="Low">Low</option>
+                  <option value="Normal">Normal</option>
+                  <option value="High">High</option>
+                  <option value="Critical">Critical</option>
+                </select>
+              </label>
             </div>
+
+            {hasActiveTicketFilters ? (
+              <div className="mt-3 flex justify-end">
+                <Button onClick={clearTicketFilters} type="button" variant="ghost">
+                  Clear filters
+                </Button>
+              </div>
+            ) : null}
           </section>
-        </div>
+        ) : null}
 
         <Card className="my-tickets-content-card">
           {successMessage ? <p className="alert alert-success">{successMessage}</p> : null}
