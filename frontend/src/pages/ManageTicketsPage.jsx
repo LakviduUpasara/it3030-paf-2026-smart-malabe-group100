@@ -258,7 +258,9 @@ function ManageTicketsPage() {
       for (const att of atts) {
         if (!att?.id) continue;
         try {
-          const preview = await fetchAttachmentPreview(detailTicket.id, att.id);
+          const preview = await fetchAttachmentPreview(detailTicket.id, att.id, {
+            fileNameHint: att.fileName,
+          });
           if (!cancelled) {
             next[att.id] = { ...preview, fileName: att.fileName || "" };
           }
@@ -310,7 +312,9 @@ function ManageTicketsPage() {
       for (const att of atts) {
         if (!att?.id) continue;
         try {
-          const preview = await fetchAttachmentPreview(detailTicket.id, att.id);
+          const preview = await fetchAttachmentPreview(detailTicket.id, att.id, {
+            fileNameHint: att.fileName,
+          });
           if (!cancelled) {
             next[att.id] = { ...preview, fileName: att.fileName || "" };
           }
