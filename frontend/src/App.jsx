@@ -1,5 +1,6 @@
 import { BrowserRouter, useLocation } from "react-router-dom";
-import { AuthProvider } from "./context/AuthProvider";
+import { AuthProvider } from "./context/AuthContext";
+import AppFooter from "./components/AppFooter";
 import Navbar from "./components/Navbar";
 import GoogleTwoFactorPromptModal from "./components/GoogleTwoFactorPromptModal";
 import TwoFactorSetupReminder from "./components/TwoFactorSetupReminder";
@@ -22,6 +23,7 @@ function AppLayout() {
   const { isAuthenticated } = useAuth();
   const location = useLocation();
   const isAdminWorkspace = isAuthenticated && location.pathname.startsWith("/admin");
+  const isPublicLandingRoute = !isAuthenticated && location.pathname === "/";
   const isPublicMarketingRoute =
     !isAuthenticated &&
     ["/", "/login", "/signup", "/approval-pending"].includes(location.pathname);
@@ -33,7 +35,12 @@ function AppLayout() {
       location.pathname === "/admin/tickets");
   const isAdminTicketsPage = isAuthenticated && location.pathname === "/admin/tickets";
 
-  const shellClass = ["app-shell", isPublicMarketingRoute ? "app-shell-auth" : ""]
+  const shellClass = [
+    "app-shell",
+    "app-shell-has-footer",
+    isPublicMarketingRoute ? "app-shell-auth" : "",
+    isPublicLandingRoute ? "app-shell-public-home" : "",
+  ]
     .filter(Boolean)
     .join(" ");
 
@@ -41,6 +48,7 @@ function AppLayout() {
     return (
       <div className={shellClass}>
         <AppRoutes />
+        <AppFooter />
       </div>
     );
   }
@@ -53,7 +61,7 @@ function AppLayout() {
       <main
         className={
           isPublicMarketingRoute
-            ? "page-shell page-shell-auth"
+            ? `page-shell page-shell-auth ${isPublicLandingRoute ? "page-shell-public-home" : ""}`.trim()
             : isAdminTicketsPage
               ? "page-shell page-shell--tickets-wide page-shell--admin-tickets"
               : isTicketsWideLayout
@@ -63,18 +71,14 @@ function AppLayout() {
       >
         <AppRoutes />
       </main>
+      <AppFooter />
     </div>
   );
 }
 
 function App() {
   return (
-    <BrowserRouter
-      future={{
-        v7_startTransition: true,
-        v7_relativeSplatPath: true,
-      }}
-    >
+    <BrowserRouter>
       <AuthProvider>
         <AppLayout />
         <GoogleTwoFactorPromptHost />
