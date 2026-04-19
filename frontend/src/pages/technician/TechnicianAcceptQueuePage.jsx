@@ -6,10 +6,11 @@ import LoadingSpinner from "../../components/LoadingSpinner";
 import TechnicianTicketModalWorkPanel from "../../components/technician/TechnicianTicketModalWorkPanel";
 import TechnicianRejectAssignmentModal from "../../components/technician/TechnicianRejectAssignmentModal";
 import TechnicianTicketReadonlySummary from "../../components/technician/TechnicianTicketReadonlySummary";
-import { acceptTicketAssignment, getMyTickets, getTicketById } from "../../services/ticketService";
+import { acceptTicketAssignment, getMyTickets, getTicketById, rejectTicketAssignment } from "../../services/ticketService";
 import {
   canOpenAcceptPage,
   canUseRejectFlow,
+  isAcceptedTechnicianWork,
   isAwaitingTechnicianDecision,
   labelForAwaitingTechnicianDecision,
 } from "../../utils/technicianTicketFlow";
@@ -142,14 +143,6 @@ function TechnicianAcceptQueuePage() {
     }
   }, [detailTicket?.id, closeDetailModal, navigate, loadTickets]);
 
-<<<<<<< HEAD
-  const handleModalReject = useCallback(() => {
-    if (!detailTicket?.id) return;
-    const id = String(detailTicket.id);
-    closeDetailModal();
-    navigate(`/technician/tickets/${id}/reject`);
-  }, [detailTicket?.id, closeDetailModal, navigate]);
-=======
   const handleRejectModalComplete = useCallback(
     async (reasonText) => {
       if (!detailTicket?.id) return;
@@ -173,7 +166,6 @@ function TechnicianAcceptQueuePage() {
     },
     [detailTicket?.id, closeDetailModal, navigate, loadTickets],
   );
->>>>>>> 03770c00c6f3d09d95419accb856f2e5a348ee34
 
   /** Accept only while assignment is still pending. */
   const showModalAccept = Boolean(

@@ -117,11 +117,9 @@ function TechnicianTicketRejectPage() {
 
         <label className="field mb-4">
           <span>
-<<<<<<< HEAD
-            Reason for rejecting this assignment <span className="required-mark">*</span>
-=======
-            Reason for rejection <span className="text-text/70">(required — visible to administrators, max {REASON_MAX} characters)</span>
->>>>>>> 03770c00c6f3d09d95419accb856f2e5a348ee34
+            Reason for rejecting this assignment{" "}
+            <span className="text-text/70">(visible to administrators, max {REASON_MAX} characters)</span>{" "}
+            <span className="required-mark">*</span>
           </span>
           <textarea
             aria-invalid={reason.trim().length > 0 && reason.trim().length < REASON_MIN ? "true" : "false"}
@@ -141,11 +139,7 @@ function TechnicianTicketRejectPage() {
 
         <div className="flex flex-wrap gap-2">
           <Button
-<<<<<<< HEAD
             disabled={busy || reason.trim().length < REASON_MIN}
-=======
-            disabled={busy || !reason.trim()}
->>>>>>> 03770c00c6f3d09d95419accb856f2e5a348ee34
             onClick={async () => {
               const trimmed = reason.trim();
               if (trimmed.length < REASON_MIN) {
@@ -155,10 +149,6 @@ function TechnicianTicketRejectPage() {
               setBusy(true);
               setError("");
               try {
-<<<<<<< HEAD
-=======
-                const trimmed = reason.trim();
->>>>>>> 03770c00c6f3d09d95419accb856f2e5a348ee34
                 await rejectTicketAssignment(ticketId, { reason: trimmed });
                 navigate("/technician/reject");
               } catch (e) {

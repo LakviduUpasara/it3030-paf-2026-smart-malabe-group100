@@ -8,7 +8,7 @@ import TechnicianTicketModalWorkPanel, {
 } from "../../components/technician/TechnicianTicketModalWorkPanel";
 import TechnicianRejectAssignmentModal from "../../components/technician/TechnicianRejectAssignmentModal";
 import TechnicianTicketReadonlySummary from "../../components/technician/TechnicianTicketReadonlySummary";
-import { acceptTicketAssignment, getMyTickets, getTicketById } from "../../services/ticketService";
+import { acceptTicketAssignment, getMyTickets, getTicketById, rejectTicketAssignment } from "../../services/ticketService";
 import {
   canOpenAcceptPage,
   canUseRejectFlow,
@@ -236,14 +236,6 @@ function TechnicianTicketsPage() {
     }
   }, [detailTicket?.id, closeDetailModal, navigate]);
 
-<<<<<<< HEAD
-  const handleModalReject = useCallback(() => {
-    if (!detailTicket?.id) return;
-    const id = String(detailTicket.id);
-    closeDetailModal();
-    navigate(`/technician/tickets/${id}/reject`);
-  }, [detailTicket?.id, closeDetailModal, navigate]);
-=======
   const handleRejectModalComplete = useCallback(
     async (reasonText) => {
       if (!detailTicket?.id) return;
@@ -268,7 +260,6 @@ function TechnicianTicketsPage() {
     },
     [detailTicket?.id, closeDetailModal, navigate],
   );
->>>>>>> 03770c00c6f3d09d95419accb856f2e5a348ee34
 
   const showModalAccept = Boolean(detailTicket && canOpenAcceptPage(detailTicket));
   const showModalReject = Boolean(detailTicket && canUseRejectFlow(detailTicket));
@@ -288,11 +279,7 @@ function TechnicianTicketsPage() {
     <div className="technician-page">
       <Card
         className="technician-page-card"
-<<<<<<< HEAD
-        subtitle="Tickets you have accepted — open a row for details, comments, evidence, and resolution."
-=======
-        subtitle="Filter by assignment state and priority, or search. Open a row for details, accept, or reject."
->>>>>>> 03770c00c6f3d09d95419accb856f2e5a348ee34
+        subtitle="Filter by assignment state and priority, or search. Open a row for details, comments, evidence, and resolution."
         title="Assigned tickets"
       >
         {error ? <p className="alert alert-error">{error}</p> : null}

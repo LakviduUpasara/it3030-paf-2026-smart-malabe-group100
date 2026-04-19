@@ -237,30 +237,16 @@ public class TicketServiceImpl implements TicketService {
             throw new ApiException(HttpStatus.FORBIDDEN, "Only technicians can reject assignments.");
         }
         requireAssignedTechnician(ticket, user);
-<<<<<<< HEAD
-        if (!technicianAwaitingAcceptance(ticket)) {
-            throw new ApiException(HttpStatus.CONFLICT,
-                    "This ticket is not awaiting acceptance. Contact the desk if you need to hand off work.");
-        }
-        String note = request.getReason().trim();
-=======
         String from = normalizeTicketStatus(ticket.getStatus());
         if (!"ASSIGNED".equals(from) && !"IN_PROGRESS".equals(from) && !"ACCEPTED".equals(from)) {
             throw new ApiException(HttpStatus.BAD_REQUEST,
                     "Only tickets awaiting acceptance, in progress, or accepted can be returned to the queue.");
         }
-        if (request == null || request.getReason() == null) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "A reason is required when declining an assignment.");
-        }
         String trimmed = request.getReason().trim();
-        if (trimmed.isEmpty()) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "A reason is required when declining an assignment.");
-        }
         if (trimmed.length() > 500) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Reason is too long (max 500 characters).");
         }
         String note = trimmed;
->>>>>>> 03770c00c6f3d09d95419accb856f2e5a348ee34
         // Back to desk queue as OPEN so managers can reassign; history kept via technicianAcceptance + lastRejectedByTechnicianUserId.
         ticket.setStatus("OPEN");
         ticket.setAssignedTechnicianUserId(null);
