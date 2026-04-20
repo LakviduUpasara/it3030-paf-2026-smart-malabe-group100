@@ -56,7 +56,7 @@ function TechnicianTicketRejectPage() {
         {error ? <p className="alert alert-error">{error}</p> : <p className="supporting-text">Ticket not found.</p>}
         <p className="mt-4">
           <Link className="button button-secondary" to="/technician/reject">
-            Back to Reject queue
+            Back to rejected tickets
           </Link>
         </p>
       </Card>
@@ -89,7 +89,7 @@ function TechnicianTicketRejectPage() {
             className="text-sm font-semibold text-heading underline-offset-2 hover:underline"
             to="/technician/reject"
           >
-            Reject queue
+            Rejected tickets
           </Link>
         </div>
         <span className={`status-badge ${toToken(ticket.status)}`}>

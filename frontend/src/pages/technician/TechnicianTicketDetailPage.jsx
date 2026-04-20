@@ -107,7 +107,7 @@ function TechnicianTicketDetailPage() {
     <div className="page-stack">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Link className="text-sm font-semibold text-heading underline-offset-2 hover:underline" to={listPath}>
-          ← {isResolvedTicketStatus(ticket.status) ? "Back to resolved" : "Back to queue"}
+          ← {isResolvedTicketStatus(ticket.status) ? "Back to resolved" : "Back to tickets"}
         </Link>
         <span className={`status-badge ${toToken(ticket.status)}`}>
           {formatTechnicianDetailStatusLabel(ticket)}
@@ -138,7 +138,7 @@ function TechnicianTicketDetailPage() {
         ) : null}
         {normalizeTicketStatusKey(ticket.status) === "WITHDRAWN" ? (
           <p className="alert alert-error">
-            The requester withdrew this ticket. It has been removed from the active assigned queue.
+            The requester withdrew this ticket. It has been removed from active assigned tickets.
           </p>
         ) : null}
 
@@ -185,14 +185,14 @@ function TechnicianTicketDetailPage() {
                   Reject this ticket
                 </Link>
               </div>
-              <p className="mb-2 text-xs text-text/60">Queues</p>
+              <p className="mb-2 text-xs text-text/60">Ticket views</p>
               <div className="flex flex-wrap gap-2">
                 <Link className="text-sm font-semibold text-heading underline underline-offset-2" to="/technician/accept">
-                  Accept queue
+                  Accepted tickets
                 </Link>
                 <span className="text-text/40">·</span>
                 <Link className="text-sm font-semibold text-heading underline underline-offset-2" to="/technician/tickets">
-                  My tickets
+                  Assigned tickets
                 </Link>
               </div>
             </>

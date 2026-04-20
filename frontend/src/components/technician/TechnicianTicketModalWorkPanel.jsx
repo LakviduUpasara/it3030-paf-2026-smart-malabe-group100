@@ -19,8 +19,9 @@ import {
 const MAX_TECHNICIAN_EVIDENCE = 3;
 
 function isImageEvidence(mime, fileName) {
+  if (!mime) return true;
   if (mime && String(mime).startsWith("image/")) return true;
-  return /\.(png|jpe?g|gif|webp|bmp)$/i.test(fileName || "");
+  return /\.(png|jpe?g|gif|webp|bmp|svg|heic|heif|avif|jfif)$/i.test(fileName || "");
 }
 
 function sortUpdatesNewestFirst(updates) {
@@ -45,7 +46,7 @@ export function focusTechnicianModalWorkNotes() {
 }
 
 /**
- * Updates + technician evidence for ticket detail modals (My tickets, Accept queue).
+ * Updates + technician evidence for ticket detail modals (My tickets, Accepted tickets).
  */
 export default function TechnicianTicketModalWorkPanel({ ticket, onTicketUpdated }) {
   const [progressText, setProgressText] = useState("");

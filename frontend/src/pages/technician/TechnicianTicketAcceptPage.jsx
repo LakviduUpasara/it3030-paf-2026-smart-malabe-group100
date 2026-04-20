@@ -84,7 +84,7 @@ function TechnicianTicketAcceptPage() {
               className="text-sm font-semibold text-heading underline-offset-2 hover:underline"
               to="/technician/accept"
             >
-              Accept queue
+              Accepted tickets
             </Link>
           </div>
           <span className={`status-badge ${toToken(ticket.status)}`}>
@@ -136,7 +136,7 @@ function TechnicianTicketAcceptPage() {
             className="text-sm font-semibold text-heading underline-offset-2 hover:underline"
             to="/technician/accept"
           >
-            Accept queue
+            Accepted tickets
           </Link>
         </div>
         <span className={`status-badge ${badgeClass}`}>{awaitingBadge}</span>

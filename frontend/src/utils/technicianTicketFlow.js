@@ -91,6 +91,6 @@ export function labelForAcceptedTechnicianWork(ticket) {
 export function labelForAwaitingTechnicianDecision(ticket) {
   if (!ticket || !isAwaitingTechnicianDecision(ticket)) return "—";
   const k = normalizeTicketStatusKey(ticket.status);
-  return k === "IN_PROGRESS" ? "In progress — decision pending" : "Awaiting your response";
+  return k === "IN_PROGRESS" ? "Decision pending" : "Awaiting your response";
 }
 

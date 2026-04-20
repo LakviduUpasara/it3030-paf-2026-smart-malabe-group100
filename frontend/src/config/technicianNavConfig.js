@@ -5,13 +5,12 @@ import {
   Inbox,
   LifeBuoy,
   Settings,
-  XCircle,
 } from "lucide-react";
 
 /**
  * Sidebar IA for the technician console.
  *
- * Tickets        -> queue pages (open / assigned / resolved / withdrawn).
+ * Tickets        -> technician ticket pages (assigned / accepted / resolved).
  * Administration -> system settings + notifications inbox.
  *
  * 'Category setup' and 'Technicians' have been removed from the technician
@@ -25,16 +24,16 @@ export const TECHNICIAN_NAV_SECTIONS = [
     defaultOpen: true,
     items: [
       {
-        id: "tickets-open",
-        label: "Open tickets",
-        href: "/technician/accept",
+        id: "tickets-assigned",
+        label: "Assigned tickets",
+        href: "/technician/tickets",
         icon: Inbox,
         end: true,
       },
       {
-        id: "tickets-assigned",
-        label: "Assigned tickets",
-        href: "/technician/tickets",
+        id: "tickets-accepted",
+        label: "Accepted tickets",
+        href: "/technician/accept",
         icon: ClipboardList,
         end: true,
       },
@@ -43,13 +42,6 @@ export const TECHNICIAN_NAV_SECTIONS = [
         label: "Resolved tickets",
         href: "/technician/resolved",
         icon: CheckCircle2,
-        end: true,
-      },
-      {
-        id: "tickets-withdrawn",
-        label: "Withdrawn tickets",
-        href: "/technician/withdrawn",
-        icon: XCircle,
         end: true,
       },
     ],

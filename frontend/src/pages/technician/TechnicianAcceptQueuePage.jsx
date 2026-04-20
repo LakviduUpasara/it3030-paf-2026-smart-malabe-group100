@@ -5,7 +5,12 @@ import Card from "../../components/Card";
 import LoadingSpinner from "../../components/LoadingSpinner";
 import TechnicianTicketModalWorkPanel from "../../components/technician/TechnicianTicketModalWorkPanel";
 import TechnicianTicketReadonlySummary from "../../components/technician/TechnicianTicketReadonlySummary";
-import { acceptTicketAssignment, getMyTickets, getTicketById } from "../../services/ticketService";
+import {
+  acceptTicketAssignment,
+  getMyTickets,
+  getTicketById,
+  rejectTicketAssignment,
+} from "../../services/ticketService";
 import {
   canOpenAcceptPage,
   canUseRejectFlow,
@@ -15,6 +20,22 @@ import {
 import { formatDateTime, toToken } from "../../utils/formatters";
 import { normalizeTicketFromApi } from "../../utils/ticketNormalize";
 import { isActiveTicketStatus } from "../../utils/technicianTicketStatus";
+import { parseTicketDescription } from "../../utils/ticketDescription";
+
+const REJECT_REASON_MIN = 3;
+const REJECT_REASON_MAX = 500;
+const REJECT_REASON_OTHER = "__OTHER__";
+const STICKY_FILTER_SECTION_STYLE = {
+  position: "sticky",
+  top: "calc(var(--navbar-measured-height, 0px) + 12px)",
+  zIndex: 5,
+};
+const REJECT_REASON_OPTIONS = [
+  { value: "Outside my area of responsibility", label: "Outside my area of responsibility" },
+  { value: "Need a specialist for this issue", label: "Need a specialist for this issue" },
+  { value: "Insufficient information to proceed", label: "Insufficient information to proceed" },
+  { value: REJECT_REASON_OTHER, label: "Other (type reason)" },
+];
 
 function TechnicianAcceptQueuePage() {
   const navigate = useNavigate();
@@ -27,6 +48,11 @@ function TechnicianAcceptQueuePage() {
   const [detailError, setDetailError] = useState("");
   const [modalActionBusy, setModalActionBusy] = useState(false);
   const [modalActionError, setModalActionError] = useState("");
+  const [rejectFlowStep, setRejectFlowStep] = useState("idle");
+  const [rejectReasonPreset, setRejectReasonPreset] = useState("");
+  const [rejectReasonOther, setRejectReasonOther] = useState("");
+  const [filterQuery, setFilterQuery] = useState("");
+  const [filterPriority, setFilterPriority] = useState("");
 
   const loadTickets = useCallback(async () => {
     const res = await getMyTickets();
@@ -42,6 +68,9 @@ function TechnicianAcceptQueuePage() {
     setDetailLoading(false);
     setModalActionBusy(false);
     setModalActionError("");
+    setRejectFlowStep("idle");
+    setRejectReasonPreset("");
+    setRejectReasonOther("");
   }, []);
 
   useEffect(() => {
@@ -116,6 +145,31 @@ function TechnicianAcceptQueuePage() {
       tickets.filter((t) => t && isAwaitingTechnicianDecision(t) && isActiveTicketStatus(t.status)),
     [tickets],
   );
+  const filteredPendingDecision = useMemo(() => {
+    const q = filterQuery.trim().toLowerCase();
+    return pendingDecision.filter((ticket) => {
+      const parsed = parseTicketDescription(ticket?.description);
+      const priority = String(parsed.priority || "Normal").trim();
+      const matchesPriority = !filterPriority || priority.toLowerCase() === filterPriority.toLowerCase();
+      if (!matchesPriority) return false;
+      if (!q) return true;
+      const haystack = [
+        ticket?.id,
+        ticket?.title,
+        ticket?.createdByUsername,
+        ticket?.description,
+        priority,
+      ]
+        .map((v) => String(v || "").toLowerCase())
+        .join(" ");
+      return haystack.includes(q);
+    });
+  }, [pendingDecision, filterQuery, filterPriority]);
+  const hasActiveFilters = filterQuery.trim() !== "" || filterPriority !== "";
+  const clearFilters = useCallback(() => {
+    setFilterQuery("");
+    setFilterPriority("");
+  }, []);
 
   const handleModalAccept = useCallback(async () => {
     if (!detailTicket?.id) return;
@@ -131,7 +185,7 @@ function TechnicianAcceptQueuePage() {
       }
       await loadTickets();
       closeDetailModal();
-      navigate("/technician/tickets");
+      navigate("/technician/accept");
     } catch (e) {
       setModalActionError(e.message || "Could not accept assignment.");
     } finally {
@@ -140,11 +194,49 @@ function TechnicianAcceptQueuePage() {
   }, [detailTicket?.id, closeDetailModal, navigate, loadTickets]);
 
   const handleModalReject = useCallback(() => {
+    if (!detailTicket?.id || modalActionBusy) return;
+    setModalActionError("");
+    setRejectFlowStep("confirm");
+  }, [detailTicket?.id, modalActionBusy]);
+
+  const handleConfirmReject = useCallback(() => {
+    if (modalActionBusy) return;
+    setModalActionError("");
+    setRejectFlowStep("reason");
+  }, [modalActionBusy]);
+
+  const handleCancelRejectFlow = useCallback(() => {
+    if (modalActionBusy) return;
+    setModalActionError("");
+    setRejectFlowStep("idle");
+    setRejectReasonPreset("");
+    setRejectReasonOther("");
+  }, [modalActionBusy]);
+
+  const handleSubmitReject = useCallback(async () => {
     if (!detailTicket?.id) return;
     const id = String(detailTicket.id);
-    closeDetailModal();
-    navigate(`/technician/tickets/${id}/reject`);
-  }, [detailTicket?.id, closeDetailModal, navigate]);
+    const selected = rejectReasonPreset.trim();
+    const typedOther = rejectReasonOther.trim();
+    const finalReason = selected === REJECT_REASON_OTHER ? typedOther : selected;
+    const trimmed = finalReason.trim();
+    if (trimmed.length < REJECT_REASON_MIN) {
+      setModalActionError(`A reason is required (at least ${REJECT_REASON_MIN} characters).`);
+      return;
+    }
+    setModalActionError("");
+    setModalActionBusy(true);
+    try {
+      await rejectTicketAssignment(id, { reason: trimmed });
+      await loadTickets();
+      closeDetailModal();
+      navigate("/technician/tickets");
+    } catch (e) {
+      setModalActionError(e.message || "Could not reject assignment.");
+    } finally {
+      setModalActionBusy(false);
+    }
+  }, [detailTicket?.id, rejectReasonPreset, rejectReasonOther, loadTickets, closeDetailModal, navigate]);
 
   /** Accept only while assignment is still pending. */
   const showModalAccept = Boolean(
@@ -165,6 +257,45 @@ function TechnicianAcceptQueuePage() {
 
   return (
     <div className="technician-page">
+      {pendingDecision.length ? (
+        <Card
+          className="technician-page-card"
+          title="Search and filters"
+          style={STICKY_FILTER_SECTION_STYLE}
+        >
+          <div className="technician-filters my-tickets-filters" aria-label="Search and filter open tickets">
+            <div className="my-tickets-filters-search-row">
+              <label className="my-tickets-filters-search">
+                <span>Search</span>
+                <input
+                  autoComplete="off"
+                  type="search"
+                  placeholder="Ticket ID, title, requester, description"
+                  value={filterQuery}
+                  onChange={(event) => setFilterQuery(event.target.value)}
+                />
+              </label>
+            </div>
+            <div className="my-tickets-filters-controls">
+              <label className="my-tickets-filter-field">
+                <span>Priority</span>
+                <select value={filterPriority} onChange={(event) => setFilterPriority(event.target.value)}>
+                  <option value="">All priorities</option>
+                  <option value="Low">Low</option>
+                  <option value="Normal">Normal</option>
+                  <option value="High">High</option>
+                  <option value="Critical">Critical</option>
+                </select>
+              </label>
+              {hasActiveFilters ? (
+                <Button type="button" variant="ghost" onClick={clearFilters}>
+                  Clear filters
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        </Card>
+      ) : null}
       <Card
         className="technician-page-card"
         subtitle="The desk has assigned these tickets to you — accept to move them to Assigned tickets, or reject with a required reason."
@@ -177,43 +308,74 @@ function TechnicianAcceptQueuePage() {
             or reject.
           </p>
         ) : (
-          <div className="list-stack">
-            {pendingDecision.map((ticket) => (
+          <>
+            {!filteredPendingDecision.length ? (
+              <p className="supporting-text technician-filter-empty" role="status">
+                No open tickets match your filters.
+              </p>
+            ) : (
               <div
-                className="list-row flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-border bg-tint/60 p-4"
-                key={ticket.id}
+                className="technician-table-wrapper"
+                role="region"
+                aria-label="Assigned tickets"
               >
-                <div className="min-w-0 flex-1">
-                  <p className="text-heading font-semibold">{ticket.title?.trim() || "Untitled"}</p>
-                  <p className="supporting-text">
-                    {ticket.createdByUsername ? `Requester: ${ticket.createdByUsername}` : "Requester: —"}
-                    {ticket.createdAt ? ` · ${formatDateTime(ticket.createdAt)}` : null}
-                  </p>
-                </div>
-                <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-                  <span
-                    className={`status-badge shrink-0 ${toToken(ticket.status)}`}
-                    title={labelForAwaitingTechnicianDecision(ticket)}
-                  >
-                    {labelForAwaitingTechnicianDecision(ticket)}
-                  </span>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => setActiveDetailTicketId(String(ticket.id))}
-                  >
-                    See details
-                  </Button>
-                  <Link
-                    className="button button-secondary inline-flex min-h-[44px] items-center justify-center px-4"
-                    to={`/technician/tickets/${ticket.id}/reject`}
-                  >
-                    Reject
-                  </Link>
-                </div>
+                <table className="technician-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Ticket ID</th>
+                      <th scope="col">Ticket title</th>
+                      <th scope="col">Priority</th>
+                      <th scope="col">Status</th>
+                      <th scope="col" className="technician-table-actions-header">
+                        See more
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredPendingDecision.map((ticket) => {
+                      const parsed = parseTicketDescription(ticket.description);
+                      return (
+                        <tr key={ticket.id}>
+                          <td>{ticket.id ?? "—"}</td>
+                          <td>
+                            <div className="technician-table-title">
+                              <span className="technician-table-ticket-title">
+                                {ticket.title?.trim() || "Untitled"}
+                              </span>
+                              <span className="technician-table-ticket-id">
+                                {ticket.createdByUsername ? `Requester: ${ticket.createdByUsername}` : "Requester: —"}
+                                {ticket.createdAt ? ` · ${formatDateTime(ticket.createdAt)}` : ""}
+                              </span>
+                            </div>
+                          </td>
+                          <td>{parsed.priority?.trim() || "Normal"}</td>
+                          <td>
+                            <span
+                              className={`status-badge ${toToken(ticket.status)}`}
+                              title={labelForAwaitingTechnicianDecision(ticket)}
+                            >
+                              {labelForAwaitingTechnicianDecision(ticket)}
+                            </span>
+                          </td>
+                          <td className="technician-table-actions-cell">
+                            <div className="technician-table-actions">
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                onClick={() => setActiveDetailTicketId(String(ticket.id))}
+                              >
+                                See more
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
-            ))}
-          </div>
+            )}
+          </>
         )}
       </Card>
 
@@ -244,6 +406,62 @@ function TechnicianAcceptQueuePage() {
               {!detailLoading && detailTicket ? (
                 <>
                   <TechnicianTicketReadonlySummary ticket={detailTicket} />
+                  {rejectFlowStep === "confirm" ? (
+                    <p className="supporting-text mt-3">
+                      Are you sure you want to reject this assignment? The ticket will return to{" "}
+                      <strong>Open</strong> for admin reassignment.
+                    </p>
+                  ) : null}
+                  {rejectFlowStep === "reason" ? (
+                    <label className="field mt-3">
+                      <span>
+                        Reason for rejecting this assignment <span className="required-mark">*</span>
+                      </span>
+                      <select
+                        aria-required="true"
+                        className="w-full rounded-xl border border-border bg-surface p-3 text-sm"
+                        onChange={(event) => {
+                          setRejectReasonPreset(event.target.value);
+                          setModalActionError("");
+                        }}
+                        required
+                        value={rejectReasonPreset}
+                      >
+                        <option value="" disabled>
+                          Select a reason
+                        </option>
+                        {REJECT_REASON_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      {rejectReasonPreset === REJECT_REASON_OTHER ? (
+                        <textarea
+                          aria-required="true"
+                          aria-invalid={
+                            rejectReasonOther.trim().length > 0 &&
+                            rejectReasonOther.trim().length < REJECT_REASON_MIN
+                              ? "true"
+                              : "false"
+                          }
+                          className="mt-2 min-h-[100px] w-full rounded-xl border border-border bg-surface p-3 text-sm"
+                          maxLength={REJECT_REASON_MAX}
+                          minLength={REJECT_REASON_MIN}
+                          onChange={(event) => {
+                            setRejectReasonOther(event.target.value);
+                            setModalActionError("");
+                          }}
+                          placeholder="Type your reason"
+                          required
+                          value={rejectReasonOther}
+                        />
+                      ) : null}
+                      <small className="supporting-text">
+                        Minimum {REJECT_REASON_MIN} characters, max {REJECT_REASON_MAX}.
+                      </small>
+                    </label>
+                  ) : null}
                   {!isAwaitingTechnicianDecision(detailTicket) ? (
                     <TechnicianTicketModalWorkPanel
                       onTicketUpdated={handleDetailTicketUpdated}
@@ -259,12 +477,12 @@ function TechnicianAcceptQueuePage() {
             </div>
             {!detailLoading && detailTicket && !detailError ? (
               <div className="modal-footer">
-                {showModalAccept ? (
+                {showModalAccept && rejectFlowStep === "idle" ? (
                   <Button type="button" disabled={modalActionBusy} onClick={handleModalAccept}>
                     Accept
                   </Button>
                 ) : null}
-                {showModalReject ? (
+                {showModalReject && rejectFlowStep === "idle" ? (
                   <Button
                     type="button"
                     variant="secondary"
@@ -273,6 +491,45 @@ function TechnicianAcceptQueuePage() {
                   >
                     Reject
                   </Button>
+                ) : null}
+                {showModalReject && rejectFlowStep === "confirm" ? (
+                  <>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={modalActionBusy}
+                      onClick={handleCancelRejectFlow}
+                    >
+                      Cancel
+                    </Button>
+                    <Button type="button" disabled={modalActionBusy} onClick={handleConfirmReject}>
+                      Yes, continue
+                    </Button>
+                  </>
+                ) : null}
+                {showModalReject && rejectFlowStep === "reason" ? (
+                  <>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={modalActionBusy}
+                      onClick={handleCancelRejectFlow}
+                    >
+                      Back
+                    </Button>
+                    <Button
+                      type="button"
+                      disabled={
+                        modalActionBusy ||
+                        !rejectReasonPreset ||
+                        (rejectReasonPreset === REJECT_REASON_OTHER &&
+                          rejectReasonOther.trim().length < REJECT_REASON_MIN)
+                      }
+                      onClick={handleSubmitReject}
+                    >
+                      Confirm reject
+                    </Button>
+                  </>
                 ) : null}
               </div>
             ) : null}

@@ -79,7 +79,7 @@ function TechnicianWithdrawnTicketsPage() {
         {!withdrawnTickets.length ? (
           <p className="supporting-text">
             No withdrawn tickets. When a user withdraws a ticket that was assigned to you it will appear here and
-            automatically leave the Assigned queue.
+            automatically leave Assigned tickets.
           </p>
         ) : (
           <div className="list-stack">

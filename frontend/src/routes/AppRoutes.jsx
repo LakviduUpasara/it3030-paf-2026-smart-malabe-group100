@@ -130,8 +130,8 @@ function AppRoutes() {
         }
       >
         <Route index element={<TechnicianHomePage />} />
-        <Route path="tickets" element={<TechnicianTicketsPage />} />
-        <Route path="accept" element={<TechnicianAcceptQueuePage />} />
+        <Route path="tickets" element={<TechnicianAcceptQueuePage />} />
+        <Route path="accept" element={<TechnicianTicketsPage />} />
         <Route path="resolved" element={<TechnicianResolvedTicketsPage />} />
         <Route path="tickets/:ticketId/accept" element={<TechnicianTicketAcceptPage />} />
         <Route path="tickets/:ticketId/reject" element={<TechnicianTicketRejectPage />} />

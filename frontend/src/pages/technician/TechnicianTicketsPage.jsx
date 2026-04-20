@@ -3,13 +3,10 @@ import { useNavigate } from "react-router-dom";
 import Button from "../../components/Button";
 import Card from "../../components/Card";
 import LoadingSpinner from "../../components/LoadingSpinner";
-import TechnicianTicketModalWorkPanel, {
-  focusTechnicianModalWorkNotes,
-} from "../../components/technician/TechnicianTicketModalWorkPanel";
+import TechnicianTicketModalWorkPanel from "../../components/technician/TechnicianTicketModalWorkPanel";
 import TechnicianTicketReadonlySummary from "../../components/technician/TechnicianTicketReadonlySummary";
-import { acceptTicketAssignment, getMyTickets, getTicketById } from "../../services/ticketService";
+import { getMyTickets, getTicketById, updateStatus } from "../../services/ticketService";
 import {
-  canOpenAcceptPage,
   canUseRejectFlow,
   isAcceptedTechnicianWork,
   isAwaitingTechnicianDecision,
@@ -18,6 +15,12 @@ import { isActiveTicketStatus } from "../../utils/technicianTicketStatus";
 import { toToken } from "../../utils/formatters";
 import { parseTicketDescription } from "../../utils/ticketDescription";
 import { normalizeTicketFromApi } from "../../utils/ticketNormalize";
+
+const STICKY_FILTER_SECTION_STYLE = {
+  position: "sticky",
+  top: "calc(var(--navbar-measured-height, 0px) + 12px)",
+  zIndex: 5,
+};
 
 function formatInlineStatus(ticket) {
   if (!ticket) return "—";
@@ -50,6 +53,9 @@ function TechnicianTicketsPage() {
   const [detailError, setDetailError] = useState("");
   const [modalActionBusy, setModalActionBusy] = useState(false);
   const [modalActionError, setModalActionError] = useState("");
+  const [filterQuery, setFilterQuery] = useState("");
+  const [filterPriority, setFilterPriority] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
 
   const closeDetailModal = useCallback(() => {
     setActiveDetailTicketId(null);
@@ -145,23 +151,53 @@ function TechnicianTicketsPage() {
       ),
     [tickets],
   );
+  const filteredActiveTickets = useMemo(() => {
+    const q = filterQuery.trim().toLowerCase();
+    return activeTickets.filter((ticket) => {
+      const parsed = parseTicketDescription(ticket?.description);
+      const priority = String(parsed.priority || "Normal").trim();
+      const statusLabel = formatInlineStatus(ticket);
+      const statusKey = String(ticket?.status || "")
+        .trim()
+        .toUpperCase()
+        .replace(/\s+/g, "_");
+      const matchesPriority = !filterPriority || priority.toLowerCase() === filterPriority.toLowerCase();
+      const matchesStatus =
+        !filterStatus ||
+        (filterStatus === "ACCEPTED" ? statusKey === "ACCEPTED" : statusKey === "IN_PROGRESS");
+      if (!matchesPriority || !matchesStatus) return false;
+      if (!q) return true;
+      const haystack = [ticket?.id, ticket?.title, ticket?.description, priority, statusLabel]
+        .map((v) => String(v || "").toLowerCase())
+        .join(" ");
+      return haystack.includes(q);
+    });
+  }, [activeTickets, filterQuery, filterPriority, filterStatus]);
+  const hasActiveFilters = filterQuery.trim() !== "" || filterPriority !== "" || filterStatus !== "";
+  const clearFilters = useCallback(() => {
+    setFilterQuery("");
+    setFilterPriority("");
+    setFilterStatus("");
+  }, []);
 
-  const handleModalAccept = useCallback(async () => {
+  const handleModalResolved = useCallback(async () => {
     if (!detailTicket?.id) return;
+    const confirmResolve = window.confirm("Are you really resolved this ticket?");
+    if (!confirmResolve) return;
     const id = String(detailTicket.id);
     setModalActionError("");
     setModalActionBusy(true);
     try {
-      const res = await acceptTicketAssignment(id);
+      const res = await updateStatus(id, "RESOLVED");
       const updated = normalizeTicketFromApi(res?.data);
       if (updated) {
         setDetailTicket(updated);
         setTickets((prev) => prev.map((t) => (String(t.id) === id ? updated : t)));
       }
       closeDetailModal();
-      navigate(`/technician/tickets/${id}/work`);
+      navigate("/technician/resolved");
     } catch (e) {
-      setModalActionError(e.message || "Could not accept assignment.");
+      setModalActionError(e.message || "Could not mark ticket resolved.");
     } finally {
       setModalActionBusy(false);
     }
@@ -174,7 +210,6 @@ function TechnicianTicketsPage() {
     navigate(`/technician/tickets/${id}/reject`);
   }, [detailTicket?.id, closeDetailModal, navigate]);
 
-  const showModalAccept = Boolean(detailTicket && canOpenAcceptPage(detailTicket));
   const showModalReject = Boolean(detailTicket && canUseRejectFlow(detailTicket));
 
   const handleDetailTicketUpdated = useCallback((normalized) => {
@@ -190,6 +225,53 @@ function TechnicianTicketsPage() {
 
   return (
     <div className="technician-page">
+      {activeTickets.length ? (
+        <Card
+          className="technician-page-card"
+          title="Search and filters"
+          style={STICKY_FILTER_SECTION_STYLE}
+        >
+          <div className="technician-filters my-tickets-filters" aria-label="Search and filter accepted tickets">
+            <div className="my-tickets-filters-search-row">
+              <label className="my-tickets-filters-search">
+                <span>Search</span>
+                <input
+                  autoComplete="off"
+                  type="search"
+                  placeholder="Ticket ID, title, description"
+                  value={filterQuery}
+                  onChange={(event) => setFilterQuery(event.target.value)}
+                />
+              </label>
+            </div>
+            <div className="my-tickets-filters-controls">
+              <label className="my-tickets-filter-field">
+                <span>Priority</span>
+                <select value={filterPriority} onChange={(event) => setFilterPriority(event.target.value)}>
+                  <option value="">All priorities</option>
+                  <option value="Low">Low</option>
+                  <option value="Normal">Normal</option>
+                  <option value="High">High</option>
+                  <option value="Critical">Critical</option>
+                </select>
+              </label>
+              <label className="my-tickets-filter-field">
+                <span>Status</span>
+                <select value={filterStatus} onChange={(event) => setFilterStatus(event.target.value)}>
+                  <option value="">All statuses</option>
+                  <option value="ACCEPTED">Accepted</option>
+                  <option value="IN_PROGRESS">In progress</option>
+                </select>
+              </label>
+              {hasActiveFilters ? (
+                <Button type="button" variant="ghost" onClick={clearFilters}>
+                  Clear filters
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        </Card>
+      ) : null}
       <Card
         className="technician-page-card"
         subtitle="Tickets you have accepted — open a row for details, comments, evidence, and resolution."
@@ -203,67 +285,74 @@ function TechnicianTicketsPage() {
               : "You have no assigned tickets. Check back after the desk assigns work."}
           </p>
         ) : (
-          <div
-            className="technician-table-wrapper"
-            role="region"
-            aria-label="Active assigned tickets"
-          >
-            <table className="technician-table">
-              <thead>
-                <tr>
-                  <th scope="col">Ticket</th>
-                  <th scope="col">Priority</th>
-                  <th scope="col">Status</th>
-                  <th scope="col" className="technician-table-actions-header">
-                    Quick actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {activeTickets.map((ticket) => {
-                  const parsed = parseTicketDescription(ticket.description);
-                  const statusToken = toToken(ticket.status || "unknown");
-                  return (
-                    <tr key={ticket.id}>
-                      <td>
-                        <div className="technician-table-title">
-                          <span className="technician-table-ticket-title">
-                            {ticket.title?.trim() || "Untitled request"}
-                          </span>
-                          <span className="technician-table-ticket-id">
-                            ID: {ticket.id ?? "—"}
-                          </span>
-                        </div>
-                      </td>
-                      <td>{parsed.priority?.trim() || "Normal"}</td>
-                      <td>
-                        <span
-                          className={`status-badge ${statusToken}`}
-                          title={formatInlineStatus(ticket)}
-                        >
-                          {formatInlineStatus(ticket)}
-                        </span>
-                      </td>
-                      <td className="technician-table-actions-cell">
-                        <div className="technician-table-actions">
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            className="technician-see-details-button"
-                            onClick={() => {
-                              setActiveDetailTicketId(String(ticket.id));
-                            }}
-                          >
-                            See details
-                          </Button>
-                        </div>
-                      </td>
+          <>
+            {!filteredActiveTickets.length ? (
+              <p className="supporting-text technician-filter-empty" role="status">
+                No accepted tickets match your filters.
+              </p>
+            ) : (
+              <div
+                className="technician-table-wrapper"
+                role="region"
+                aria-label="Active assigned tickets"
+              >
+                <table className="technician-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Ticket ID</th>
+                      <th scope="col">Ticket title</th>
+                      <th scope="col">Priority</th>
+                      <th scope="col">Status</th>
+                      <th scope="col" className="technician-table-actions-header">
+                        See more
+                      </th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                  </thead>
+                  <tbody>
+                    {filteredActiveTickets.map((ticket) => {
+                      const parsed = parseTicketDescription(ticket.description);
+                      const statusToken = toToken(ticket.status || "unknown");
+                      return (
+                        <tr key={ticket.id}>
+                          <td>{ticket.id ?? "—"}</td>
+                          <td>
+                            <div className="technician-table-title">
+                              <span className="technician-table-ticket-title">
+                                {ticket.title?.trim() || "Untitled request"}
+                              </span>
+                            </div>
+                          </td>
+                          <td>{parsed.priority?.trim() || "Normal"}</td>
+                          <td>
+                            <span
+                              className={`status-badge ${statusToken}`}
+                              title={formatInlineStatus(ticket)}
+                            >
+                              {formatInlineStatus(ticket)}
+                            </span>
+                          </td>
+                          <td className="technician-table-actions-cell">
+                            <div className="technician-table-actions">
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                className="technician-see-details-button"
+                                onClick={() => {
+                                  setActiveDetailTicketId(String(ticket.id));
+                                }}
+                              >
+                                See more
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
         )}
       </Card>
 
@@ -305,11 +394,9 @@ function TechnicianTicketsPage() {
             </div>
             {!detailLoading && detailTicket && !detailError ? (
               <div className="modal-footer">
-                {showModalAccept ? (
-                  <Button type="button" disabled={modalActionBusy} onClick={handleModalAccept}>
-                    Accept
-                  </Button>
-                ) : null}
+                <Button type="button" disabled={modalActionBusy} onClick={handleModalResolved}>
+                  Resolved
+                </Button>
                 {showModalReject ? (
                   <Button
                     type="button"
@@ -324,9 +411,9 @@ function TechnicianTicketsPage() {
                   type="button"
                   variant="secondary"
                   disabled={modalActionBusy}
-                  onClick={() => focusTechnicianModalWorkNotes()}
+                  onClick={closeDetailModal}
                 >
-                  Add comment
+                  Cancel
                 </Button>
               </div>
             ) : null}

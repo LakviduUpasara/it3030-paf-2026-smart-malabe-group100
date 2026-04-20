@@ -99,7 +99,7 @@ function TechnicianHomePage() {
               Alerts inbox
             </Button>
             <Button onClick={() => navigate("/technician/tickets")} variant="primary" type="button">
-              Open queue
+              Open tickets
             </Button>
           </>
         }
@@ -131,7 +131,7 @@ function TechnicianHomePage() {
           value={stats.inProgress}
         />
         <AdminStatTile
-          detail="Completed in your queue"
+          detail="Completed in your tickets"
           icon={CheckCircle2}
           label="Resolved"
           value={stats.done}
@@ -156,7 +156,7 @@ function TechnicianHomePage() {
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.12em] text-text/60">
-                    Live queue
+                    Live tickets
                   </p>
                   <h2 className="mt-1 text-base font-semibold text-heading">Work priorities</h2>
                   <p className="mt-1 text-sm text-text/72">
@@ -170,7 +170,7 @@ function TechnicianHomePage() {
               <div className="mt-6 grid gap-4 sm:grid-cols-3">
                 <article className="rounded-2xl border border-border bg-tint p-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.12em] text-text/60">
-                    Next in queue
+                    Next ticket
                   </p>
                   <p className="mt-2 font-semibold text-heading">
                     {nextTicket?.title || "No assignments yet"}
@@ -233,7 +233,7 @@ function TechnicianHomePage() {
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
                 <Button onClick={() => navigate("/technician/tickets")} variant="secondary" type="button">
-                  View full queue
+                  View all tickets
                 </Button>
                 <Button onClick={() => navigate("/technician/resolved")} variant="secondary" type="button">
                   Resolved tickets
@@ -279,7 +279,7 @@ function TechnicianHomePage() {
             </section>
 
             <section className="rounded-3xl border border-border bg-card p-5 shadow-shadow">
-              <p className="text-base font-semibold text-heading">Queue posture</p>
+              <p className="text-base font-semibold text-heading">Ticket posture</p>
               <p className="text-sm text-text/72">Assignment overview</p>
               <div className="mt-4 space-y-4">
                 <div>

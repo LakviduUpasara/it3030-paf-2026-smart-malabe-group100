@@ -6,8 +6,9 @@ import { normalizeAttachmentFromApi } from "../../utils/ticketNormalize";
 import { isAcceptedTechnicianWork, isAwaitingTechnicianDecision } from "../../utils/technicianTicketFlow";
 
 function isImageEvidence(mime, fileName) {
+  if (!mime) return true;
   if (mime && String(mime).startsWith("image/")) return true;
-  return /\.(png|jpe?g|gif|webp|bmp)$/i.test(fileName || "");
+  return /\.(png|jpe?g|gif|webp|bmp|svg|heic|heif|avif|jfif)$/i.test(fileName || "");
 }
 
 function formatTicketStatusLabelForTicket(ticket) {
