@@ -39,6 +39,9 @@ import TechnicianTicketAcceptPage from "../pages/technician/TechnicianTicketAcce
 import TechnicianTicketRejectPage from "../pages/technician/TechnicianTicketRejectPage";
 import TechnicianResolvedTicketsPage from "../pages/technician/TechnicianResolvedTicketsPage";
 import TechnicianTicketsPage from "../pages/technician/TechnicianTicketsPage";
+import TechnicianCategorySetupPage from "../pages/technician/TechnicianCategorySetupPage";
+import TechnicianTeamPage from "../pages/technician/TechnicianTeamPage";
+import TechnicianWithdrawnTicketsPage from "../pages/technician/TechnicianWithdrawnTicketsPage";
 import AdminConsoleLayout from "../components/admin/AdminConsoleLayout";
 import UserConsoleLayout from "../components/user/UserConsoleLayout";
 import AdminRoute from "./AdminRoute";
@@ -134,6 +137,9 @@ function AppRoutes() {
         <Route path="tickets/:ticketId/reject" element={<TechnicianTicketRejectPage />} />
         <Route path="tickets/:ticketId/work" element={<TechnicianTicketWorkspacePage />} />
         <Route path="tickets/:ticketId" element={<TechnicianTicketDetailPage />} />
+        <Route path="categories" element={<TechnicianCategorySetupPage />} />
+        <Route path="team" element={<TechnicianTeamPage />} />
+        <Route path="withdrawn" element={<TechnicianWithdrawnTicketsPage />} />
         <Route path="notifications" element={<TechnicianNotificationsPage />} />
       </Route>
 

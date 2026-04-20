@@ -52,9 +52,26 @@ public class TicketController {
         return ResponseEntity.ok(service.assignTechnician(id, request));
     }
 
+    @PatchMapping("/{id}/assign-technician")
+    public ResponseEntity<TicketResponse> assignTechnicianPatch(@PathVariable String id,
+                                                                @Valid @RequestBody AssignTicketRequest request) {
+        return ResponseEntity.ok(service.assignTechnician(id, request));
+    }
+
+    @PatchMapping("/{id}/reassign-technician")
+    public ResponseEntity<TicketResponse> reassignTechnicianPatch(@PathVariable String id,
+                                                                  @Valid @RequestBody AssignTicketRequest request) {
+        return ResponseEntity.ok(service.assignTechnician(id, request));
+    }
+
     /** Assigned technician accepts the job (status {@code ACCEPTED}; pending assignment uses {@code IN_PROGRESS}). */
     @PostMapping("/{id}/assignment/accept")
     public ResponseEntity<TicketResponse> acceptAssignment(@PathVariable String id) {
+        return ResponseEntity.ok(service.acceptAssignment(id));
+    }
+
+    @PatchMapping("/{id}/assignment/accept")
+    public ResponseEntity<TicketResponse> acceptAssignmentPatch(@PathVariable String id) {
         return ResponseEntity.ok(service.acceptAssignment(id));
     }
 
@@ -62,9 +79,15 @@ public class TicketController {
     @PostMapping("/{id}/assignment/reject")
     public ResponseEntity<TicketResponse> rejectAssignment(
             @PathVariable String id,
-            @Valid @RequestBody(required = false) TechnicianRejectAssignmentRequest request) {
-        TechnicianRejectAssignmentRequest body = request != null ? request : new TechnicianRejectAssignmentRequest();
-        return ResponseEntity.ok(service.rejectAssignment(id, body));
+            @Valid @RequestBody TechnicianRejectAssignmentRequest request) {
+        return ResponseEntity.ok(service.rejectAssignment(id, request));
+    }
+
+    @PatchMapping("/{id}/assignment/reject")
+    public ResponseEntity<TicketResponse> rejectAssignmentPatch(
+            @PathVariable String id,
+            @Valid @RequestBody TechnicianRejectAssignmentRequest request) {
+        return ResponseEntity.ok(service.rejectAssignment(id, request));
     }
 
     @PatchMapping("/{id}")
@@ -76,6 +99,12 @@ public class TicketController {
     @PostMapping("/{id}/withdraw")
     public ResponseEntity<TicketResponse> withdrawMyTicket(@PathVariable String id,
                                                             @Valid @RequestBody WithdrawTicketRequest request) {
+        return ResponseEntity.ok(service.withdrawMyTicket(id, request));
+    }
+
+    @PatchMapping("/{id}/withdraw")
+    public ResponseEntity<TicketResponse> withdrawMyTicketPatch(@PathVariable String id,
+                                                                @Valid @RequestBody WithdrawTicketRequest request) {
         return ResponseEntity.ok(service.withdrawMyTicket(id, request));
     }
 

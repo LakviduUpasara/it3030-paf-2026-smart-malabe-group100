@@ -22,9 +22,12 @@ function NotificationBell({ pollMs = 30_000 }) {
   const navigate = useNavigate();
   const location = useLocation();
   const isAdminConsole = location.pathname.startsWith("/admin");
+  const isTechnicianConsole = location.pathname.startsWith("/technician");
   const notificationsPath = isAdminConsole
     ? "/admin/notifications?tab=inbox"
-    : "/notifications?tab=system";
+    : isTechnicianConsole
+      ? "/technician/notifications"
+      : "/notifications?tab=system";
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState([]);
   const [unread, setUnread] = useState(0);

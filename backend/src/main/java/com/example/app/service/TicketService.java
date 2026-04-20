@@ -61,6 +61,6 @@ public interface TicketService {
     /** Assigned technician accepts the job (status {@code ACCEPTED}; {@code technicianAcceptance} set to accepted). */
     TicketResponse acceptAssignment(String ticketId);
 
-    /** Assigned technician declines; ticket becomes {@code REJECTED} and is unassigned for the desk. */
+    /** Assigned technician declines while acceptance is still pending; ticket returns {@code OPEN} for reassignment. */
     TicketResponse rejectAssignment(String ticketId, TechnicianRejectAssignmentRequest request);
 }

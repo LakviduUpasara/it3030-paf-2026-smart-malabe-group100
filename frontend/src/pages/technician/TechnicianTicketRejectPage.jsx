@@ -3,19 +3,19 @@ import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import Button from "../../components/Button";
 import Card from "../../components/Card";
 import LoadingSpinner from "../../components/LoadingSpinner";
-import TechnicianRejectAssignmentModal from "../../components/technician/TechnicianRejectAssignmentModal";
 import { getTicketById, rejectTicketAssignment } from "../../services/ticketService";
 import { toToken } from "../../utils/formatters";
 import {
   canUseRejectFlow,
-  isAcceptedTechnicianWork,
   isAwaitingTechnicianDecision,
-  labelForAcceptedTechnicianWork,
   labelForAwaitingTechnicianDecision,
 } from "../../utils/technicianTicketFlow";
 
+const REASON_MAX = 500;
+const REASON_MIN = 3;
+
 /**
- * Return ticket to the desk — status becomes {@code OPEN} for reassignment — while assignment is pending or after acceptance.
+ * Decline an assignment before accepting it — ticket returns {@code OPEN} for admin reassignment (reason required).
  */
 function TechnicianTicketRejectPage() {
   const { ticketId } = useParams();
@@ -24,7 +24,7 @@ function TechnicianTicketRejectPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [rejectModalOpen, setRejectModalOpen] = useState(false);
+  const [reason, setReason] = useState("");
 
   const load = async () => {
     if (!ticketId) return;
@@ -55,8 +55,8 @@ function TechnicianTicketRejectPage() {
       <Card title="Reject ticket">
         {error ? <p className="alert alert-error">{error}</p> : <p className="supporting-text">Ticket not found.</p>}
         <p className="mt-4">
-          <Link className="button button-secondary" to="/technician/tickets">
-            Back to My tickets
+          <Link className="button button-secondary" to="/technician/reject">
+            Back to Reject queue
           </Link>
         </p>
       </Card>
@@ -69,12 +69,10 @@ function TechnicianTicketRejectPage() {
 
   const summaryPath = `/technician/tickets/${ticketId}`;
   const assignedPhase = isAwaitingTechnicianDecision(ticket);
-  const inProgressPhase = isAcceptedTechnicianWork(ticket);
 
-  const pageTitle = inProgressPhase ? "Return ticket to desk" : "Reject this ticket";
-  const pageSubtitle = inProgressPhase
-    ? "You already accepted, but you can still hand it back if you can’t complete the work — the desk can reassign it."
-    : "Use this only if you cannot take this assignment before you start";
+  const pageTitle = "Reject this assignment";
+  const pageSubtitle =
+    "The admin and requester are notified with your reason. The ticket returns to Open so the desk can reassign it.";
 
   return (
     <div className="page-stack">
@@ -89,13 +87,13 @@ function TechnicianTicketRejectPage() {
           <span className="text-text/40">·</span>
           <Link
             className="text-sm font-semibold text-heading underline-offset-2 hover:underline"
-            to="/technician/tickets"
+            to="/technician/reject"
           >
-            My tickets
+            Reject queue
           </Link>
         </div>
         <span className={`status-badge ${toToken(ticket.status)}`}>
-          {assignedPhase ? labelForAwaitingTechnicianDecision(ticket) : labelForAcceptedTechnicianWork(ticket)}
+          {labelForAwaitingTechnicianDecision(ticket)}
         </span>
       </div>
 
@@ -111,32 +109,59 @@ function TechnicianTicketRejectPage() {
             <span>Description</span>
             <p className="supporting-text whitespace-pre-wrap">{ticket.description || "—"}</p>
           </div>
-          {inProgressPhase ? (
-            <p className="supporting-text text-sm text-amber-800/90 dark:text-amber-200/90">
-              This removes your assignment and puts the ticket back to <strong>Open</strong> so the desk can assign someone
-              else. Confirm only when you&apos;re sure.
-            </p>
-          ) : (
-            <p className="supporting-text text-sm text-amber-800/90 dark:text-amber-200/90">
-              The desk will see the ticket as <strong>Open</strong> again and can assign another technician.
-            </p>
-          )}
+          <p className="supporting-text text-sm text-amber-800/90 dark:text-amber-200/90">
+            The desk will see the ticket as <strong>Open</strong> under <strong>Rejected assignments</strong> with your
+            note, then can assign another technician.
+          </p>
         </div>
+
+        <label className="field mb-4">
+          <span>
+            Reason for rejecting this assignment <span className="required-mark">*</span>
+          </span>
+          <textarea
+            aria-invalid={reason.trim().length > 0 && reason.trim().length < REASON_MIN ? "true" : "false"}
+            aria-required="true"
+            className="min-h-[100px] w-full rounded-xl border border-border bg-surface p-3 text-sm"
+            maxLength={REASON_MAX}
+            minLength={REASON_MIN}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="e.g. Outside my area / need specialist / cannot complete"
+            required
+            value={reason}
+          />
+          <small className="supporting-text">
+            A short note helps the admin reassign quickly. Minimum {REASON_MIN} characters, max {REASON_MAX}.
+          </small>
+        </label>
 
         <div className="flex flex-wrap gap-2">
           <Button
-            disabled={busy}
-            onClick={() => {
+            disabled={busy || reason.trim().length < REASON_MIN}
+            onClick={async () => {
+              const trimmed = reason.trim();
+              if (trimmed.length < REASON_MIN) {
+                setError(`A reason is required (at least ${REASON_MIN} characters).`);
+                return;
+              }
+              setBusy(true);
               setError("");
-              setRejectModalOpen(true);
+              try {
+                await rejectTicketAssignment(ticketId, { reason: trimmed });
+                navigate("/technician/reject");
+              } catch (e) {
+                setError(e.message || "Could not return ticket.");
+              } finally {
+                setBusy(false);
+              }
             }}
             type="button"
             variant="primary"
           >
-            {inProgressPhase ? "Return to desk…" : "Return to queue…"}
+            Confirm — reject assignment
           </Button>
           <Link className="button button-secondary inline-flex items-center justify-center" to={summaryPath}>
-            Back without returning
+            Back without rejecting
           </Link>
           {assignedPhase ? (
             <Link
@@ -145,39 +170,9 @@ function TechnicianTicketRejectPage() {
             >
               Go to Accept page instead
             </Link>
-          ) : (
-            <Link
-              className="button button-secondary inline-flex items-center justify-center"
-              to={`/technician/tickets/${ticketId}/work`}
-            >
-              Back to workspace
-            </Link>
-          )}
+          ) : null}
         </div>
       </Card>
-
-      <TechnicianRejectAssignmentModal
-        busy={busy}
-        inProgressPhase={inProgressPhase}
-        onClose={() => {
-          if (!busy) setRejectModalOpen(false);
-        }}
-        onComplete={async (reasonText) => {
-          setBusy(true);
-          setError("");
-          try {
-            await rejectTicketAssignment(ticketId, { reason: reasonText });
-            navigate("/technician/tickets");
-          } catch (e) {
-            setError(e.message || "Could not return ticket.");
-            throw e;
-          } finally {
-            setBusy(false);
-          }
-        }}
-        open={rejectModalOpen}
-        ticketTitle={ticket.title}
-      />
     </div>
   );
 }
