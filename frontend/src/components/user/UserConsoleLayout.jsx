@@ -16,9 +16,9 @@ function UserConsoleLayout() {
         />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <UserTopBar onMenuClick={() => setMobileNavOpen(true)} />
-          <main className="min-h-0 flex-1 overflow-y-auto bg-bg pt-5 pb-10">
+          <main className="min-h-0 flex-1 overflow-y-auto bg-bg pt-3 pb-10">
             <div className="mx-auto w-full max-w-6xl px-5 sm:px-8 lg:px-10">
-              <div className="mb-4 w-full">
+              <div className="w-full empty:hidden">
                 <TwoFactorSetupReminder />
               </div>
               <div className="space-y-6 lg:space-y-8">
