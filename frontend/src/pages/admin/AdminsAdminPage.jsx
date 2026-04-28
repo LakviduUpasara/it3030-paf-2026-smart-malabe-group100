@@ -6,17 +6,12 @@ import { useAdminShell } from "../../context/AdminShellContext";
 import * as registrationService from "../../services/registrationService";
 import { ROLES } from "../../utils/roleUtils";
 
-/** Matches backend `Role` enum — same set admins can assign as signup approval. */
-const DIRECTORY_ROLES = [
-  ROLES.USER,
-  ROLES.STUDENT,
-  ROLES.LECTURER,
-  ROLES.LAB_ASSISTANT,
-  ROLES.TECHNICIAN,
-  ROLES.MANAGER,
-  ROLES.ADMIN,
-  ROLES.LOST_ITEM_ADMIN,
-];
+/**
+ * Supported roles for the user directory and the "New account" form.
+ * Kept in lockstep with the signup-request approval flow — only the three
+ * platform roles (USER, TECHNICIAN, ADMIN) may be provisioned or filtered.
+ */
+const DIRECTORY_ROLES = [ROLES.USER, ROLES.TECHNICIAN, ROLES.ADMIN];
 const STATUSES = ["ACTIVE", "INACTIVE"];
 
 function emptyAdminForm() {

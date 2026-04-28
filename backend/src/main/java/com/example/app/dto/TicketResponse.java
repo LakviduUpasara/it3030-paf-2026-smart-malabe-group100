@@ -26,6 +26,12 @@ public class TicketResponse {
     private String withdrawalReasonCode;
     private String withdrawalReasonNote;
 
+    /** Present when the last technician declined the assignment (desk may use for triage). */
+    private String technicianAssignmentRejectionNote;
+
+    /** {@code PENDING} until accepted; {@code ACCEPTED} when the technician may work; {@code REJECTED} if they declined. */
+    private String technicianAcceptance;
+
     // getters & setters
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
@@ -94,4 +100,20 @@ public class TicketResponse {
 
     public String getWithdrawalReasonNote() { return withdrawalReasonNote; }
     public void setWithdrawalReasonNote(String withdrawalReasonNote) { this.withdrawalReasonNote = withdrawalReasonNote; }
+
+    public String getTechnicianAssignmentRejectionNote() {
+        return technicianAssignmentRejectionNote;
+    }
+
+    public void setTechnicianAssignmentRejectionNote(String technicianAssignmentRejectionNote) {
+        this.technicianAssignmentRejectionNote = technicianAssignmentRejectionNote;
+    }
+
+    public String getTechnicianAcceptance() {
+        return technicianAcceptance;
+    }
+
+    public void setTechnicianAcceptance(String technicianAcceptance) {
+        this.technicianAcceptance = technicianAcceptance;
+    }
 }

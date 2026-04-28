@@ -1,6 +1,7 @@
 package com.example.app.service;
 
 import com.example.app.dto.AssignTicketRequest;
+import com.example.app.dto.TechnicianRejectAssignmentRequest;
 import com.example.app.dto.TicketAttachmentDownload;
 import com.example.app.dto.TicketRequest;
 import com.example.app.dto.TicketResponse;
@@ -56,4 +57,10 @@ public interface TicketService {
 
     /** Admin assigns a technician to a ticket. */
     TicketResponse assignTechnician(String ticketId, AssignTicketRequest request);
+
+    /** Assigned technician accepts the job (status {@code ACCEPTED}; {@code technicianAcceptance} set to accepted). */
+    TicketResponse acceptAssignment(String ticketId);
+
+    /** Assigned technician declines while acceptance is still pending; ticket returns {@code OPEN} for reassignment. */
+    TicketResponse rejectAssignment(String ticketId, TechnicianRejectAssignmentRequest request);
 }

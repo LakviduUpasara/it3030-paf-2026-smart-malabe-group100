@@ -1,6 +1,7 @@
 package com.example.app.controller;
 
 import com.example.app.dto.AssignTicketRequest;
+import com.example.app.dto.TechnicianRejectAssignmentRequest;
 import com.example.app.dto.TicketAttachmentDownload;
 import com.example.app.dto.TicketRequest;
 import com.example.app.dto.TicketResponse;
@@ -11,6 +12,7 @@ import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -19,22 +21,17 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
-/**
- * Legacy JPA/file-backed ticket API (assignments, attachments, technician updates).
- * Campus incident reporting uses {@link CampusTicketController} at {@code POST /api/v1/tickets}.
- */
 @RestController
-@RequestMapping("/api/v1/legacy/tickets")
+@RequestMapping("/api/v1/tickets")
 @CrossOrigin
 public class TicketController {
 
     @Autowired
     private TicketService service;
 
-    // ✅ CREATE TICKET
-    @PostMapping
+    @PostMapping(value = {"", "/with-categories"})
     public ResponseEntity<TicketResponse> createTicket(@Valid @RequestBody TicketRequest request) {
-        return ResponseEntity.ok(service.createTicket(request));
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.createTicket(request));
     }
 
     // ✅ GET ALL TICKETS
@@ -55,6 +52,44 @@ public class TicketController {
         return ResponseEntity.ok(service.assignTechnician(id, request));
     }
 
+    @PatchMapping("/{id}/assign-technician")
+    public ResponseEntity<TicketResponse> assignTechnicianPatch(@PathVariable String id,
+                                                                @Valid @RequestBody AssignTicketRequest request) {
+        return ResponseEntity.ok(service.assignTechnician(id, request));
+    }
+
+    @PatchMapping("/{id}/reassign-technician")
+    public ResponseEntity<TicketResponse> reassignTechnicianPatch(@PathVariable String id,
+                                                                  @Valid @RequestBody AssignTicketRequest request) {
+        return ResponseEntity.ok(service.assignTechnician(id, request));
+    }
+
+    /** Assigned technician accepts the job (status {@code ACCEPTED}; pending assignment uses {@code IN_PROGRESS}). */
+    @PostMapping("/{id}/assignment/accept")
+    public ResponseEntity<TicketResponse> acceptAssignment(@PathVariable String id) {
+        return ResponseEntity.ok(service.acceptAssignment(id));
+    }
+
+    @PatchMapping("/{id}/assignment/accept")
+    public ResponseEntity<TicketResponse> acceptAssignmentPatch(@PathVariable String id) {
+        return ResponseEntity.ok(service.acceptAssignment(id));
+    }
+
+    /** Assigned technician declines; ticket becomes {@code OPEN} (unassigned) so the desk can reassign. */
+    @PostMapping("/{id}/assignment/reject")
+    public ResponseEntity<TicketResponse> rejectAssignment(
+            @PathVariable String id,
+            @Valid @RequestBody TechnicianRejectAssignmentRequest request) {
+        return ResponseEntity.ok(service.rejectAssignment(id, request));
+    }
+
+    @PatchMapping("/{id}/assignment/reject")
+    public ResponseEntity<TicketResponse> rejectAssignmentPatch(
+            @PathVariable String id,
+            @Valid @RequestBody TechnicianRejectAssignmentRequest request) {
+        return ResponseEntity.ok(service.rejectAssignment(id, request));
+    }
+
     @PatchMapping("/{id}")
     public ResponseEntity<TicketResponse> updateMyTicket(@PathVariable String id,
                                                           @Valid @RequestBody TicketRequest request) {
@@ -64,6 +99,12 @@ public class TicketController {
     @PostMapping("/{id}/withdraw")
     public ResponseEntity<TicketResponse> withdrawMyTicket(@PathVariable String id,
                                                             @Valid @RequestBody WithdrawTicketRequest request) {
+        return ResponseEntity.ok(service.withdrawMyTicket(id, request));
+    }
+
+    @PatchMapping("/{id}/withdraw")
+    public ResponseEntity<TicketResponse> withdrawMyTicketPatch(@PathVariable String id,
+                                                                @Valid @RequestBody WithdrawTicketRequest request) {
         return ResponseEntity.ok(service.withdrawMyTicket(id, request));
     }
 

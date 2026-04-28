@@ -3087,6 +3087,11 @@ a {
   box-sizing: border-box;
 }
 
+.admin-tickets-main.admin-tickets-main--standalone {
+  margin-left: 0;
+  padding: 0;
+}
+
 @media (max-width: 720px) {
   .admin-tickets-layout {
     flex-direction: column;
@@ -4266,6 +4271,7 @@ a {
 }
 
 .status-badge.in-progress,
+.status-badge.accepted,
 .status-badge.reserved {
   background: rgba(15, 124, 130, 0.14);
   color: var(--brand-strong);
@@ -4481,6 +4487,11 @@ a {
   overscroll-behavior: contain;
 }
 
+/** Stacked above a modal that is already open (e.g. technician detail + return flow). */
+.modal-backdrop--stack {
+  z-index: 50;
+}
+
 .modal-panel {
   width: min(620px, 100%);
   max-height: calc(100vh - 2rem);
@@ -4527,6 +4538,19 @@ a {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+.modal-footer {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 1rem 1.4rem;
+  border-top: 1px solid var(--border);
+  background: var(--surface-strong);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
 }
 
 .modal-header h3 {

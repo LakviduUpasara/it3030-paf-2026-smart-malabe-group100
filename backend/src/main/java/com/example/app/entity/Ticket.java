@@ -39,6 +39,29 @@ public class Ticket {
     /** Free text when withdrawalReasonCode is OTHER. */
     private String withdrawalReasonNote;
 
+    /**
+     * When a technician rejects an assignment, optional note for the desk (cleared on new assignment).
+     */
+    private String technicianAssignmentRejectionNote;
+
+    /**
+     * After admin assigns: {@code PENDING} until the technician accepts or rejects.
+     * {@code ACCEPTED} means they may update the ticket and mark it resolved.
+     * {@code REJECTED} when the assigned technician declined the job (ticket unassigned).
+     */
+    private String technicianAcceptance;
+
+    /**
+     * Set when the assigned technician rejects the job so they can still see the ticket in history until the desk reassigns.
+     */
+    private String lastRejectedByTechnicianUserId;
+
+    /**
+     * When the requester withdraws, stores the technician who was assigned so they can still open the ticket under
+     * Withdrawn (assignee is cleared so it leaves the active queue).
+     */
+    private String withdrawalPriorTechnicianUserId;
+
     public String getId() {
         return id;
     }
@@ -157,5 +180,37 @@ public class Ticket {
 
     public void setWithdrawalReasonNote(String withdrawalReasonNote) {
         this.withdrawalReasonNote = withdrawalReasonNote;
+    }
+
+    public String getTechnicianAssignmentRejectionNote() {
+        return technicianAssignmentRejectionNote;
+    }
+
+    public void setTechnicianAssignmentRejectionNote(String technicianAssignmentRejectionNote) {
+        this.technicianAssignmentRejectionNote = technicianAssignmentRejectionNote;
+    }
+
+    public String getTechnicianAcceptance() {
+        return technicianAcceptance;
+    }
+
+    public void setTechnicianAcceptance(String technicianAcceptance) {
+        this.technicianAcceptance = technicianAcceptance;
+    }
+
+    public String getLastRejectedByTechnicianUserId() {
+        return lastRejectedByTechnicianUserId;
+    }
+
+    public void setLastRejectedByTechnicianUserId(String lastRejectedByTechnicianUserId) {
+        this.lastRejectedByTechnicianUserId = lastRejectedByTechnicianUserId;
+    }
+
+    public String getWithdrawalPriorTechnicianUserId() {
+        return withdrawalPriorTechnicianUserId;
+    }
+
+    public void setWithdrawalPriorTechnicianUserId(String withdrawalPriorTechnicianUserId) {
+        this.withdrawalPriorTechnicianUserId = withdrawalPriorTechnicianUserId;
     }
 }

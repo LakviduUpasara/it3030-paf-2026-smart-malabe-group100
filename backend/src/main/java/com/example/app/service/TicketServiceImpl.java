@@ -1,6 +1,7 @@
 package com.example.app.service;
 
 import com.example.app.dto.AssignTicketRequest;
+import com.example.app.dto.TechnicianRejectAssignmentRequest;
 import com.example.app.dto.AttachmentResponse;
 import com.example.app.dto.TicketUpdateResponse;
 import com.example.app.dto.TicketAttachmentDownload;
@@ -15,6 +16,10 @@ import com.example.app.entity.Ticket;
 import com.example.app.entity.TicketUpdate;
 import com.example.app.entity.UserAccount;
 import com.example.app.entity.WithdrawnTicketRecord;
+import com.example.app.entity.enums.AccountStatus;
+import com.example.app.entity.enums.NotificationCategory;
+import com.example.app.entity.enums.NotificationRelatedEntity;
+import com.example.app.entity.enums.NotificationType;
 import com.example.app.entity.enums.Role;
 import com.example.app.exception.ApiException;
 import com.example.app.repository.TicketRepository;
@@ -40,6 +45,7 @@ import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -59,6 +65,13 @@ public class TicketServiceImpl implements TicketService {
             "RESOLVED_MYSELF", "NO_LONGER_NEEDED", "DUPLICATE", "ELSEWHERE", "OTHER");
     private static final int MAX_OTHER_WITHDRAWAL_REASON_LEN = 2000;
 
+    private static final Set<String> VALID_TICKET_STATUSES = Set.of(
+            "OPEN", "ASSIGNED", "IN_PROGRESS", "ACCEPTED", "REJECTED", "RESOLVED", "WITHDRAWN");
+
+    private static final String TECH_ACCEPT_PENDING = "PENDING";
+    private static final String TECH_ACCEPT_ACCEPTED = "ACCEPTED";
+    private static final String TECH_ACCEPT_REJECTED = "REJECTED";
+
     @Autowired
     private TicketRepository ticketRepo;
 
@@ -73,6 +86,9 @@ public class TicketServiceImpl implements TicketService {
 
     @Autowired
     private UserAccountRepository userAccountRepository;
+
+    @Autowired
+    private NotificationService notificationService;
 
     @Override
     public TicketResponse createTicket(TicketRequest request) {
@@ -92,6 +108,12 @@ public class TicketServiceImpl implements TicketService {
 
         Ticket saved = ticketRepo.save(ticket);
 
+        try {
+            notifyAdminsTicketCreated(saved, user);
+        } catch (RuntimeException ignored) {
+            // notifications must not break ticket creation
+        }
+
         return mapToResponse(saved);
     }
 
@@ -103,7 +125,7 @@ public class TicketServiceImpl implements TicketService {
         if (role == Role.USER) {
             list = ticketRepo.findByCreatedByUserIdOrderByCreatedAtDesc(user.getUserId());
         } else if (role == Role.TECHNICIAN) {
-            list = ticketRepo.findByAssignedTechnicianUserIdOrderByCreatedAtDesc(user.getUserId());
+            list = mergeTechnicianVisibleTickets(user.getUserId());
         } else if (role == Role.ADMIN) {
             list = ticketRepo.findAll(Sort.by(Sort.Direction.DESC, "createdAt"));
         } else {
@@ -118,6 +140,29 @@ public class TicketServiceImpl implements TicketService {
                 : userAccountRepository.findAllById(userIds).stream()
                         .collect(Collectors.toMap(UserAccount::getId, Function.identity()));
         return list.stream().map(t -> mapToResponse(t, usersById)).collect(Collectors.toList());
+    }
+
+    /**
+     * Assigned tickets plus tickets this technician declined (still visible for history until the desk reassigns).
+     */
+    private List<Ticket> mergeTechnicianVisibleTickets(String technicianUserId) {
+        List<Ticket> assigned = ticketRepo.findByAssignedTechnicianUserIdOrderByCreatedAtDesc(technicianUserId);
+        List<Ticket> rejectedByMe = ticketRepo.findByLastRejectedByTechnicianUserIdOrderByCreatedAtDesc(technicianUserId);
+        List<Ticket> withdrawnFormerlyMine =
+                ticketRepo.findByWithdrawalPriorTechnicianUserIdOrderByCreatedAtDesc(technicianUserId);
+        Map<String, Ticket> merged = new LinkedHashMap<>();
+        for (Ticket t : assigned) {
+            merged.put(t.getId(), t);
+        }
+        for (Ticket t : rejectedByMe) {
+            merged.putIfAbsent(t.getId(), t);
+        }
+        for (Ticket t : withdrawnFormerlyMine) {
+            merged.putIfAbsent(t.getId(), t);
+        }
+        return merged.values().stream()
+                .sorted(Comparator.comparing(Ticket::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())).reversed())
+                .collect(Collectors.toList());
     }
 
     @Override
@@ -135,15 +180,82 @@ public class TicketServiceImpl implements TicketService {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Selected user is not a technician.");
         }
         String status = ticket.getStatus() != null ? ticket.getStatus().trim().toUpperCase() : "OPEN";
-        if ("RESOLVED".equals(status)) {
+        if ("RESOLVED".equals(status) || "WITHDRAWN".equals(status)) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "This ticket can no longer be assigned.");
         }
         ticket.setAssignedTechnicianUserId(techId);
-        if ("OPEN".equals(status) || "WITHDRAWN".equals(status)) {
-            ticket.setStatus("IN_PROGRESS");
-        }
+        ticket.setTechnicianAssignmentRejectionNote(null);
+        ticket.setLastRejectedByTechnicianUserId(null);
+        ticket.setStatus("IN_PROGRESS");
+        ticket.setTechnicianAcceptance(TECH_ACCEPT_PENDING);
         Ticket saved = ticketRepo.save(ticket);
+        try {
+            notifyTicketAssigned(saved, techId, requireAuthenticatedUser().getUserId());
+        } catch (RuntimeException ignored) {
+        }
         return mapToResponse(saved);
+    }
+
+    @Override
+    public TicketResponse acceptAssignment(String ticketId) {
+        Ticket ticket = ticketRepo.findById(ticketId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Ticket not found"));
+        AuthenticatedUser user = requireAuthenticatedUser();
+        if (user.getRole() != Role.TECHNICIAN) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only technicians can accept assignments.");
+        }
+        requireAssignedTechnician(ticket, user);
+        if (technicianHasAccepted(ticket)) {
+            return mapToResponse(ticketRepo.findById(ticketId)
+                    .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Ticket not found")));
+        }
+        if (!technicianAwaitingAcceptance(ticket)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "This ticket is not awaiting acceptance.");
+        }
+        ticket.setStatus("ACCEPTED");
+        ticket.setTechnicianAcceptance(TECH_ACCEPT_ACCEPTED);
+        ticket.setTechnicianAssignmentRejectionNote(null);
+        ticketRepo.save(ticket);
+        Ticket reloaded = ticketRepo.findById(ticketId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Ticket not found"));
+        try {
+            notifyAssignmentAccepted(reloaded, user.getUserId());
+        } catch (RuntimeException ignored) {
+        }
+        return mapToResponse(reloaded);
+    }
+
+    @Override
+    public TicketResponse rejectAssignment(String ticketId, TechnicianRejectAssignmentRequest request) {
+        if (request == null || request.getReason() == null || request.getReason().trim().length() < 3) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "A reason is required (at least 3 characters).");
+        }
+        Ticket ticket = ticketRepo.findById(ticketId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Ticket not found"));
+        AuthenticatedUser user = requireAuthenticatedUser();
+        if (user.getRole() != Role.TECHNICIAN) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only technicians can reject assignments.");
+        }
+        requireAssignedTechnician(ticket, user);
+        if (!technicianAwaitingAcceptance(ticket)) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "This ticket is not awaiting acceptance. Contact the desk if you need to hand off work.");
+        }
+        String note = request.getReason().trim();
+        // Back to desk queue as OPEN so managers can reassign; history kept via technicianAcceptance + lastRejectedByTechnicianUserId.
+        ticket.setStatus("OPEN");
+        ticket.setAssignedTechnicianUserId(null);
+        ticket.setTechnicianAcceptance(TECH_ACCEPT_REJECTED);
+        ticket.setLastRejectedByTechnicianUserId(user.getUserId());
+        ticket.setTechnicianAssignmentRejectionNote(note);
+        ticketRepo.save(ticket);
+        Ticket reloaded = ticketRepo.findById(ticketId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Ticket not found"));
+        try {
+            notifyAssignmentRejected(reloaded, user.getUserId(), note);
+        } catch (RuntimeException ignored) {
+        }
+        return mapToResponse(reloaded);
     }
 
     @Override
@@ -162,9 +274,30 @@ public class TicketServiceImpl implements TicketService {
         Ticket ticket = ticketRepo.findById(id)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Ticket not found"));
         assertCanViewTicket(ticket);
-
-        ticket.setStatus(status);
-        ticketRepo.save(ticket);
+        AuthenticatedUser user = requireAuthenticatedUser();
+        String normalized = normalizeTicketStatus(status);
+        if (normalized == null || normalized.isEmpty()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Status is required.");
+        }
+        if (user.getRole() == Role.TECHNICIAN) {
+            requireAssignedTechnician(ticket, user);
+            assertTechnicianStatusChange(ticket, normalized);
+        } else if (user.getRole() == Role.ADMIN) {
+            ensureValidStatusEnum(normalized);
+        } else {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only staff can update ticket status.");
+        }
+        String previous = normalizeTicketStatus(ticket.getStatus());
+        ticket.setStatus(normalized);
+        Ticket saved = ticketRepo.save(ticket);
+        if (user.getRole() == Role.TECHNICIAN
+                && "RESOLVED".equals(normalized)
+                && !"RESOLVED".equals(previous)) {
+            try {
+                notifyTicketResolved(saved, user.getUserId());
+            } catch (RuntimeException ignored) {
+            }
+        }
     }
 
     @Override
@@ -298,6 +431,11 @@ public class TicketServiceImpl implements TicketService {
         assertTicketSubmitter(ticket);
         assertTicketOwnerMutable(ticket);
 
+        String priorTechnicianUserId = ticket.getAssignedTechnicianUserId();
+        ticket.setWithdrawalPriorTechnicianUserId(priorTechnicianUserId);
+        ticket.setAssignedTechnicianUserId(null);
+        ticket.setTechnicianAcceptance(null);
+
         ticket.setStatus("WITHDRAWN");
         ticket.setWithdrawalReasonCode(code);
         ticket.setWithdrawalReasonNote(note);
@@ -313,6 +451,11 @@ public class TicketServiceImpl implements TicketService {
         withdrawalRow.setWithdrawalReasonCode(code);
         withdrawalRow.setWithdrawalReasonNote(note);
         withdrawnTicketRepo.save(withdrawalRow);
+
+        try {
+            notifyTicketWithdrawnByUser(saved, priorTechnicianUserId);
+        } catch (RuntimeException ignored) {
+        }
 
         return mapToResponse(saved);
     }
@@ -520,6 +663,10 @@ public class TicketServiceImpl implements TicketService {
         if (assignedId == null || !assignedId.equals(user.getUserId())) {
             throw new ApiException(HttpStatus.FORBIDDEN, "Only the assigned technician can manage ticket updates.");
         }
+        if (!technicianHasAccepted(ticket)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST,
+                    "Accept this assignment before posting updates or uploading evidence.");
+        }
     }
 
     private String displayNameForAuthenticatedUser(AuthenticatedUser user) {
@@ -575,9 +722,20 @@ public class TicketServiceImpl implements TicketService {
         }
         if (user.getRole() == Role.TECHNICIAN) {
             String assignedId = ticket.getAssignedTechnicianUserId();
-            if (assignedId == null || !assignedId.equals(user.getUserId())) {
-                throw new ApiException(HttpStatus.NOT_FOUND, "Ticket not found");
+            if (assignedId != null && assignedId.equals(user.getUserId())) {
+                return;
             }
+            String lastReject = ticket.getLastRejectedByTechnicianUserId();
+            if (lastReject != null && lastReject.equals(user.getUserId())) {
+                return;
+            }
+            String prior = ticket.getWithdrawalPriorTechnicianUserId();
+            if ("WITHDRAWN".equals(normalizeTicketStatus(ticket.getStatus()))
+                    && prior != null
+                    && prior.equals(user.getUserId())) {
+                return;
+            }
+            throw new ApiException(HttpStatus.NOT_FOUND, "Ticket not found");
         }
     }
 
@@ -624,6 +782,8 @@ public class TicketServiceImpl implements TicketService {
         res.setSuggestions(ticket.getSuggestions());
         res.setWithdrawalReasonCode(ticket.getWithdrawalReasonCode());
         res.setWithdrawalReasonNote(ticket.getWithdrawalReasonNote());
+        res.setTechnicianAssignmentRejectionNote(ticket.getTechnicianAssignmentRejectionNote());
+        res.setTechnicianAcceptance(ticket.getTechnicianAcceptance());
         res.setAttachments(mapAttachments(ticket));
         res.setTechnicianAttachments(mapTechnicianAttachments(ticket));
         res.setUpdates(mapUpdates(ticket));
@@ -751,6 +911,404 @@ public class TicketServiceImpl implements TicketService {
             return;
         }
         assertTicketSubmitter(ticket);
+    }
+
+    private void requireAssignedTechnician(Ticket ticket, AuthenticatedUser user) {
+        String assignedId = ticket.getAssignedTechnicianUserId();
+        if (assignedId == null || !assignedId.equals(user.getUserId())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only the assigned technician can perform this action.");
+        }
+    }
+
+    private void assertTechnicianStatusChange(Ticket ticket, String toStatus) {
+        String from = normalizeTicketStatus(ticket.getStatus());
+        if (("ASSIGNED".equals(from) || "IN_PROGRESS".equals(from)) && !technicianHasAccepted(ticket)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST,
+                    "Accept or reject this assignment before changing status.");
+        }
+        boolean activeAcceptedWork = "ACCEPTED".equals(from)
+                || ("IN_PROGRESS".equals(from) && technicianHasAccepted(ticket));
+        if (activeAcceptedWork) {
+            if ("RESOLVED".equals(toStatus) || from.equals(toStatus)) {
+                ensureValidStatusEnum(toStatus);
+                return;
+            }
+            throw new ApiException(HttpStatus.BAD_REQUEST, "You can only mark this ticket as resolved.");
+        }
+        if ("RESOLVED".equals(from)) {
+            if ("ACCEPTED".equals(toStatus) || "IN_PROGRESS".equals(toStatus)) {
+                ensureValidStatusEnum(toStatus);
+                return;
+            }
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Reopen by setting status to Accepted or In progress.");
+        }
+        throw new ApiException(HttpStatus.BAD_REQUEST, "Status cannot be changed from the current state.");
+    }
+
+    private void ensureValidStatusEnum(String s) {
+        if (!VALID_TICKET_STATUSES.contains(s)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid status.");
+        }
+    }
+
+    private static String normalizeTicketStatus(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        String s = raw.trim().toUpperCase().replace(' ', '_');
+        return switch (s) {
+            case "WITHDRAW" -> "WITHDRAWN";
+            case "REJECT" -> "REJECTED";
+            case "INPROGRESS" -> "IN_PROGRESS";
+            case "ACCEPT" -> "ACCEPTED";
+            default -> s;
+        };
+    }
+
+    /** Legacy {@code ASSIGNED}, or {@code IN_PROGRESS} with explicit {@code PENDING} acceptance. */
+    private boolean technicianAwaitingAcceptance(Ticket ticket) {
+        String from = normalizeTicketStatus(ticket.getStatus());
+        if ("ASSIGNED".equals(from)) {
+            return true;
+        }
+        if (!"IN_PROGRESS".equals(from)) {
+            return false;
+        }
+        String acc = normalizeTechnicianAcceptance(ticket.getTechnicianAcceptance());
+        return TECH_ACCEPT_PENDING.equals(acc);
+    }
+
+    /**
+     * Technician may post updates / resolve: {@code IN_PROGRESS} and accepted, or legacy {@code IN_PROGRESS} rows
+     * with no acceptance field set.
+     */
+    private boolean technicianHasAccepted(Ticket ticket) {
+        String from = normalizeTicketStatus(ticket.getStatus());
+        if ("ACCEPTED".equals(from)) {
+            return true;
+        }
+        if (!"IN_PROGRESS".equals(from)) {
+            return false;
+        }
+        String acc = normalizeTechnicianAcceptance(ticket.getTechnicianAcceptance());
+        if (acc.isEmpty()) {
+            return true;
+        }
+        return TECH_ACCEPT_ACCEPTED.equals(acc);
+    }
+
+    private static String normalizeTechnicianAcceptance(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        return raw.trim().toUpperCase();
+    }
+
+    private void notifyAdminsTicketCreated(Ticket ticket, AuthenticatedUser reporter) {
+        if (ticket == null || reporter == null) {
+            return;
+        }
+        List<String> admins = activeAdminRecipientIds();
+        if (admins.isEmpty()) {
+            return;
+        }
+        UserAccount reporterAccount = userAccountRepository.findById(reporter.getUserId()).orElse(null);
+        String reporterLabel = displayNameForUser(reporterAccount, "A user");
+        String ref = ticketRef(ticket);
+        String title = safeTitle(ticket);
+        String where = ticketWhereClause(ticket);
+        String msg = String.format("%s submitted %s for %s%s.", reporterLabel, ref, title, where);
+        notificationService.deliverMany(
+                admins,
+                NotificationType.TICKET_CREATED,
+                NotificationCategory.TICKET,
+                "New ticket submitted",
+                msg,
+                NotificationRelatedEntity.TICKET,
+                ticket.getId(),
+                reporter.getUserId());
+    }
+
+    private void notifyTicketAssigned(Ticket ticket, String technicianUserId, String adminActorUserId) {
+        try {
+            UserAccount admin = userAccountRepository.findById(adminActorUserId).orElse(null);
+            String adminLabel = displayNameForUser(admin, "Admin");
+            String where = ticketWhereClause(ticket);
+            String msg = String.format(
+                    "You have been assigned to ticket %s for %s%s by %s.",
+                    ticketRef(ticket),
+                    safeTitle(ticket),
+                    where,
+                    adminLabel);
+            notificationService.deliver(
+                    technicianUserId,
+                    NotificationType.TICKET_ASSIGNED,
+                    NotificationCategory.TICKET,
+                    "New ticket assigned to you",
+                    msg,
+                    NotificationRelatedEntity.TICKET,
+                    ticket.getId(),
+                    adminActorUserId);
+        } catch (RuntimeException ignored) {
+        }
+    }
+
+    private void notifyAssignmentAccepted(Ticket ticket, String technicianActorUserId) {
+        try {
+            UserAccount tech = userAccountRepository.findById(technicianActorUserId).orElse(null);
+            String techLabel = displayNameForUser(tech, "Technician");
+            String where = ticketWhereClause(ticket);
+            List<String> admins = activeAdminRecipientIds();
+            String ref = ticketRef(ticket);
+            String title = safeTitle(ticket);
+            if (!admins.isEmpty()) {
+                String adminMsg = String.format(
+                        "Technician %s has accepted ticket %s for %s%s.",
+                        techLabel,
+                        ref,
+                        title,
+                        where);
+                notificationService.deliverMany(
+                        admins,
+                        NotificationType.TICKET_ASSIGNMENT_ACCEPTED,
+                        NotificationCategory.TICKET,
+                        "Technician accepted an assignment",
+                        adminMsg,
+                        NotificationRelatedEntity.TICKET,
+                        ticket.getId(),
+                        technicianActorUserId);
+            }
+            String ownerId = ticket.getCreatedByUserId();
+            if (ownerId != null && !ownerId.isBlank()) {
+                String userMsg = String.format(
+                        "Technician %s has accepted your ticket %s for %s%s and will start working on it.",
+                        techLabel,
+                        ref,
+                        title,
+                        where);
+                notificationService.deliver(
+                        ownerId,
+                        NotificationType.TICKET_ASSIGNMENT_ACCEPTED,
+                        NotificationCategory.TICKET,
+                        "Your ticket was accepted",
+                        userMsg,
+                        NotificationRelatedEntity.TICKET,
+                        ticket.getId(),
+                        technicianActorUserId);
+            }
+        } catch (RuntimeException ignored) {
+        }
+    }
+
+    private void notifyAssignmentRejected(Ticket ticket, String technicianActorUserId, String reason) {
+        try {
+            UserAccount tech = userAccountRepository.findById(technicianActorUserId).orElse(null);
+            String techLabel = displayNameForUser(tech, "Technician");
+            String where = ticketWhereClause(ticket);
+            List<String> admins = activeAdminRecipientIds();
+            String ref = ticketRef(ticket);
+            String title = safeTitle(ticket);
+            if (!admins.isEmpty()) {
+                String adminMsg = String.format(
+                        "Technician %s rejected ticket %s for %s%s. Reason: %s",
+                        techLabel,
+                        ref,
+                        title,
+                        where,
+                        reason);
+                notificationService.deliverMany(
+                        admins,
+                        NotificationType.TICKET_ASSIGNMENT_REJECTED,
+                        NotificationCategory.TICKET,
+                        "Technician rejected an assignment",
+                        adminMsg,
+                        NotificationRelatedEntity.TICKET,
+                        ticket.getId(),
+                        technicianActorUserId);
+            }
+            String ownerId = ticket.getCreatedByUserId();
+            if (ownerId != null && !ownerId.isBlank()) {
+                String userMsg = String.format(
+                        "Technician assignment for your ticket %s for %s%s was rejected. Reason: %s Your request will be reassigned by the admin.",
+                        ref,
+                        title,
+                        where,
+                        reason);
+                notificationService.deliver(
+                        ownerId,
+                        NotificationType.TICKET_ASSIGNMENT_REJECTED,
+                        NotificationCategory.TICKET,
+                        "Assignment returned to the desk",
+                        userMsg,
+                        NotificationRelatedEntity.TICKET,
+                        ticket.getId(),
+                        technicianActorUserId);
+            }
+        } catch (RuntimeException ignored) {
+        }
+    }
+
+    private void notifyTicketWithdrawnByUser(Ticket ticket, String priorTechnicianUserId) {
+        try {
+            String reporterId = ticket.getCreatedByUserId();
+            UserAccount reporter = reporterId != null ? userAccountRepository.findById(reporterId).orElse(null) : null;
+            String who = displayNameForUser(reporter, "A user");
+            String where = ticketWhereClause(ticket);
+            String ref = ticketRef(ticket);
+            String title = safeTitle(ticket);
+            List<String> admins = activeAdminRecipientIds();
+            if (!admins.isEmpty()) {
+                String adminMsg = String.format(
+                        "User %s has withdrawn ticket %s for %s%s.",
+                        who,
+                        ref,
+                        title,
+                        where);
+                notificationService.deliverMany(
+                        admins,
+                        NotificationType.TICKET_WITHDRAWN_BY_USER,
+                        NotificationCategory.TICKET,
+                        "Ticket withdrawn by requester",
+                        adminMsg,
+                        NotificationRelatedEntity.TICKET,
+                        ticket.getId(),
+                        reporterId);
+            }
+            if (priorTechnicianUserId != null && !priorTechnicianUserId.isBlank()) {
+                String techMsg = String.format(
+                        "Ticket %s for %s%s has been withdrawn by the user and removed from your assigned work queue.",
+                        ref,
+                        title,
+                        where);
+                notificationService.deliver(
+                        priorTechnicianUserId,
+                        NotificationType.TICKET_WITHDRAWN_BY_USER,
+                        NotificationCategory.TICKET,
+                        "Ticket withdrawn by requester",
+                        techMsg,
+                        NotificationRelatedEntity.TICKET,
+                        ticket.getId(),
+                        reporterId);
+            }
+        } catch (RuntimeException ignored) {
+        }
+    }
+
+    private void notifyTicketResolved(Ticket ticket, String technicianActorUserId) {
+        try {
+            UserAccount tech = userAccountRepository.findById(technicianActorUserId).orElse(null);
+            String techLabel = displayNameForUser(tech, "Technician");
+            String where = ticketWhereClause(ticket);
+            String ref = ticketRef(ticket);
+            String title = safeTitle(ticket);
+            String resNote = latestTechnicianUpdateSummary(ticket);
+            String resolutionPart =
+                    resNote != null && !resNote.isBlank() ? " Resolution: " + resNote : "";
+            String ownerId = ticket.getCreatedByUserId();
+            if (ownerId == null || ownerId.isBlank()) {
+                return;
+            }
+            String msg = String.format(
+                    "Your ticket %s for %s%s has been resolved by Technician %s.%s",
+                    ref,
+                    title,
+                    where,
+                    techLabel,
+                    resolutionPart);
+            notificationService.deliver(
+                    ownerId,
+                    NotificationType.TICKET_RESOLVED,
+                    NotificationCategory.TICKET,
+                    "Ticket resolved",
+                    msg,
+                    NotificationRelatedEntity.TICKET,
+                    ticket.getId(),
+                    technicianActorUserId);
+        } catch (RuntimeException ignored) {
+        }
+    }
+
+    private String latestTechnicianUpdateSummary(Ticket ticket) {
+        List<TicketUpdate> updates = ticket.getUpdates();
+        if (updates == null || updates.isEmpty()) {
+            return null;
+        }
+        return updates.stream()
+                .max(Comparator.comparing(TicketUpdate::getTimestamp, Comparator.nullsLast(Comparator.naturalOrder())))
+                .map(TicketUpdate::getMessage)
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .orElse(null);
+    }
+
+    private static String ticketRef(Ticket ticket) {
+        if (ticket == null || ticket.getId() == null || ticket.getId().isBlank()) {
+            return "#TCK";
+        }
+        String id = ticket.getId().replace("-", "");
+        String shortId = id.length() > 8 ? id.substring(0, 8).toUpperCase() : id.toUpperCase();
+        return "#TCK-" + shortId;
+    }
+
+    private static String safeTitle(Ticket ticket) {
+        if (ticket == null || ticket.getTitle() == null || ticket.getTitle().isBlank()) {
+            return "your campus ticket";
+        }
+        return ticket.getTitle().trim();
+    }
+
+    private String ticketWhereClause(Ticket ticket) {
+        if (ticket == null) {
+            return "";
+        }
+        try {
+            List<String> parts = new ArrayList<>();
+            if (ticket.getCategoryId() != null) {
+                categoryRepository
+                        .findById(ticket.getCategoryId())
+                        .ifPresent(
+                                c -> {
+                                    if (c.getName() != null && !c.getName().isBlank()) {
+                                        parts.add(c.getName().trim());
+                                    }
+                                });
+            }
+            if (ticket.getSubCategoryId() != null) {
+                subCategoryRepository
+                        .findById(ticket.getSubCategoryId())
+                        .ifPresent(
+                                s -> {
+                                    if (s.getName() != null && !s.getName().isBlank()) {
+                                        parts.add(s.getName().trim());
+                                    }
+                                });
+            }
+            if (!parts.isEmpty()) {
+                return " in " + String.join(" · ", parts);
+            }
+        } catch (RuntimeException ignored) {
+        }
+        return "";
+    }
+
+    private static String displayNameForUser(UserAccount user, String fallback) {
+        if (user == null) {
+            return fallback;
+        }
+        if (user.getFullName() != null && !user.getFullName().isBlank()) {
+            return user.getFullName().trim();
+        }
+        if (user.getEmail() != null && !user.getEmail().isBlank()) {
+            return user.getEmail().trim();
+        }
+        return fallback;
+    }
+
+    private List<String> activeAdminRecipientIds() {
+        return userAccountRepository.findByRoleOrderByFullNameAsc(Role.ADMIN).stream()
+                .filter(u -> u.getStatus() == AccountStatus.ACTIVE)
+                .map(UserAccount::getId)
+                .toList();
     }
 
     private void validateCategoryCombination(String categoryId, String subCategoryId) {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import Button from "../components/Button";
 import Card from "../components/Card";
 import LoadingSpinner from "../components/LoadingSpinner";
@@ -23,6 +23,11 @@ import {
 } from "../utils/ticketNormalize";
 import { parseTicketDescription } from "../utils/ticketDescription";
 import { ROLES } from "../utils/roleUtils";
+import {
+  canOpenAcceptPage,
+  canUseRejectFlow,
+  isAwaitingTechnicianDecision,
+} from "../utils/technicianTicketFlow";
 
 function normalizeStatusForPicker(status) {
   const raw = String(status || "OPEN")
@@ -30,7 +35,16 @@ function normalizeStatusForPicker(status) {
     .toUpperCase()
     .replace(/\s+/g, "_");
   if (raw === "CLOSED") return "RESOLVED";
-  if (raw === "OPEN" || raw === "IN_PROGRESS" || raw === "RESOLVED") return raw;
+  if (raw === "ASSIGNED") return "ASSIGNED";
+  if (raw === "REJECTED") return "REJECTED";
+  if (
+    raw === "OPEN" ||
+    raw === "IN_PROGRESS" ||
+    raw === "ACCEPTED" ||
+    raw === "RESOLVED"
+  ) {
+    return raw;
+  }
   return "OPEN";
 }
 
@@ -41,16 +55,20 @@ function isImageEvidence(mime, fileName) {
   return /\.(png|jpe?g|gif|webp|bmp)$/i.test(fileName || "");
 }
 
-function formatTicketStatusLabel(status) {
-  const raw = String(status || "OPEN")
+function formatTicketStatusLabelForTicket(ticket) {
+  if (isAwaitingTechnicianDecision(ticket)) return "Awaiting your response";
+  const raw = String(ticket?.status || "OPEN")
     .trim()
     .toUpperCase()
     .replace(/\s+/g, "_");
   if (raw === "IN_PROGRESS") return "In progress";
+  if (raw === "ACCEPTED") return "Accepted";
+  if (raw === "ASSIGNED") return "Awaiting your response";
   if (raw === "OPEN") return "Open";
+  if (raw === "REJECTED") return "Rejected";
   if (raw === "RESOLVED") return "Resolved";
   if (raw === "WITHDRAWN") return "Withdrawn";
-  return String(status || "Unknown")
+  return String(ticket?.status || "Unknown")
     .replace(/_/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -82,6 +100,8 @@ function TechnicianTicketPanel({
   onDeleteTechnicianEvidence,
   onPatchUpdate,
   onDeleteUpdate,
+  onAcceptAssignment,
+  onRejectAssignment,
   notesFocusSerial = 0,
 }) {
   const notesSectionRef = useRef(null);
@@ -89,7 +109,9 @@ function TechnicianTicketPanel({
   const [editDraft, setEditDraft] = useState("");
 
   const parsed = parseTicketDescription(ticket.description);
-  const isResolved = normalizeStatusForPicker(ticket.status) === "RESOLVED";
+  const statusPicker = normalizeStatusForPicker(ticket.status);
+  const isPendingAssignment = isAwaitingTechnicianDecision(ticket);
+  const isResolved = statusPicker === "RESOLVED";
   const creator = ticket.createdByUsername?.trim();
   const statusToken = toToken(ticket.status || "unknown");
 
@@ -227,9 +249,9 @@ function TechnicianTicketPanel({
           </h3>
           <span
             className={`status-badge ${statusToken}`}
-            title={`Status: ${formatTicketStatusLabel(ticket.status)}`}
+            title={`Status: ${formatTicketStatusLabelForTicket(ticket)}`}
           >
-            {formatTicketStatusLabel(ticket.status)}
+            {formatTicketStatusLabelForTicket(ticket)}
           </span>
         </div>
         {creator ? (
@@ -310,11 +332,40 @@ function TechnicianTicketPanel({
         ) : null}
       </div>
 
+      {isPendingAssignment ? (
+        <div className="technician-ticket-assignment-callout rounded-2xl border border-border bg-tint/60 p-4" role="status">
+          <strong>Decision pending</strong>
+          <p className="mt-2 text-sm text-text/80">
+            Open the <strong>Accept</strong> or <strong>Reject</strong> page when you are ready — you confirm there.
+            Resolved only after you accept (in the workspace).
+          </p>
+          {typeof onAcceptAssignment === "function" && typeof onRejectAssignment === "function" ? (
+            <div className="technician-ticket-toolbar mt-3 flex flex-wrap gap-2">
+              <Button
+                type="button"
+                onClick={() => onAcceptAssignment(ticket.id)}
+                disabled={pendingKey != null}
+              >
+                Open Accept page
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => onRejectAssignment(ticket.id)}
+                disabled={pendingKey != null}
+              >
+                Open Reject page
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       {isResolved ? (
         <div className="technician-ticket-resolved-callout" role="status">
           <strong>Resolved</strong>
           <p>
-            This ticket is complete. Change status to <em>In progress</em> if you need to add more
+            This ticket is complete. Change status to <em>Accepted</em> if you need to add more
             work, notes, or attachments.
           </p>
           {typeof onReopenInProgress === "function" ? (
@@ -331,13 +382,13 @@ function TechnicianTicketPanel({
         </div>
       ) : null}
 
-      {!isResolved ? (
+      {!isResolved && !isPendingAssignment ? (
         <section className="technician-ticket-section" aria-labelledby={`tech-status-${ticket.id}`}>
           <h4 id={`tech-status-${ticket.id}`} className="technician-ticket-section-title">
             Status
           </h4>
           <p className="technician-ticket-section-hint">
-            When the work is finished, mark this ticket as resolved.
+            Use this when the work is finished and the issue is handled for the requester.
           </p>
           <div className="technician-ticket-toolbar technician-ticket-toolbar--single">
             <Button
@@ -353,16 +404,18 @@ function TechnicianTicketPanel({
 
       <section
         ref={notesSectionRef}
-        className={`technician-ticket-section${isResolved ? " technician-ticket-section--muted" : ""}`}
+        className={`technician-ticket-section${isResolved || isPendingAssignment ? " technician-ticket-section--muted" : ""}`}
         aria-labelledby={`tech-notes-${ticket.id}`}
       >
         <h4 id={`tech-notes-${ticket.id}`} className="technician-ticket-section-title">
           Notes and updates
         </h4>
         <p className="technician-ticket-section-hint">
-          {isResolved
-            ? "Unavailable while the ticket is resolved. Reopen by setting status to In progress."
-            : "Add a short update for the requester (shown on the ticket). Nothing is saved until you click Post update."}
+          {isPendingAssignment
+            ? "Post updates after you tap I can take this."
+            : isResolved
+              ? "Unavailable while the ticket is resolved. Reopen by setting status to Accepted."
+              : "Add a short update for the requester (shown on the ticket). Nothing is saved until you click Post update."}
         </p>
         {normalizedUpdates.length > 0 ? (
           <ul className="technician-updates-list" aria-label="Posted updates">
@@ -414,7 +467,7 @@ function TechnicianTicketPanel({
                         {u.timestamp ? <span>{formatDateTime(u.timestamp)}</span> : null}
                       </div>
                       <p className="technician-update-body">{u.message || "—"}</p>
-                      {!isResolved ? (
+                      {!isResolved && !isPendingAssignment ? (
                         <div className="technician-update-actions">
                           <Button
                             type="button"
@@ -457,7 +510,7 @@ function TechnicianTicketPanel({
             className="technician-textarea"
             placeholder="e.g. Inspected the bus bay — part ordered, ETA Tuesday."
             rows={4}
-            disabled={isResolved}
+            disabled={isResolved || isPendingAssignment}
             value={messagesById[ticket.id] || ""}
             onChange={(e) =>
               setMessagesById((prev) => ({
@@ -471,7 +524,7 @@ function TechnicianTicketPanel({
           <Button
             type="button"
             onClick={() => onAddUpdate(ticket.id)}
-            disabled={isResolved || pendingKey === `${ticket.id}-update`}
+            disabled={isResolved || isPendingAssignment || pendingKey === `${ticket.id}-update`}
           >
             Post update
           </Button>
@@ -479,16 +532,18 @@ function TechnicianTicketPanel({
       </section>
 
       <section
-        className={`technician-ticket-section${isResolved ? " technician-ticket-section--muted" : ""}`}
+        className={`technician-ticket-section${isResolved || isPendingAssignment ? " technician-ticket-section--muted" : ""}`}
         aria-labelledby={`tech-file-${ticket.id}`}
       >
         <h4 id={`tech-file-${ticket.id}`} className="technician-ticket-section-title">
           Your evidence
         </h4>
         <p className="technician-ticket-section-hint">
-          {isResolved
-            ? "Uploads are disabled until the ticket is in progress again."
-            : `Upload up to ${MAX_TECHNICIAN_EVIDENCE} photos or documents (stored separately from the requester’s files). You can remove or replace each file.`}
+          {isPendingAssignment
+            ? "Upload evidence after you tap I can take this."
+            : isResolved
+              ? "Uploads are disabled until the ticket is in progress again."
+              : `Upload up to ${MAX_TECHNICIAN_EVIDENCE} photos or documents (stored separately from the requester’s files). You can remove or replace each file.`}
         </p>
         {normalizedTechnicianAttachments.length > 0 ? (
           <ul className="ticket-detail-evidence-list technician-evidence-list technician-tech-evidence-list">
@@ -498,7 +553,7 @@ function TechnicianTicketPanel({
               const showImg = preview?.url && isImageEvidence(preview.mime, name);
               return (
                 <li className="ticket-detail-evidence-item" key={att.id || name}>
-                  {!isResolved && att.id ? (
+                  {!isResolved && !isPendingAssignment && att.id ? (
                     <div className="technician-tech-evidence-actions">
                       <button
                         aria-label={`Remove ${name}`}
@@ -556,6 +611,7 @@ function TechnicianTicketPanel({
               type="file"
               disabled={
                 isResolved ||
+                isPendingAssignment ||
                 normalizedTechnicianAttachments.length >= MAX_TECHNICIAN_EVIDENCE
               }
               onChange={(e) =>
@@ -572,6 +628,7 @@ function TechnicianTicketPanel({
             onClick={() => onUploadTechnicianEvidence(ticket.id)}
             disabled={
               isResolved ||
+              isPendingAssignment ||
               pendingKey === `${ticket.id}-tech-upload` ||
               !techFilesById[ticket.id] ||
               normalizedTechnicianAttachments.length >= MAX_TECHNICIAN_EVIDENCE
@@ -588,6 +645,7 @@ function TechnicianTicketPanel({
 function TechnicianDashboardPage() {
   const { user } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const isResolvedView = location.pathname === "/technician/resolved";
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -692,17 +750,27 @@ function TechnicianDashboardPage() {
     setFeedback({});
 
     try {
-      await updateStatus(ticketId, "IN_PROGRESS");
+      await updateStatus(ticketId, "ACCEPTED");
       setTickets((prev) =>
-        prev.map((t) => (t.id === ticketId ? { ...t, status: "IN_PROGRESS" } : t)),
+        prev.map((t) => (t.id === ticketId ? { ...t, status: "ACCEPTED" } : t)),
       );
-      setFeedback({ type: "success", text: "Ticket moved back to In progress." });
+      setFeedback({ type: "success", text: "Ticket moved back to Accepted." });
       setActiveTicketId(null);
     } catch (err) {
       setFeedback({ type: "error", text: err.message });
     } finally {
       setPendingKey(null);
     }
+  };
+
+  const handleGoToAcceptPage = (ticketId) => {
+    setActiveTicketId(null);
+    navigate(`/technician/tickets/${ticketId}/accept`);
+  };
+
+  const handleGoToRejectPage = (ticketId) => {
+    setActiveTicketId(null);
+    navigate(`/technician/tickets/${ticketId}/reject`);
   };
 
   const handleAddUpdate = async (ticketId) => {
@@ -971,7 +1039,7 @@ function TechnicianDashboardPage() {
         subtitle={
           isResolvedView
             ? "Work you have marked complete. Open a row for full details."
-            : "Active assignments. Mark tickets resolved when finished—they move to the Resolved page."
+            : "New tickets need your choice: take them if you can solve them, or send them back. After you accept, mark resolved when the work is done."
         }
         className="technician-page-card"
       >
@@ -1086,9 +1154,9 @@ function TechnicianDashboardPage() {
                           <td>
                             <span
                               className={`status-badge ${statusToken}`}
-                              title={formatTicketStatusLabel(ticket.status)}
+                              title={formatTicketStatusLabelForTicket(ticket)}
                             >
-                              {formatTicketStatusLabel(ticket.status)}
+                              {formatTicketStatusLabelForTicket(ticket)}
                             </span>
                           </td>
                           <td className="technician-table-actions-cell">
@@ -1112,13 +1180,21 @@ function TechnicianDashboardPage() {
                                   Mark in progress
                                 </Button>
                               ) : null}
-                              {!isResolvedView && !isResolved ? (
+                              {!isResolvedView && !isResolved && canOpenAcceptPage(ticket) ? (
                                 <Button
                                   type="button"
-                                  onClick={() => handleMarkResolved(ticket.id)}
-                                  disabled={pendingKey === `${ticket.id}-resolved`}
+                                  onClick={() => handleGoToAcceptPage(ticket.id)}
                                 >
-                                  Mark as resolved
+                                  Accept
+                                </Button>
+                              ) : null}
+                              {!isResolvedView && !isResolved && canUseRejectFlow(ticket) ? (
+                                <Button
+                                  type="button"
+                                  variant="secondary"
+                                  onClick={() => handleGoToRejectPage(ticket.id)}
+                                >
+                                  Reject
                                 </Button>
                               ) : null}
                               {!isResolvedView && !isResolved ? (
@@ -1186,6 +1262,8 @@ function TechnicianDashboardPage() {
               notesFocusSerial={notesFocusSerial}
               onMarkResolved={handleMarkResolved}
               onReopenInProgress={handleReopenInProgress}
+              onAcceptAssignment={handleGoToAcceptPage}
+              onRejectAssignment={handleGoToRejectPage}
               onAddUpdate={handleAddUpdate}
               onUploadTechnicianEvidence={handleUploadTechnicianEvidence}
               onReplaceTechnicianEvidence={handleReplaceTechnicianEvidence}

@@ -1,6 +1,6 @@
 import { BrowserRouter, useLocation } from "react-router-dom";
-import { AuthProvider } from "./context/AuthContext";
-import SessionInvalidationBridge from "./components/SessionInvalidationBridge";
+import { AuthProvider } from "./context/AuthProvider";
+import { ThemeProvider } from "./context/ThemeContext";
 import Navbar from "./components/Navbar";
 import GoogleTwoFactorPromptModal from "./components/GoogleTwoFactorPromptModal";
 import TwoFactorSetupReminder from "./components/TwoFactorSetupReminder";
@@ -23,14 +23,23 @@ function AppLayout() {
   const { isAuthenticated } = useAuth();
   const location = useLocation();
   const isAdminWorkspace = isAuthenticated && location.pathname.startsWith("/admin");
+  const isTechnicianWorkspace =
+    isAuthenticated && location.pathname.startsWith("/technician");
+  const isUserWorkspace =
+    isAuthenticated &&
+    (location.pathname === "/dashboard" ||
+      location.pathname === "/bookings" ||
+      location.pathname.startsWith("/bookings/") ||
+      location.pathname === "/tickets" ||
+      location.pathname === "/notifications" ||
+      location.pathname === "/settings/security");
   const isPublicMarketingRoute =
     !isAuthenticated &&
     ["/", "/login", "/signup", "/approval-pending"].includes(location.pathname);
   const isTicketsWideLayout =
     isAuthenticated &&
     (location.pathname === "/tickets" ||
-      location.pathname === "/technician" ||
-      location.pathname === "/technician/resolved" ||
+      location.pathname.startsWith("/technician") ||
       location.pathname === "/admin/tickets");
   const isAdminTicketsPage = isAuthenticated && location.pathname === "/admin/tickets";
 
@@ -38,7 +47,7 @@ function AppLayout() {
     .filter(Boolean)
     .join(" ");
 
-  if (isAdminWorkspace) {
+  if (isAdminWorkspace || isUserWorkspace || isTechnicianWorkspace) {
     return (
       <div className={shellClass}>
         <AppRoutes />
@@ -70,12 +79,18 @@ function AppLayout() {
 
 function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <SessionInvalidationBridge />
-        <AppLayout />
-        <GoogleTwoFactorPromptHost />
-      </AuthProvider>
+    <BrowserRouter
+      future={{
+        v7_startTransition: true,
+        v7_relativeSplatPath: true,
+      }}
+    >
+      <ThemeProvider>
+        <AuthProvider>
+          <AppLayout />
+          <GoogleTwoFactorPromptHost />
+        </AuthProvider>
+      </ThemeProvider>
     </BrowserRouter>
   );
 }

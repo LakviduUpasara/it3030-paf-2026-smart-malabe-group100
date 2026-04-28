@@ -63,8 +63,10 @@ function AdminDashboardPage() {
       setError("");
 
       try {
-        const resources = await getResources();
-        const tickets = await getManagedTickets();
+        const [resources, ticketsRes] = await Promise.all([
+          getResources(),
+          getManagedTickets(),
+        ]);
 
         let bookings = [];
         let bookingStats = null;
@@ -92,10 +94,15 @@ function AdminDashboardPage() {
         }
 
         if (active) {
+          const ticketRows = Array.isArray(ticketsRes)
+            ? ticketsRes
+            : Array.isArray(ticketsRes?.data)
+              ? ticketsRes.data
+              : [];
           setSummary({
-            resources,
+            resources: Array.isArray(resources) ? resources : [],
             bookings,
-            tickets,
+            tickets: ticketRows,
             bookingStats,
           });
         }

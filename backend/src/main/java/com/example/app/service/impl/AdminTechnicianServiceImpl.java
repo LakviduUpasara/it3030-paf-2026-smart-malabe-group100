@@ -104,7 +104,7 @@ public class AdminTechnicianServiceImpl implements AdminTechnicianService {
         for (Ticket ticket : assigned) {
             ticket.setAssignedTechnicianUserId(null);
             String status = ticket.getStatus() != null ? ticket.getStatus().trim().toUpperCase() : "";
-            if ("IN_PROGRESS".equals(status)) {
+            if ("IN_PROGRESS".equals(status) || "ASSIGNED".equals(status) || "ACCEPTED".equals(status)) {
                 ticket.setStatus("OPEN");
             }
         }

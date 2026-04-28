@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Plus } from "lucide-react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useSearchParams } from "react-router-dom";
 import Button from "../../components/Button";
 import AdminPageHeader from "../../components/admin/AdminPageHeader";
 import { PORTAL_DATA_KEYS } from "../../constants/portalDataKeys";
@@ -103,7 +103,32 @@ function AdminNotificationsPage() {
   const { user } = useAuth();
   const isSuperAdmin = user?.role === "ADMIN";
 
-  const [tab, setTab] = useState("sent");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [tab, setTab] = useState(() =>
+    searchParams.get("tab") === "inbox" ? "inbox" : "sent",
+  );
+
+  useEffect(() => {
+    const urlTab = searchParams.get("tab") === "inbox" ? "inbox" : "sent";
+    if (urlTab !== tab) {
+      setTab(urlTab);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  const selectTab = useCallback(
+    (next) => {
+      setTab(next);
+      const nextParams = new URLSearchParams(searchParams);
+      if (next === "inbox") {
+        nextParams.set("tab", "inbox");
+      } else {
+        nextParams.delete("tab");
+      }
+      setSearchParams(nextParams, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
   const [announcements, setAnnouncements] = useState([]);
   const [inbox, setInbox] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -991,7 +1016,7 @@ function AdminNotificationsPage() {
         <button
           type="button"
           onClick={() => {
-            setTab("sent");
+            selectTab("sent");
             setActiveWindow("List");
           }}
           className={`flex-1 rounded-3xl px-4 py-2 text-sm font-medium ${
@@ -1003,7 +1028,7 @@ function AdminNotificationsPage() {
         <button
           type="button"
           onClick={() => {
-            setTab("inbox");
+            selectTab("inbox");
             setActiveWindow("Inbox");
           }}
           className={`flex-1 rounded-3xl px-4 py-2 text-sm font-medium ${
