@@ -71,7 +71,7 @@ it3030-paf-2026-smart-campus-groupXX/
 4. Open a second terminal in `backend/`.
 5. Run `mvn spring-boot:run`.
 
-The backend starts on `http://localhost:18081`.
+The backend starts on `http://localhost:18080`.
 
 ### Frontend
 
@@ -108,11 +108,24 @@ The backend auth flow now uses MongoDB collections for:
 - session tokens
 - 2-step verification challenges
 
-## Team Contribution
+## Running Playwright Tests
 
-| Member | Role | Contribution |
-|---|---|---|
-| Member 1 | Placeholder | Facilities catalogue + resource management endpoints |
-| Member 2 | Placeholder | Frontend module ownership |
-| Member 3 | Placeholder | Documentation and testing |
-| Member 4 | Placeholder | Integration and deployment |
+Playwright end-to-end tests are located in `frontend/tests/e2e`. The suite starts the frontend and backend automatically and uses the application's existing developer quick-sign-in flow for stable automated authentication during test execution.
+
+```bash
+cd frontend
+npm install
+npx playwright install
+npm run test:e2e
+npm run test:e2e:report
+```
+
+Generated evidence screenshots are written to `docs/testing/playwright-screenshots/`, and the HTML report is written to `frontend/playwright-report/index.html`.
+
+## Team Contribution
+| Member | Student ID | Role / Main Contribution |
+|--------|------------|--------------------------|
+| Member 1 | IT23585744 | Facilities catalogue + resource management endpoints |
+| Member 2 | IT23561670 | Booking workflow + conflict checking |
+| Member 3 | IT23569522 | Incident tickets + attachments + technician updates |
+| Member 4 | IT23580930 | Notifications + role management + OAuth integration improvements |
